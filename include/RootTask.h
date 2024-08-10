@@ -112,7 +112,8 @@ private:
     void setupSocket_();
     #endif
 
-    void drawMiiBodyREAL(FFLiCharInfo* charInfo, rio::BaseMtx44f& proj_mtx);
+    // NOTE: bc of the amount of arguments, consider putting this in mpModel
+    void drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::BaseMtx44f& proj_mtx);
 
 private:
     bool                mInitialized;

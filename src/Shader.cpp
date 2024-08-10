@@ -1,3 +1,4 @@
+#include "nn/ffl/FFLModulateParam.h"
 #include <Shader.h>
 
 #include <gpu/rio_RenderState.h>
@@ -278,11 +279,11 @@ void Shader::initialize()
 
     mSamplerLocation = mShader.getFragmentSamplerLocation("s_texture");
 
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("a_color");
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL]    = mShader.getVertexAttribLocation("a_normal");
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_POSITION]  = mShader.getVertexAttribLocation("a_position");
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("a_tangent");
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD]  = mShader.getVertexAttribLocation("a_texCoord");
+    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL]    = mShader.getVertexAttribLocation("a_normal");
+    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("a_color");
+    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("a_tangent");
 
 #if RIO_IS_CAFE
     GX2InitAttribStream(
@@ -390,6 +391,9 @@ void Shader::setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx
 }
 
 void Shader::setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const {
+    if (!mLightEnableBody)
+        return setViewUniform(model_mtx, view_mtx, proj_mtx);
+
     mBodyShader.setUniform(proj_mtx, mBodyShader.getVertexUniformLocation("proj"), u32(-1));
 
     rio::Matrix44f view44;
@@ -504,31 +508,48 @@ void Shader::setMaterial_(const FFLModulateType modulateType)
     mShader.setUniform(cMaterialParam[modulateType].specularPower, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_SPECULAR_POWER]);
 }
 
-void Shader::bindBodyShader(FFLiCharInfo* pCharInfo)
+void Shader::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 {
+    // FAVORITE COLOR
+    const FFLColor favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
+
+    mLightEnableBody = light_enable; // read by setViewUniformBody
+    if (!light_enable) {
+        // don't feel like implementing light_enable in the shader itself so i will just do this
+        bind(light_enable, pCharInfo);
+        const FFLModulateParam modulateParam = {
+            FFL_MODULATE_MODE_0,
+            FFL_MODULATE_TYPE_SHAPE_FOREHEAD, // doesn't even matter
+            &favoriteColor,
+            nullptr, // no color G
+            nullptr, // no color B
+            nullptr  // no texture
+        };
+        setModulate_(modulateParam);
+        return;
+    }
+
     mBodyShader.bind();
-    //RIO_GL_CALL(glBindVertexArray(vao));
+
+    // set body uniforms
 
     setCulling(FFL_CULL_MODE_BACK);
 
-    // set body uniforms
+    mBodyShader.setUniform(favoriteColor.r, favoriteColor.g, favoriteColor.b, u32(-1), mBodyShader.getFragmentUniformLocation("base"));
+
+    mBodyShader.setUniform(u32(7), u32(-1), mBodyShader.getFragmentUniformLocation("PS_PUSH.alphaFunc"));
+    mBodyShader.setUniform(0.0f, u32(-1), mBodyShader.getFragmentUniformLocation("PS_PUSH.alphaRef"));
 
     // the light direction is passed into this shader NEGATIVE?
     mBodyShader.setUniform(-cLightDir.x, -cLightDir.y, -cLightDir.z, -0.30943f, mBodyShader.getVertexUniformLocation("lightDir"), u32(-1));
 
-
     mBodyShader.setUniform(3.0f, u32(-1), mBodyShader.getFragmentUniformLocation("SP_power"));
-    mBodyShader.setUniform(0.7f, 0.7f, 0.7f, u32(-1), mBodyShader.getFragmentUniformLocation("ambient"));
-    // FAVORITE COLOR
-    const FFLColor favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
-    mBodyShader.setUniform(favoriteColor.r, favoriteColor.g, favoriteColor.b, u32(-1), mBodyShader.getFragmentUniformLocation("base"));
 
+    mBodyShader.setUniform(0.7f, 0.7f, 0.7f, u32(-1), mBodyShader.getFragmentUniformLocation("ambient"));
     mBodyShader.setUniform(0.3f, 0.3f, 0.3f, u32(-1), mBodyShader.getFragmentUniformLocation("diffuse"));
     mBodyShader.setUniform(0.4f, 0.4f, 0.4f, u32(-1), mBodyShader.getFragmentUniformLocation("rim"));
     mBodyShader.setUniform(2.0f, u32(-1), mBodyShader.getFragmentUniformLocation("rimSP_power"));
     mBodyShader.setUniform(0.17f, 0.17f, 0.17f, u32(-1), mBodyShader.getFragmentUniformLocation("specular"));
-    mBodyShader.setUniform(u32(7), u32(-1), mBodyShader.getFragmentUniformLocation("PS_PUSH.alphaFunc"));
-    mBodyShader.setUniform(0.0f, u32(-1), mBodyShader.getFragmentUniformLocation("PS_PUSH.alphaRef"));
 }
 
 void Shader::draw_(const FFLDrawParam& draw_param)

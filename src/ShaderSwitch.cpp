@@ -778,9 +778,9 @@ void ShaderSwitch::setMaterial_(const FFLModulateType modulateType)
     mShader.setUniform(s32(drawType), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_DRAW_TYPE]);
 }
 
-void ShaderSwitch::bindBodyShader(FFLiCharInfo* pCharInfo)
+void ShaderSwitch::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 {
-    bind(true, pCharInfo);
+    bind(light_enable, pCharInfo);
 
     setCulling(FFL_CULL_MODE_BACK);
 

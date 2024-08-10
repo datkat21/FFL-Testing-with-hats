@@ -9,11 +9,13 @@ out vec4 PARAM_1;
 out vec4 PARAM_2;
 out vec4 PARAM_3;
 out vec4 PARAM_4;
-in vec4 a_color;
-in vec3 a_normal;
+// original order: color, normal, position, tangent, texCoord
 in vec4 a_position;
-in vec3 a_tangent;
 in vec2 a_texCoord;
+in vec3 a_normal;
+in vec4 a_color;
+in vec3 a_tangent;
+
 int stackIdxVar;
 int stateVar;
 vec4 RVar[128];

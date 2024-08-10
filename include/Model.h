@@ -51,6 +51,7 @@ public:
     {
         mLightEnable = lightEnable;
     }
+    bool getLightEnable() const { return mLightEnable; }
 
     const rio::BaseVec3f& getScale() const
     {

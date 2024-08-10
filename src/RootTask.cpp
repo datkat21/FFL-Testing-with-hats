@@ -109,8 +109,13 @@ void RootTask::setupSocket_()
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     // Get port number from environment or use default
+    char portReminder[] ="\033[2m(you can change the port with the PORT environment variable)\033[0m\n";
     const char* env_port = getenv("PORT");
-    int port = env_port ? atoi(env_port) : 12346;
+    int port = 12346; // default port
+    if (env_port) {
+        port = atoi(env_port);
+        portReminder[0] = '\0';
+    }
     // Forcefully attaching socket to the port
     address.sin_port = htons(port);
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
@@ -125,6 +130,8 @@ void RootTask::setupSocket_()
         exit(EXIT_FAILURE);
     } else {
         // Set socket to non-blocking mode
+        char serverOnlyReminder[] = "\033[1mRemember to add the environment variable SERVER_ONLY=1 to hide the main window.\n\033[0m";
+        // except if we are server only, in which case we WANT to block
         if (!mpServerOnly) {
             #ifdef _WIN32
             u_long mode = 1;
@@ -132,14 +139,18 @@ void RootTask::setupSocket_()
             #else
             fcntl(server_fd, F_SETFL, O_NONBLOCK);
             #endif
+        } else {
+            // don't show the reminder with server only
+            serverOnlyReminder[0] = '\0';
         }
 
         mSocketIsListening = true;
 
         RIO_LOG("\033[1m" \
         "tcp server listening on port %d\033[0m\n" \
-        "\033[2m(you can change the port with the PORT environment variable)\033[0m\n",
-        port);
+        "%s" \
+        "%s",
+        port, portReminder, serverOnlyReminder);
     }
 }
 #endif
@@ -569,7 +580,7 @@ void RootTask::createModel_(RenderRequest *buf) {
     mCounter = 0.0f;
 }
 
-void RootTask::drawMiiBodyREAL(FFLiCharInfo* charInfo, rio::BaseMtx44f& proj_mtx) {
+void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::BaseMtx44f& proj_mtx) {
 
     // SELECT BODY MODEL
     const rio::mdl::Model* model = mpBodyModels[charInfo->gender];
@@ -583,7 +594,7 @@ void RootTask::drawMiiBodyREAL(FFLiCharInfo* charInfo, rio::BaseMtx44f& proj_mtx
 
         // BIND SHADER
         //bodyShader.bind();
-        mpModel->getShader()->bindBodyShader(charInfo);
+        mpModel->getShader()->bindBodyShader(light_enable, charInfo);
         //RIO_GL_CALL(glBindVertexArray(vao));
 
         rio::BaseMtx34f view_mtx;
@@ -775,7 +786,7 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
         FFLiCharModel *charModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
 
         //drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);
-        drawMiiBodyREAL(&charModel->charInfo,  *projMtx);
+        drawMiiBodyREAL(mpModel->getLightEnable(), &charModel->charInfo, *projMtx);
     }
 
     renderBuffer.bind();
@@ -1055,7 +1066,7 @@ void RootTask::calc_()
     if (mpModel != nullptr) {
         mpModel->enableSpecialDraw();
         mpModel->drawOpa(view_mtx, mProjMtx);
-        drawMiiBodyREAL(&reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel())->charInfo, mProjMtx);
+        drawMiiBodyREAL(mpModel->getLightEnable(), &reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel())->charInfo, mProjMtx);
         mpModel->drawXlu(view_mtx, mProjMtx);
     }
 }
