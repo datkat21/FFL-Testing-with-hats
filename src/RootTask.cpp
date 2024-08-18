@@ -569,6 +569,12 @@ void RootTask::createModel_(RenderRequest *buf) {
     ShaderType whichShader = SHADER_TYPE_WIIU;
     if (buf->shaderType < SHADER_TYPE_MAX)
         whichShader = static_cast<ShaderType>(buf->shaderType);
+
+    // this should happen after charinfo verification by the way
+    if (buf->shaderType == SHADER_TYPE_MIITOMO)
+        // miitomo erroneously makes glasses larger so we will too
+        // NOTE: REMOVE LATER..??
+        charInfo.parts.glassScale += 1;
     if (!mpModel->initialize(arg, *mpShaders[whichShader])) {
         RIO_LOG("FFLInitCharModelCPUStep FAILED while initializing model: %d\n", mpModel->getInitializeCpuResult());
         delete mpModel;

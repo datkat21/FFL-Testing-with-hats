@@ -1,5 +1,6 @@
 #include <Shader.h>
 #include <ShaderSwitch.h>
+#include <ShaderMiitomo.h>
 
 #include <gfx/rio_Camera.h>
 #include <gfx/mdl/rio_Model.h>
@@ -31,14 +32,14 @@ enum MiiDataInputType {
 enum ShaderType {
     SHADER_TYPE_WIIU,
     SHADER_TYPE_SWITCH,
+    SHADER_TYPE_MIITOMO,
     /* FUTURE OPTIONS:
-     * miitomo
      * 3ds
        - potentially downscaling
      * wii...????????
        - it would have to be some TEV to GLSL sheeee
      */
-    SHADER_TYPE_MAX = 2,
+    SHADER_TYPE_MAX = 3,
 };
 
 enum ViewType {
@@ -102,6 +103,10 @@ private:
                     break;
                 case SHADER_TYPE_SWITCH:
                     mpShaders[type] = new ShaderSwitch();
+                    break;
+                case SHADER_TYPE_MIITOMO:
+                    // miitomo shader needs wii u shader to draw mask
+                    mpShaders[type] = new ShaderMiitomo(mpShaders[SHADER_TYPE_WIIU]);
                     break;
             }
             mpShaders[type]->initialize();
