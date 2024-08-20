@@ -396,19 +396,21 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
             inputType = INPUT_TYPE_FFL_MIIDATACORE;
             break;
         */
-        case 76: // RFLStoreData
-        case 74: // RFLCharData
+        case 76: // RFLStoreData, FFLiStoreDataRFL ....????? (idk if this exists)
+        case 74: // RFLCharData, FFLiMiiDataOfficialRFL
             inputType = INPUT_TYPE_RFL_CHARDATA;
             break;
         case sizeof(charInfo): // nx char info
             inputType = INPUT_TYPE_NX_CHARINFO;
             break;
-        // todo nx storedata and coredata
+        case sizeof(coreData):
+        case 68://sizeof(storeData):
+            inputType = INPUT_TYPE_NX_COREDATA;
+            break;
         case sizeof(charInfoStudio): // studio raw
             inputType = INPUT_TYPE_STUDIO_RAW;
             break;
-        case 47: // have also seen studio encoded come out like this
-        case 48: // studio encoded i think
+        case STUDIO_DATA_ENCODED_LENGTH: // studio encoded i think
             inputType = INPUT_TYPE_STUDIO_ENCODED;
             break;
         case sizeof(FFLiMiiDataCore):
@@ -421,6 +423,9 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
             return false;
             break;
     }
+
+    // create temporary charInfoNX for studio, coredata
+    charInfo charInfoNX;
 
     switch (inputType) {
         case INPUT_TYPE_RFL_CHARDATA:
@@ -485,22 +490,24 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
         {
             // mii studio url data format is obfuscated
             // this decodes it in place and falls through
-            char decodedData[48];
-            std::memcpy(decodedData, buf->data, dataLength);
+            char decodedData[STUDIO_DATA_ENCODED_LENGTH];
+            std::memcpy(decodedData, buf->data, STUDIO_DATA_ENCODED_LENGTH);
             studioURLObfuscationDecode(decodedData);
-            charInfo charInfoNX;
             studioToCharInfoNX(&charInfoNX, reinterpret_cast<::charInfoStudio*>(decodedData));
             charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
             break;
         }
         case INPUT_TYPE_STUDIO_RAW:
             // we may not need this if we decode from and to buf->data but that's confusing
-            charInfo charInfoNX;
             studioToCharInfoNX(&charInfoNX, reinterpret_cast<::charInfoStudio*>(buf->data));
             charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
             break;
         case INPUT_TYPE_NX_CHARINFO:
             charInfoNXToFFLiCharInfo(pCharInfo, reinterpret_cast<::charInfo*>(buf->data));
+            break;
+        case INPUT_TYPE_NX_COREDATA:
+            coreDataToCharInfoNX(&charInfoNX, reinterpret_cast<::coreData*>(buf->data));
+            charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
             break;
         // note this is miidatacore
         default:
@@ -671,7 +678,6 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
         #endif
         return;
     }
-    mpModel->enableSpecialDraw();
 
     // hopefully renderrequest is proper
     RenderRequest* renderRequest = reinterpret_cast<RenderRequest*>(buf);
@@ -1070,7 +1076,6 @@ void RootTask::calc_()
     }
 
     if (mpModel != nullptr) {
-        mpModel->enableSpecialDraw();
         mpModel->drawOpa(view_mtx, mProjMtx);
         drawMiiBodyREAL(mpModel->getLightEnable(), &reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel())->charInfo, mProjMtx);
         mpModel->drawXlu(view_mtx, mProjMtx);

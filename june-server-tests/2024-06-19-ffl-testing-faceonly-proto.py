@@ -26,7 +26,7 @@ FFL_RESOLUTION_MASK = 0x3fffffff
 FFL_RESOLUTION_MIP_MAP_ENABLE_MASK = 1 << 30
 # Define the RenderRequest struct
 class RenderRequest:
-    def __init__(self, data, resolution=1024, tex_resolution=1024, is_head_only=False, expression=0, resource_type=1, mipmap_enable=False, background_color=[0, 0, 0, 0]):
+    def __init__(self, data, resolution=1024, tex_resolution=1024, is_head_only=False, expression=0, resource_type=1, mipmap_enable=False, background_color=[1, 1, 1, 0]):
         self.data = bytes(data)
         self.data_length = len(data)
         self.resolution = resolution

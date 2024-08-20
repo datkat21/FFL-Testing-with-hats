@@ -24,7 +24,7 @@ def main():
     resource_type = 1
     shader_type = 0
     camera_rotate = [0, 0, 0]
-    background_color = [0, 0, 0, 0]
+    background_color = [1, 1, 1, 0]
     verify_charinfo = True
     light_enable = True
 

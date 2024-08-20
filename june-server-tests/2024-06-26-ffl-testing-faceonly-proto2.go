@@ -476,13 +476,19 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	*/
+	// 46: size of studio data raw
+	// 96: length of FFLStoreData
 	if len(storeData) < 46 || len(storeData) > 96 {
-		http.Error(w, "data length should be between 46-96 bytes (TODO: ACCOMODATE nn::mii::detail::CoreDataRaw)", http.StatusBadRequest)
+		http.Error(w, "data length should be between 46-96 bytes", http.StatusBadRequest)
 		return
 	}
 
 	// parse background color
-	var bgColor color.RGBA
+	var bgColor color.NRGBA
+	// set default background color
+	// NOTE: DEFAULT BACKGROUND COLOR IS NOT ALL ZEROES!!!!
+	// IT IS TRANSPARENT WHITE. NOT USING THAT MAKES GLASSES TINTS WRONG
+	bgColor = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x0}
 	// taken from nwf-mii-cemu-toy miiPostHandler
 	bgColorParam := query.Get("bgColor")
 	// only process bgColor if it  exists
@@ -529,14 +535,14 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "width = resolution, int, no limit on this lmao,", http.StatusBadRequest)
 		return
 	}
-	if width > 4095 {
+	if width > 4096 {
 		http.Error(w, "ok bro i set the limit to 4K", http.StatusBadRequest)
 		return
 	}
 
 	// Parsing and validating texture resolution
 	texResolution, err := strconv.Atoi(texResolutionStr)
-	if err != nil {
+	if err != nil || texResolution < 2 {
 		http.Error(w, "texResolution is not a number", http.StatusBadRequest)
 		return
 	}

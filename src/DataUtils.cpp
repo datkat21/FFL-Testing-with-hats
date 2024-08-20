@@ -9,10 +9,9 @@
 #include <nn/ffl/FFLiColor.h>
 
 void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src) {
-    // Initialize the destination structure
+    // Initialize charInfo struct with zeros
     rio::MemUtil::set(dest, 0, sizeof(FFLiCharInfo));
 
-    // Copy and convert values
     dest->parts.faceType = src->faceline_type;
     // NOTE: ver3 common colors ARE compatible with switch table
     // ASSUMES THAT YOUR FFL IS USING SWITCH FACELINE COLOR TABLE!!!!
@@ -82,7 +81,6 @@ void studioToCharInfoNX(charInfo* dest, const charInfoStudio* src) {
     // Initialize charInfo struct with zeros
     rio::MemUtil::set(dest, 0, sizeof(charInfo));
 
-    // Mapping the fields from charInfoStudio to charInfo
     dest->beard_color = src->beard_color;
     dest->mustache_type = src->mustache_type;
     dest->build = src->build;
@@ -139,8 +137,8 @@ void studioURLObfuscationDecode(char* data) {
     unsigned char previous = random;
 
     // Reverse the encoding process
-    // NOTE: 48 = length of encoded mii
-    for (int i = 1; i < 48; i++) {
+    // NOTE: 47 = length of obfuscated studio data
+    for (int i = 1; i < STUDIO_DATA_ENCODED_LENGTH; i++) {
         // Reverse the modulation and XOR to find the original byte
         unsigned char encodedByte = data[i];
         unsigned char original = (encodedByte - 7 + 256) % 256; // reverse the addition of 7
@@ -148,4 +146,64 @@ void studioURLObfuscationDecode(char* data) {
         data[i - 1] = original;
         previous = encodedByte; // update previous to the current encoded byte for next iteration
     }
+}
+
+void coreDataToCharInfoNX(charInfo* dest, const coreData* src) {
+    // Initialize charInfo struct with zeros
+    rio::MemUtil::set(dest, 0, sizeof(charInfo));
+
+    dest->font_region = src->font_region;
+    dest->favorite_color = src->favorite_color;
+    dest->gender = src->gender;
+    dest->height = src->height;
+    dest->build = src->build;
+    dest->type = src->type;
+    dest->region_move = src->region_move;
+    dest->faceline_type = src->faceline_type;
+    dest->faceline_color = src->faceline_color;
+    dest->faceline_wrinkle = src->faceline_wrinkle;
+    dest->faceline_make = src->faceline_make;
+    dest->hair_type = src->hair_type;
+    dest->hair_color = src->hair_color;
+    dest->hair_flip = src->hair_flip;
+    dest->eye_type = src->eye_type;
+    dest->eye_color = src->eye_color;
+    dest->eye_scale = src->eye_scale;
+    dest->eye_aspect = src->eye_aspect;
+    dest->eye_rotate = src->eye_rotate;
+    dest->eye_x = src->eye_x;
+    dest->eye_y = src->eye_y;
+    dest->eyebrow_type = src->eyebrow_type;
+    dest->eyebrow_color = src->eyebrow_color;
+    dest->eyebrow_scale = src->eyebrow_scale;
+    dest->eyebrow_aspect = src->eyebrow_aspect;
+    dest->eyebrow_rotate = src->eyebrow_rotate;
+    dest->eyebrow_x = src->eyebrow_x;
+    dest->eyebrow_y = src->eyebrow_y + 3; // Adjusted value
+    dest->nose_type = src->nose_type;
+    dest->nose_scale = src->nose_scale;
+    dest->nose_y = src->nose_y;
+    dest->mouth_type = src->mouth_type;
+    dest->mouth_color = src->mouth_color;
+    dest->mouth_scale = src->mouth_scale;
+    dest->mouth_aspect = src->mouth_aspect;
+    dest->mouth_y = src->mouth_y;
+    dest->beard_color = src->beard_color;
+    dest->beard_type = src->beard_type;
+    dest->mustache_type = src->mustache_type;
+    dest->mustache_scale = src->mustache_scale;
+    dest->mustache_y = src->mustache_y;
+    dest->glass_type = src->glass_type;
+    dest->glass_color = src->glass_color;
+    dest->glass_scale = src->glass_scale;
+    dest->glass_y = src->glass_y;
+    dest->mole_type = src->mole_type;
+    dest->mole_scale = src->mole_scale;
+    dest->mole_x = src->mole_x;
+    dest->mole_y = src->mole_y;
+
+    // Copy nickname
+    memcpy(dest->nickname, src->nickname, sizeof(src->nickname));
+
+    // Other fields of charInfo will remain zero-initialized.
 }

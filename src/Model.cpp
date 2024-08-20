@@ -118,12 +118,17 @@ void Model::drawXluNormal_()
 
     rio::RenderState render_state;
     render_state.setDepthEnable(true, false);
-    render_state.setDepthFunc(rio::Graphics::COMPARE_FUNC_LEQUAL);
+    render_state.setDepthFunc(rio::Graphics::COMPARE_FUNC_LESS);
     render_state.applyDepthAndStencilTest();
     mpShader->applyAlphaTestEnable();
     render_state.setBlendEnable(true);
-    render_state.setBlendFactor(rio::Graphics::BLEND_MODE_SRC_ALPHA, rio::Graphics::BLEND_MODE_ONE_MINUS_SRC_ALPHA);
-    render_state.applyBlendAndFastZ();
+    render_state.setBlendFactorSrcRGB(rio::Graphics::BLEND_MODE_SRC_ALPHA);
+    render_state.setBlendFactorDstRGB(rio::Graphics::BLEND_MODE_ONE_MINUS_SRC_ALPHA);
+    render_state.setBlendFactorSrcAlpha(rio::Graphics::BLEND_MODE_SRC_ALPHA);
+    render_state.setBlendFactorDstAlpha(rio::Graphics::BLEND_MODE_ONE);
+    render_state.setBlendEquation(rio::Graphics::BLEND_FUNC_ADD);
+    render_state.setBlendConstantColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+    render_state.apply();
 
     FFLDrawXlu(mpCharModel);
 }

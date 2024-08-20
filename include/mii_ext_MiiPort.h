@@ -226,7 +226,10 @@ typedef struct {
     u8 nose_y;            // Nose Y (vertical) position
 } charInfoStudio;
 
+#define STUDIO_DATA_ENCODED_LENGTH 47
+
 // DataUtils.cpp
 void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src);
 void studioToCharInfoNX(charInfo* dest, const charInfoStudio* src);
 void studioURLObfuscationDecode(char* data);
+void coreDataToCharInfoNX(charInfo* dest, const coreData* src);
