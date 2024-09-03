@@ -41,9 +41,14 @@ As of 2024-05-31, I added a Makefile that should more or less "just" work on Lin
     make -j4
     ```
     To build with WUT, use: `make wut -j4`
-3. Obtain required files.
-    * You'll need to extract the following file from a Wii U:
-        - `sys/title/0005001b/10056000/content/FFLResHigh.dat`
+3. Obtain the resource file, FFLResHigh.dat.
+    * You can get it from many sources:
+        - It can be extracted from a Wii U:
+            - `sys/title/0005001b/10056000/content/FFLResHigh.dat`
+        - You can extract it from a Miitomo install (_it's not in the APK/IPA_), or download it from archive.org:
+            * https://web.archive.org/web/20180502054513/http://download-cdn.miitomo.com/native/20180125111639/android/v2/asset_model_character_mii_AFLResHigh_2_3_dat.zip
+            * Extract the above and rename AFLResHigh_2_3.dat to FFLResHigh.dat.
+        - (As well as AFLResHigh_2_3.dat, AFLResHigh.dat will work too)
     * Place that file in the root of this repo.
         - This file contains models and textures needed to render Miis and this program will not work without it.
 4. Run `ffl_testing_2_debug64`, and pray that it works.

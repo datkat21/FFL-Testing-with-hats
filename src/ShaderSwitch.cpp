@@ -64,30 +64,6 @@ const rio::BaseVec4f& getColorUniform(const FFLColor& color)
     return reinterpret_cast<const rio::BaseVec4f&>(color.r);
 }
 
-void safeNormalizeVec3(rio::BaseVec3f* vec) {
-    float magnitude = std::sqrt(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
-    if (magnitude != 0.0f) {
-        vec->x /= magnitude;
-        vec->y /= magnitude;
-        vec->z /= magnitude;
-    }
-
-    vec->x = std::fmax(std::fmin(vec->x, 1.0f), -1.0f);
-    vec->y = std::fmax(std::fmin(vec->y, 1.0f), -1.0f);
-    vec->z = std::fmax(std::fmin(vec->z, 1.0f), -1.0f);
-
-    if (vec->x == 1.0f || vec->x == -1.0f) {
-        vec->y = 0.0f;
-        vec->z = 0.0f;
-    } else if (vec->y == 1.0f || vec->y == -1.0f) {
-        vec->x = 0.0f;
-        vec->z = 0.0f;
-    } else if (vec->z == 1.0f || vec->z == -1.0f) {
-        vec->x = 0.0f;
-        vec->y = 0.0f;
-    }
-}
-
 // NOTE: there isn't a concrete way to determine the gamma type
 // I don't know how it's being set OR if the decomp provides a way to set it
 //static bool sGammaType = FFLiUseOffScreenSrgbFetch() ? 0 : 1;//1 : 0;
@@ -829,109 +805,50 @@ void ShaderSwitch::draw_(const FFLDrawParam& draw_param)
             );
         }
 #elif RIO_IS_WIN
+
+        GLuint indexBufferHandle;
+        glGenBuffers(1, &indexBufferHandle);  // Generate a new buffer
+
         for (int type = FFL_ATTRIBUTE_BUFFER_TYPE_POSITION; type <= FFL_ATTRIBUTE_BUFFER_TYPE_COLOR; ++type)
         {
             const FFLAttributeBuffer& buffer = draw_param.attributeBufferParam.attributeBuffers[type];
             s32 location = mAttributeLocation[type];
             void* ptr = buffer.ptr;
 
-            if (ptr && location != -1)
+            if (ptr && location != -1 && buffer.stride > 0)
             {
                 u32 stride = buffer.stride;
                 u32 vbo_handle = mVBOHandle[type];
                 u32 size = buffer.size;
 
-                if (stride == 0)
+                // Bind buffer and set vertex attribute pointer
+                RIO_GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, vbo_handle));
+                RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, size, ptr, GL_STATIC_DRAW));
+                RIO_GL_CALL(glEnableVertexAttribArray(location));
+
+                // Determine attribute pointer parameters based on buffer type
+                switch (type)
                 {
-                    // Directly set vertex attribute without buffer
-                    switch (type)
-                    {
-                    case FFL_ATTRIBUTE_BUFFER_TYPE_POSITION:
-                        RIO_GL_CALL(glVertexAttrib3fv(location, static_cast<f32*>(ptr)));
-                        break;
-                    case FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD:
-                        RIO_GL_CALL(glVertexAttrib2fv(location, static_cast<f32*>(ptr)));
-                        break;
-                    case FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL:
-                        RIO_GL_CALL(glVertexAttribP4ui(location, GL_INT_2_10_10_10_REV, true, *static_cast<u32*>(ptr)));
-                        break;
-                    /*case FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT:
-                        RIO_GL_CALL(glVertexAttrib4Nbv(location, static_cast<s8*>(ptr)));
-                        break;
-                    */case FFL_ATTRIBUTE_BUFFER_TYPE_COLOR:
-                        RIO_GL_CALL(glVertexAttrib4Nubv(location, static_cast<u8*>(ptr)));
-                        break;
-                    default:
-                        break;
-                    }
-                }
-                else
-                {
-                    // Bind buffer and set vertex attribute pointer
-                    RIO_GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, vbo_handle));
-                    RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, size, ptr, GL_STATIC_DRAW));
-                    RIO_GL_CALL(glEnableVertexAttribArray(location));
-
-                    // Determine attribute pointer parameters based on buffer type
-                    switch (type)
-                    {
-                    case FFL_ATTRIBUTE_BUFFER_TYPE_POSITION:
-                        RIO_GL_CALL(glVertexAttribPointer(location, 3, GL_FLOAT, false, stride, nullptr));
-                        break;
-                    case FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD:
-                        #ifdef RIO_NO_CLIP_CONTROL
-                        // accomodate OpenGL default clip plane by flipping texCoords
-                        // NOTE: results in flipping face texture, RATHER THAN...
-                        // ... leaving it upside down, and flipping it SOMEWHERE else (not in shader or here...???)
-                        // NOTE: CAN ALSO PROBABLY BE ADDED TO FFL ITSELF, I just don't know where to put it
-                        if (draw_param.modulateParam.type == FFL_MODULATE_TYPE_SHAPE_MASK ||
-                            draw_param.modulateParam.type == FFL_MODULATE_TYPE_FACE_MAKE ||
-                            draw_param.modulateParam.type == FFL_MODULATE_TYPE_FACE_LINE ||
-                            draw_param.modulateParam.type == FFL_MODULATE_TYPE_FACE_BEARD)
-                        {
-                            // Flip the texture coordinates within the buffer
-                            u32 numTexCoords = size / sizeof(f32);
-
-                            f32* flippedTexCoords = new f32[numTexCoords];
-
-                            for (u32 i = 0; i < numTexCoords; i += 2)
-                            {
-                                f32* originalTexCoord = static_cast<f32*>(ptr) + i;
-                                flippedTexCoords[i] = originalTexCoord[0];
-                                // flip Y coordinate
-                                flippedTexCoords[i + 1] = 1.0f - originalTexCoord[1];
-                            }
-
-                            RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, size, flippedTexCoords, GL_STATIC_DRAW));
-
-                            // Don't forget to free the allocated memory
-                            delete[] flippedTexCoords;
-
-                        }
-                        else
-                        {
-                            RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, size, ptr, GL_STATIC_DRAW));
-                        }
-                        #else
-                        RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, size, ptr, GL_STATIC_DRAW));
-                        #endif
-                        RIO_GL_CALL(glVertexAttribPointer(location, 2, GL_FLOAT, false, stride, nullptr));
-                        break;
-                    case FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL:
-                        // force this arbitrary normal buffer when glass mesh is being drawn
-                        if (draw_param.modulateParam.type == FFL_MODULATE_TYPE_SHAPE_GLASS)
-                            RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, sizeof(cGlassNormalBufferLE), cGlassNormalBufferLE, GL_STATIC_DRAW));
-                        RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_INT_2_10_10_10_REV, true, stride, nullptr));
-                        break;
-                    /*case FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT:
-                        RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_BYTE, true, stride, nullptr));
-                        break;
-                    */case FFL_ATTRIBUTE_BUFFER_TYPE_COLOR:
-                        RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_UNSIGNED_BYTE, true, stride, nullptr));
-                        break;
-                    default:
-                        break;
-                    }
+                case FFL_ATTRIBUTE_BUFFER_TYPE_POSITION:
+                    RIO_GL_CALL(glVertexAttribPointer(location, 3, GL_FLOAT, false, stride, nullptr));
+                    break;
+                case FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD:
+                    RIO_GL_CALL(glVertexAttribPointer(location, 2, GL_FLOAT, false, stride, nullptr));
+                    break;
+                case FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL:
+                    // force this arbitrary normal buffer when glass mesh is being drawn
+                    if (draw_param.modulateParam.type == FFL_MODULATE_TYPE_SHAPE_GLASS)
+                        RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, sizeof(cGlassNormalBufferLE), cGlassNormalBufferLE, GL_STATIC_DRAW));
+                    RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_INT_2_10_10_10_REV, true, stride, nullptr));
+                    break;
+                case FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT:
+                    RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_BYTE, true, stride, nullptr));
+                    break;
+                case FFL_ATTRIBUTE_BUFFER_TYPE_COLOR:
+                    RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_UNSIGNED_BYTE, true, stride, nullptr));
+                    break;
+                default:
+                    break;
                 }
             }
         }

@@ -164,6 +164,8 @@ void RootTask::prepare_()
     init_desc._c = false;
     init_desc._10 = true;
 
+#ifndef TEST_FFL_DEFAULT_RESOURCE_LOADING
+
 #if RIO_IS_CAFE
     FSInit();
 #endif // RIO_IS_CAFE
@@ -229,6 +231,9 @@ void RootTask::prepare_()
     }
 
     FFLResult result = FFLInitResEx(&init_desc, &mResourceDesc);
+#else
+    FFLResult result = FFLInitResEx(&init_desc, nullptr);
+#endif
     if (result != FFL_RESULT_OK)
     {
         RIO_LOG("FFLInitResEx() failed with result: %d\n", (s32)result);
@@ -367,7 +372,7 @@ void RootTask::createModel_() {
     Model::InitArgStoreData arg = {
         .desc = {
             .resolution = FFLResolution(768),
-            .expressionFlag = 1,
+            .expressionFlag = 1 << 0,
             .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
             .resourceType = FFL_RESOURCE_TYPE_HIGH,
         },
@@ -565,7 +570,8 @@ void RootTask::createModel_(RenderRequest *buf) {
     Model::InitArgStoreData arg = {
         .desc = {
             .resolution = buf->texResolution,
-            .expressionFlag = static_cast<u32>(1 << buf->expression),
+            .expressionFlag = static_cast<FFLExpressionFlag>(1) <<
+                        buf->expression,// % (FFL_EXPRESSION_MAX - 1),
             .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
             .resourceType = static_cast<FFLResourceType>(buf->resourceType % FFL_RESOURCE_TYPE_MAX),
         },
@@ -1008,12 +1014,22 @@ downsampleShader.unload();
     RIO_GL_CALL(glGenBuffers(1, &pbo));
     RIO_GL_CALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo));
     RIO_GL_CALL(glBufferData(GL_PIXEL_PACK_BUFFER, bufferSize, nullptr, GL_STREAM_READ));
+
+    // Read pixels into PBO (asynchronously)
     RIO_GL_CALL(glReadPixels(0, 0, width, height, nativeFormat.format, nativeFormat.type, nullptr));
-    void* readBuffer = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-    // Process data in ptr
-    RIO_LOG("Rendered data read successfully from the buffer.\n");
-    send(new_socket, reinterpret_cast<char*>(readBuffer), bufferSize, 0);
-    RIO_GL_CALL(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
+
+    // Map the PBO to read the data
+    void* readBuffer;
+    RIO_GL_CALL(readBuffer = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, bufferSize, GL_MAP_READ_BIT));
+
+    if (readBuffer) {
+        // Process the data in readBuffer
+        RIO_LOG("Rendered data read successfully from the buffer.\n");
+        send(new_socket, reinterpret_cast<char*>(readBuffer), bufferSize, 0);
+        RIO_GL_CALL(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
+    }
+
+    // Unbind the PBO
     RIO_GL_CALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, 0));
     RIO_GL_CALL(glDeleteBuffers(1, &pbo));
 // NOTE: renderBuffer.read() IS NOT IMPLEMENTED ON CAFE NOR IS THIS MEANT TO RUN ON WII U AT ALL LOL

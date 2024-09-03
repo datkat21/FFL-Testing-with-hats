@@ -46,7 +46,7 @@ private:
     void setShaderCallback_();
 
     void bindTexture_(const FFLModulateParam& modulateParam);
-    void setConstColor_(u32 ps_loc, const FFLColor& color);
+    void setConstColor_(u32 ps_loc, FFLColor color);
     void setModulateMode_(FFLModulateMode mode);
     void setModulate_(const FFLModulateParam& modulateParam);
 
