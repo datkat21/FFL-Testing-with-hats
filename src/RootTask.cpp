@@ -667,6 +667,33 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::B
     //bodyShader.unload();
 }
 
+// Convert degrees to radians
+rio::Vector3f convertRotationFrom3i(const rio::Vector3i degrees) {
+    rio::Vector3f radians;
+    radians.x = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees.x), 360.0f));
+    radians.y = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees.y), 360.0f));
+    radians.z = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees.z), 360.0f));
+    return radians;
+}
+
+// Calculate position based on spherical coordinates
+rio::Vector3f calculatePosition(float radius, const rio::Vector3f& radians) {
+    rio::Vector3f position;
+    position.x = radius * -std::sin(radians.y) * std::cos(radians.x);
+    position.y = radius * std::sin(radians.x);
+    position.z = radius * std::cos(radians.y) * std::cos(radians.x);
+    return position;
+}
+
+// Calculate up vector based on z rotation
+rio::Vector3f calculateUpVector(const rio::Vector3f& radians) {
+    rio::Vector3f up;
+    up.x = std::sin(radians.z);
+    up.y = std::cos(radians.z);
+    up.z = 0.0f;
+    return up;
+}
+
 void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
     if (mpModel == nullptr) {
         /*const char* errMsg = "mpModel == nullptr";
@@ -684,26 +711,74 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
 
     // switch between two projection matrxies
     rio::BaseMtx44f *projMtx;
-    if (renderRequest->viewType == VIEW_TYPE_FACE_ONLY) {
-        // use default if request is head only
-        projMtx = &mProjMtx;
-    } else {
-        // if it has body then use the matrix we just defined
-        projMtx = mProjMtxIconBody;
-        // NOTE: adjusted to be slightly more accurate but still not right
-        // FFLMakeIconWithBody view uses 37.05f, 415.53f
-        // nn::mii::VariableIconBody::StoreCameraMatrix uses 37.0f, 380.0f
-        mCamera.pos() = { 0.0f, 34.20f, 412.0f };
-        mCamera.at() = { 0.0f, 34.20f, 0.0f };
-        /*
-        mCamera.pos() = { 0.0f, 34.20f, 412.0f };
-        mCamera.at() = { 0.0f, 34.20f, 0.0f };
-        */
-        mCamera.setUp({ 0.0f, 1.0f, 0.0f });
-        mCamera.getMatrix(&view_mtx);
-        // without this it will use the default view matrix
+    switch (renderRequest->viewType) {
+        case VIEW_TYPE_FACE:
+        case VIEW_TYPE_FACE_ONLY:
+        {
+            // if it has body then use the matrix we just defined
+            projMtx = mProjMtxIconBody;
+            // NOTE: adjusted to be slightly closer but still not right
+            // FFLMakeIconWithBody view uses 37.05f, 415.53f
+
+            //RIO_LOG("x = %i, y = %i, z = %i\n", renderRequest->cameraRotate.x, renderRequest->cameraRotate.y, renderRequest->cameraRotate.z);
+            /*
+            rio::Vec3f fCameraPosition = {
+                fmod(static_cast<f32>(renderRequest->cameraRotate.x), 360),
+                fmod(static_cast<f32>(renderRequest->cameraRotate.y), 360),
+                fmod(static_cast<f32>(renderRequest->cameraRotate.z), 360),
+            };*/
+
+            mCamera.pos() = { 0.0f, 34.20f, 412.0f };
+            mCamera.at() = { 0.0f, 34.20f, 0.0f };
+            mCamera.setUp({ 0.0f, 1.0f, 0.0f });
+            break;
+        }
+        case VIEW_TYPE_NNMII_VARIABLEICONBODY_VIEW:
+        {
+            projMtx = mProjMtxIconBody;
+            // nn::mii::VariableIconBody::StoreCameraMatrix uses 37.0f, 380.0f
+            mCamera.pos() = { 0.0f, 37.0f, 380.0f };
+            mCamera.at() = { 0.0f, 37.0f, 0.0f };
+            mCamera.setUp({ 0.0f, 1.0f, 0.0f });
+            //projMtx.m
+            break;
+        }
+        case VIEW_TYPE_ALL_BODY:
+        {
+            projMtx = mProjMtxIconBody;
+            // NOTE: NOTE: TODO: NOT ACCURATE TO ANYTHING JUST GUESSING
+            mCamera.pos() = { 0.0f, 9.0f, 900.0f };
+            mCamera.at() = { 0.0f, 6.0f, 0.0f };
+            mCamera.setUp({ 0.0f, 1.0f, 0.0f });
+            break;
+        }
+        default:
+        {
+            // default, face only (FFLMakeIcon)
+            // use default if request is head only
+            projMtx = &mProjMtx;
+
+            mCamera.at() = { 0.0f, 34.5f, 0.0f };
+            mCamera.setUp({ 0.0f, 1.0f, 0.0f });
+
+            mCamera.pos() = { 0.0f, 34.5f, 600.0f };
+            break;
+        }
     }
 
+
+    // Update camera position
+    const rio::Vector3f cameraPos = mCamera.pos();
+    const float radius = cameraPos.z;
+
+    rio::Vector3f rotateRadians = convertRotationFrom3i(renderRequest->cameraRotate);
+    rio::Vector3f position = calculatePosition(radius, rotateRadians);
+    const rio::Vector3f upVector = calculateUpVector(rotateRadians);
+
+    mCamera.pos() = { position.x, cameraPos.y + position.y, position.z };
+    mCamera.setUp(upVector);
+
+    mCamera.getMatrix(&view_mtx);
     #ifdef RIO_NO_CLIP_CONTROL
         // render upside down so glReadPixels is right side up
         if (projMtx->m[1][1] > 0) // if it is not already negative
@@ -793,7 +868,9 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
     RIO_LOG("drawOpa rendered to the buffer.\n");
 
     // draw body?
-    if (renderRequest->viewType != VIEW_TYPE_FACE_ONLY)
+    if (renderRequest->viewType != VIEW_TYPE_FACE_ONLY
+        && renderRequest->viewType != VIEW_TYPE_FACE_ONLY_FFLMAKEICON
+    )
     {
         FFLiCharModel *charModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
 
@@ -1043,7 +1120,7 @@ void RootTask::calc_()
     mCamera.setUp(cameraUp);
     // Move the camera around the target clockwise
     // Define the radius of the orbit in the XZ-plane (distance from the target)
-    if (!mpNoSpin && !mpServerOnly && !hasSocketRequest) {
+    if (!mpNoSpin && !mpServerOnly && !hasSocketRequest && mpModel != nullptr) {
         radius += 380;
         mCamera.pos().set(
             // Set the camera's position using the sin and cos functions to move it in a circle around the target

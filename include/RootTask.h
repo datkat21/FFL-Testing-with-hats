@@ -23,6 +23,7 @@ enum MiiDataInputType {
     INPUT_TYPE_RFL_CHARDATA,
     INPUT_TYPE_NX_CHARINFO,
     INPUT_TYPE_STUDIO_ENCODED,
+    // mii studio site decoded URL format/LocalStorage format
     INPUT_TYPE_STUDIO_RAW,
     INPUT_TYPE_NX_COREDATA,
     INPUT_TYPE_NX_STOREDATA,
@@ -46,9 +47,10 @@ enum ViewType {
     VIEW_TYPE_FACE,  // head with body
     VIEW_TYPE_FACE_ONLY,  // head only
     VIEW_TYPE_ALL_BODY,
+    VIEW_TYPE_FACE_ONLY_FFLMAKEICON,
     // nn::mii::VariableIconBody::StoreCameraMatrix
     VIEW_TYPE_NNMII_VARIABLEICONBODY_VIEW,
-    VIEW_TYPE_MAX = 4,
+    VIEW_TYPE_MAX = 5,
 };
 
 struct RenderRequest {

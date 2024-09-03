@@ -90,7 +90,8 @@ var viewTypes = map[string]int {
 	"face":             0,
 	"face_only":        1,
 	"all_body":         2,
-	"variableiconbody": 3,
+	"fflmakeicon":      3,
+	"variableiconbody": 4,
 }
 
 func sayHello(w http.ResponseWriter, r *http.Request) {
@@ -333,13 +334,23 @@ func normalizeNnid(nnid string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(nnid, "-", ""), "_", ""), ".", ""))
 }
 
-// isBase64 checks if a string is a valid base64 encoded string
-func isBase64(s string) bool {
-	if len(s)%4 != 0 {
-		return false
+
+
+// decodeBase64 decodes a Base64 string, handling both standard and URL-safe Base64.
+func decodeBase64(s string) ([]byte, error) {
+	// Normalize URL-safe Base64 by replacing '-' with '+' and '_' with '/'
+	s = strings.ReplaceAll(s, "-", "+")
+	s = strings.ReplaceAll(s, "_", "/")
+
+	// Add padding if necessary
+	switch len(s) % 4 {
+	case 2:
+		s += "=="
+	case 3:
+		s += "="
 	}
-	_, err := base64.StdEncoding.DecodeString(s)
-	return err == nil
+
+	return base64.StdEncoding.DecodeString(s)
 }
 
 // isHex checks if a string is a valid hexadecimal encoded string
@@ -457,11 +468,8 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		data = strings.ReplaceAll(data, " ", "")
 		if isHex(data) {
 			storeData, err = hex.DecodeString(data)
-		} else if isBase64(data) {
-			storeData, err = base64.StdEncoding.DecodeString(data)
 		} else {
-			http.Error(w, "we tried decoding data as base64 and hex and failed at both", http.StatusBadRequest)
-			return
+			storeData, err = decodeBase64(data)
 		}
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to decode data: %v", err), http.StatusBadRequest)
@@ -484,11 +492,11 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// parse background color
-	var bgColor color.NRGBA
+	var bgColor color.RGBA
 	// set default background color
 	// NOTE: DEFAULT BACKGROUND COLOR IS NOT ALL ZEROES!!!!
 	// IT IS TRANSPARENT WHITE. NOT USING THAT MAKES GLASSES TINTS WRONG
-	bgColor = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x0}
+	bgColor = color.RGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x0}
 	// taken from nwf-mii-cemu-toy miiPostHandler
 	bgColorParam := query.Get("bgColor")
 	// only process bgColor if it  exists
@@ -527,7 +535,15 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		expressionFlag = 1
 	}*/
 	//expressionFlag := getExpressionFlag(expressionStr)
-	expression := getExpressionInt(expressionStr)
+	// first try to parse the expression as int
+	// should be safe as long as the server wraps around exp flags
+	var expression int
+	expression, err = strconv.Atoi(expressionStr)
+	if err != nil {
+		// now try to parse it as a string
+		// this defaults to normal if it fails
+		expression = getExpressionInt(expressionStr)
+	}r)
 
 	// Parsing and validating width
 	width, err := strconv.Atoi(widthStr)
@@ -688,7 +704,7 @@ now, PickupCharInfo calls:
 		`, http.StatusInternalServerError)
 			return
 		}
-		http.Error(w, "incomplete backend from backend, error is: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "incomplete response from backend, error is: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -762,28 +778,31 @@ const (
 )
 
 // Map of expression strings to their respective flags
+// NOTE: Mii Studio expression parameters, which
+// this aims to be compatible with, use
+// the opposite direction for all wink expressions.
 var expressionMap = map[string]int{
 	"surprise":              FFL_EXPRESSION_SURPRISE,
 	"surprise_open_mouth":   FFL_EXPRESSION_SURPRISE_OPEN_MOUTH,
-	"wink_left_open_mouth":  FFL_EXPRESSION_WINK_LEFT_OPEN_MOUTH,
+	"wink_left_open_mouth":  FFL_EXPRESSION_WINK_RIGHT_OPEN_MOUTH,
 	"like":                  FFL_EXPRESSION_LIKE,
 	"anger_open_mouth":      FFL_EXPRESSION_ANGER_OPEN_MOUTH,
 	"blink_open_mouth":      FFL_EXPRESSION_BLINK_OPEN_MOUTH,
 	"anger":                 FFL_EXPRESSION_ANGER,
-	"like_wink_left":        FFL_EXPRESSION_LIKE,
+	"like_wink_left":        FFL_EXPRESSION_LIKE_WINK_RIGHT,
 	"happy":                 FFL_EXPRESSION_HAPPY,
 	"blink":                 FFL_EXPRESSION_BLINK,
 	"smile":                 FFL_EXPRESSION_SMILE,
 	"sorrow_open_mouth":     FFL_EXPRESSION_SORROW_OPEN_MOUTH,
-	"wink_right":            FFL_EXPRESSION_WINK_RIGHT,
+	"wink_right":            FFL_EXPRESSION_WINK_LEFT,
 	"sorrow":                FFL_EXPRESSION_SORROW,
 	"normal":                FFL_EXPRESSION_NORMAL,
-	"like_wink_right":       FFL_EXPRESSION_LIKE_WINK_RIGHT,
-	"wink_right_open_mouth": FFL_EXPRESSION_WINK_RIGHT_OPEN_MOUTH,
+	"like_wink_right":       FFL_EXPRESSION_LIKE,
+	"wink_right_open_mouth": FFL_EXPRESSION_WINK_LEFT_OPEN_MOUTH,
 	"smile_open_mouth":      FFL_EXPRESSION_HAPPY,
 	"frustrated":            FFL_EXPRESSION_FRUSTRATED,
 	"surprised":             FFL_EXPRESSION_SURPRISE,
-	"wink_left":             FFL_EXPRESSION_WINK_LEFT,
+	"wink_left":             FFL_EXPRESSION_WINK_RIGHT,
 	"open_mouth":            FFL_EXPRESSION_OPEN_MOUTH,
 	"puzzled":               FFL_EXPRESSION_SORROW, // assuming PUZZLED is similar to SORROW
 	"normal_open_mouth":     FFL_EXPRESSION_OPEN_MOUTH,

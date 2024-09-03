@@ -540,6 +540,7 @@ void ShaderSwitch::initialize()
 #endif
 
     mSampler.setWrap(rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR);
+    mSampler.setFilter(rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_MIP_FILTER_MODE_POINT, rio::TEX_ANISO_1_TO_1);
 
     mCallback.pObj = this;
     mCallback.pApplyAlphaTestFunc = &ShaderSwitch::applyAlphaTestCallback_;

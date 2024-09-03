@@ -337,10 +337,8 @@ void ShaderMiitomo::initialize()
 #endif
 
     mSampler.setWrap(rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR);
-
-    mLUTFresSampler.setWrap(rio::TEX_WRAP_MODE_CLAMP, rio::TEX_WRAP_MODE_CLAMP, rio::TEX_WRAP_MODE_MIRROR);
-
-    mLUTSpecSampler.setWrap(rio::TEX_WRAP_MODE_CLAMP, rio::TEX_WRAP_MODE_CLAMP, rio::TEX_WRAP_MODE_MIRROR);
+    mSampler.setLOD(-1000.0f, 1000.0f, 0.0f);
+    mSampler.setFilter(rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_MIP_FILTER_MODE_LINEAR, rio::TEX_ANISO_1_TO_1);
 
     mCallback.pObj = this;
     mCallback.pApplyAlphaTestFunc = &ShaderMiitomo::applyAlphaTestCallback_;

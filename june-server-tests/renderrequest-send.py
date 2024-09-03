@@ -6,13 +6,14 @@ def read_fflstoredata(file_path):
         return file.read(96)
 
 def main():
-    if len(sys.argv) != 4:
+    if len(sys.argv) < 4:
         print("Usage: python script.py <path_to_FFLStoreData_file> <resolution> <output_file>")
         return
 
     fflstoredata_file = sys.argv[1]
     resolution = int(sys.argv[2])
     output_file = sys.argv[3]
+    expression = int(sys.argv[4]) if len(sys.argv) > 4 else 0
 
     fflstoredata = read_fflstoredata(fflstoredata_file)
 
@@ -20,7 +21,7 @@ def main():
     tex_resolution = 768
     data_length = len(fflstoredata)
     view_type = 0  # face
-    expression = 0
+    #expression = 0
     resource_type = 1
     shader_type = 0
     camera_rotate = [0, 0, 0]
