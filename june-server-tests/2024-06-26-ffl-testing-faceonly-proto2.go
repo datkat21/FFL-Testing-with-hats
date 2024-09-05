@@ -543,7 +543,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		// now try to parse it as a string
 		// this defaults to normal if it fails
 		expression = getExpressionInt(expressionStr)
-	}r)
+	}
 
 	// Parsing and validating width
 	width, err := strconv.Atoi(widthStr)

@@ -10,6 +10,7 @@
 #include <gfx/rio_Window.h>
 #include <gfx/rio_Graphics.h>
 #include <gpu/rio_RenderState.h>
+#include <gpu/win/rio_Texture2DUtilWin.h>
 
 #include <gfx/mdl/res/rio_ModelCacher.h>
 
@@ -599,8 +600,91 @@ void RootTask::createModel_(RenderRequest *buf) {
     mCounter = 0.0f;
 }
 
-void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::BaseMtx44f& proj_mtx) {
+void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Texture2D* texture, int socket) {
+    // does operations on the renderbuffer assuming it is already bound
 
+    const uint width = texture->getWidth();
+    const uint height = texture->getHeight();
+    // Read the rendered data into a buffer and save it to a file
+    uint bufferSize = rio::Texture2DUtil::calcImageSize(texture->getTextureFormat(), width, height);
+
+    //int bufferSize = renderRequest->resolution * renderRequest->resolution * 4;
+/*
+    // Create a regular framebuffer to resolve the MSAA buffer to
+    GLuint resolveFBO, resolveColorRBO;
+    glGenFramebuffers(1, &resolveFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, resolveFBO);
+
+    // Create and attach a regular color renderbuffer
+    glGenRenderbuffers(1, &resolveColorRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, resolveColorRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, renderRequest->resolution, renderRequest->resolution);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, resolveColorRBO);
+
+
+    // Blit (resolve) the multisampled framebuffer to the regular framebuffer
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, msaaFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveFBO);
+    glBlitFramebuffer(0, 0, renderRequest->resolution, renderRequest->resolution,
+                    0, 0, renderRequest->resolution, renderRequest->resolution,
+                    GL_COLOR_BUFFER_BIT, GL_LINEAR);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, resolveFBO);
+
+    RIO_GL_CALL(glReadPixels(0, 0, renderRequest->resolution, renderRequest->resolution, GL_RGBA, GL_UNSIGNED_BYTE, readBuffer));
+*/
+    //renderBufferDownsample.read(0, readBuffer, renderBufferDownsample.getSize().x, renderBufferDownsample.getSize().y, renderTextureDownsampleColor->getNativeTexture().surface.nativeFormat);
+
+    rio::NativeTextureFormat nativeFormat = texture->getNativeTexture().surface.nativeFormat;
+
+#if RIO_IS_WIN
+/*
+    glReadBuffer(GL_COLOR_ATTACHMENT0 + 0);
+    glReadPixels(0, 0, width, height, nativeFormat.format, nativeFormat.type, readBuffer);
+*/
+    // map a pixel buffer object (DMA?)
+    GLuint pbo;
+    RIO_GL_CALL(glGenBuffers(1, &pbo));
+    RIO_GL_CALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo));
+    RIO_GL_CALL(glBufferData(GL_PIXEL_PACK_BUFFER, bufferSize, nullptr, GL_STREAM_READ));
+
+    // Read pixels into PBO (asynchronously)
+    RIO_GL_CALL(glReadPixels(0, 0, width, height, nativeFormat.format, nativeFormat.type, nullptr));
+
+    // Map the PBO to read the data
+    void* readBuffer;
+    // opengl 2 and below compatible function
+    //RIO_GL_CALL(readBuffer = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
+    // this should be compatible with OpenGL 3.3 and OpenGL ES 3.0
+    RIO_GL_CALL(readBuffer = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, bufferSize, GL_MAP_READ_BIT));
+
+    // don't dereference a null pointer
+    if (readBuffer) {
+        // Process the data in readBuffer
+        RIO_LOG("Rendered data read successfully from the buffer.\n");
+        send(new_socket, reinterpret_cast<char*>(readBuffer), bufferSize, 0);
+        RIO_GL_CALL(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
+    } else {
+        RIO_ASSERT(!readBuffer && "why is readBuffer nullptr...???");
+    }
+
+    // Unbind the PBO
+    RIO_GL_CALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, 0));
+    RIO_GL_CALL(glDeleteBuffers(1, &pbo));
+// NOTE: renderBuffer.read() DOES NOT WORK ON CAFE AS OF WRITING, NOR IS THIS MEANT TO RUN ON WII U AT ALL LOL
+#else
+    u8* readBuffer = new u8[bufferSize];
+    //rio::MemUtil::set(readBuffer, 0xFF, bufferSize);
+    // NOTE: UNTESTED
+    renderBuffer.read(0, readBuffer, renderBuffer.getSize().x, renderBuffer.getSize().y, nativeFormat);
+    send(new_socket, reinterpret_cast<char*>(readBuffer), bufferSize, 0);
+    delete[] readBuffer;
+#endif
+
+    RIO_LOG("Wrote %d bytes out to socket.\n", bufferSize);
+}
+
+void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::BaseMtx44f& proj_mtx) {
     // SELECT BODY MODEL
     const rio::mdl::Model* model = mpBodyModels[charInfo->gender];
 
@@ -973,77 +1057,7 @@ RIO_GL_CALL(glDeleteBuffers(1, &quadVBO));
 downsampleShader.unload();
 */
 
-
-    // Read the rendered data into a buffer and save it to a file
-    int bufferSize = renderBuffer.getSize().x * renderBuffer.getSize().y * 4; // Assuming 4 bytes per pixel (RGBA)
-    //int bufferSize = renderRequest->resolution * renderRequest->resolution * 4;
-/*
-    // Create a regular framebuffer to resolve the MSAA buffer to
-    GLuint resolveFBO, resolveColorRBO;
-    glGenFramebuffers(1, &resolveFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, resolveFBO);
-
-    // Create and attach a regular color renderbuffer
-    glGenRenderbuffers(1, &resolveColorRBO);
-    glBindRenderbuffer(GL_RENDERBUFFER, resolveColorRBO);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, renderRequest->resolution, renderRequest->resolution);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, resolveColorRBO);
-
-
-    // Blit (resolve) the multisampled framebuffer to the regular framebuffer
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, msaaFBO);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveFBO);
-    glBlitFramebuffer(0, 0, renderRequest->resolution, renderRequest->resolution,
-                    0, 0, renderRequest->resolution, renderRequest->resolution,
-                    GL_COLOR_BUFFER_BIT, GL_LINEAR);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, resolveFBO);
-
-    RIO_GL_CALL(glReadPixels(0, 0, renderRequest->resolution, renderRequest->resolution, GL_RGBA, GL_UNSIGNED_BYTE, readBuffer));
-*/
-    //renderBufferDownsample.read(0, readBuffer, renderBufferDownsample.getSize().x, renderBufferDownsample.getSize().y, renderTextureDownsampleColor->getNativeTexture().surface.nativeFormat);
-    rio::NativeTextureFormat nativeFormat = renderTextureColor->getNativeTexture().surface.nativeFormat;
-
-#if RIO_IS_WIN
-/*
-    glReadBuffer(GL_COLOR_ATTACHMENT0 + 0);
-    glReadPixels(0, 0, width, height, nativeFormat.format, nativeFormat.type, readBuffer);
-*/
-    // map a pixel buffer object (DMA?)
-    GLuint pbo;
-    RIO_GL_CALL(glGenBuffers(1, &pbo));
-    RIO_GL_CALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo));
-    RIO_GL_CALL(glBufferData(GL_PIXEL_PACK_BUFFER, bufferSize, nullptr, GL_STREAM_READ));
-
-    // Read pixels into PBO (asynchronously)
-    RIO_GL_CALL(glReadPixels(0, 0, width, height, nativeFormat.format, nativeFormat.type, nullptr));
-
-    // Map the PBO to read the data
-    void* readBuffer;
-    RIO_GL_CALL(readBuffer = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, bufferSize, GL_MAP_READ_BIT));
-
-    if (readBuffer) {
-        // Process the data in readBuffer
-        RIO_LOG("Rendered data read successfully from the buffer.\n");
-        send(new_socket, reinterpret_cast<char*>(readBuffer), bufferSize, 0);
-        RIO_GL_CALL(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
-    }
-
-    // Unbind the PBO
-    RIO_GL_CALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, 0));
-    RIO_GL_CALL(glDeleteBuffers(1, &pbo));
-// NOTE: renderBuffer.read() IS NOT IMPLEMENTED ON CAFE NOR IS THIS MEANT TO RUN ON WII U AT ALL LOL
-#else
-    u8* readBuffer = new u8[bufferSize];
-    //rio::MemUtil::set(readBuffer, 0xFF, bufferSize);
-    // NOTE: UNTESTED
-    renderBuffer.read(0, readBuffer, renderBuffer.getSize().x, renderBuffer.getSize().y, nativeFormat);
-    send(new_socket, reinterpret_cast<char*>(readBuffer), bufferSize, 0);
-    delete[] readBuffer;
-#endif
-
-    RIO_LOG("Wrote %d bytes out to socket.\n", bufferSize);
-
+    copyAndSendRenderBufferToSocket(renderBuffer, renderTextureColor, new_socket);
 
     // Unbind the render buffer
     renderBuffer.getRenderTargetColor()->invalidateGPUCache();

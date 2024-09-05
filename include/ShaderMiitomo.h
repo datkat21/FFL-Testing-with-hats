@@ -22,7 +22,7 @@ public:
 
     void bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo) override;
 
-    void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const;
+    void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
     void setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override {
         setViewUniform(model_mtx, view_mtx, proj_mtx);
     };
