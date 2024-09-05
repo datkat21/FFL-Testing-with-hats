@@ -3,21 +3,13 @@
 #define VARYING_QUALIFIER out
 #define VARYING_INSTANCE Out
 
-VARYING_QUALIFIER Varying
-{
-    vec2 texCoord;
-    vec3 normal;
-    float specularMix;
-} VARYING_INSTANCE;
+VARYING_QUALIFIER vec2 texCoord;
+VARYING_QUALIFIER vec3 normal;
+VARYING_QUALIFIER float specularMix;
 
 /// ================================================================
 /// 頂点シェーダーの実装
 /// ================================================================
-
-out gl_PerVertex
-{
-    vec4 gl_Position;
-};
 
 layout( location = 0 ) in vec4 i_Position;
 // order of TexCoord and Normal flipped
@@ -66,11 +58,11 @@ void main()
     gl_Position = PROJECT(proj,vec4(vPos,1.0f));
     */
     gl_Position = proj * mv * i_Position;
-    Out.normal = mat3(mv) * i_Normal.xyz;
+    normal = mat3(mv) * i_Normal.xyz;
 
-    Out.texCoord = i_TexCoord.xy;
-    //Out.normal = TRANSFORM_VEC(mv,i_Normal);
-    Out.specularMix = i_Parameter.r;
+    texCoord = i_TexCoord.xy;
+    //normal = TRANSFORM_VEC(mv,i_Normal);
+    specularMix = i_Parameter.r;
 
 
 #if defined(USE_DEBUG)

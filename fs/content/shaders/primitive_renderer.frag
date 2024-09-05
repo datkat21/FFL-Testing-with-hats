@@ -11,8 +11,8 @@ out vec4 FragColor;
 void main()
 {
     vec4 color = texture(texture0, TexCoord);
-    FragColor.r = Color.r * (color.r * rate + (1 - rate));
-    FragColor.g = Color.g * (color.g * rate + (1 - rate));
-    FragColor.b = Color.b * (color.b * rate + (1 - rate));
-    FragColor.a = Color.a * (color.a * rate + (1 - rate));
+    FragColor.r = Color.r * (color.r * rate + (1.0 - rate));
+    FragColor.g = Color.g * (color.g * rate + (1.0 - rate));
+    FragColor.b = Color.b * (color.b * rate + (1.0 - rate));
+    FragColor.a = Color.a * (color.a * rate + (1.0 - rate));
 }

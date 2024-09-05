@@ -8,9 +8,7 @@ static rio::InitializeArg initializeArg = {
         .width = 600,
         .height = 600,
 #if RIO_IS_WIN
-        .resizable = true,
-        .gl_major = 3,
-        .gl_minor = 3
+        .resizable = true
 #endif // RIO_IS_WIN
     }
 };

@@ -3,12 +3,9 @@
 #define VARYING_QUALIFIER in
 #define VARYING_INSTANCE In
 
-VARYING_QUALIFIER Varying
-{
-    vec2 texCoord;
-    vec3 normal;
-    float specularMix;
-} VARYING_INSTANCE;
+VARYING_QUALIFIER vec2 texCoord;
+VARYING_QUALIFIER vec3 normal;
+VARYING_QUALIFIER float specularMix;
 
 /// ================================================================
 /// ピクセルシェーダーの実装
@@ -70,7 +67,7 @@ vec4 GetAlbedo()
     if(modulateType != MODULATE_TYPE_CONSTANT &&
        modulateType != MODULATE_TYPE_ICONBODY)
     {
-        texel = texture(s_Tex,In.texCoord);
+        texel = texture(s_Tex,texCoord);
     }
     switch(modulateType)
     {
@@ -149,7 +146,7 @@ void main()
         albedo.rgb = ToLinear(albedo.rgb);
     }
 
-    vec3 preNormal = In.normal;
+    vec3 preNormal = normal;
 
     /// ライティング向け計算
     vec3 normal = normalize(preNormal); ///< ビュー空間法線
@@ -174,7 +171,7 @@ void main()
     }
     else
     {
-        specularFactor = mix(u_SpecularFactorA,u_SpecularFactorB,In.specularMix);
+        specularFactor = mix(u_SpecularFactorA,u_SpecularFactorB,specularMix);
     }
 
     vec4 outputColor = vec4(vec3(0.0f),albedo.a);
