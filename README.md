@@ -1,5 +1,4 @@
-**(IMPORTANT IMPORTANT IF YOU ARE PRETENDO STAFF: PLEASE READ THE LICENSE, THANKS)**
-# RENDERER SERVER PROTOTYPE!!!!!!!!!!!!!! 😍
+# Running the renderer server
 1. Follow the usual instructions below to get this up and running.
     * I don't think the server portion will work at all on a Wii U, so don't try.
     * Get to the point where it shows you spinny Miis.
@@ -7,13 +6,19 @@
     * Python
         - Needs Flask
         - Run `june-server-tests/2024-06-19-ffl-testing-faceonly-proto.py`
+        - (Note that the Python server is limited in features and performance)
     * Go
         - Inside `june-server-tests` just `go run .` or run the Go file
 3. Make sure FFL-Testing is running and listening, and try a request like this to the server: http://localhost:5000/miis/image.png?data=005057676b565c6278819697bbc3cecad3e6edf301080a122e303a381c235f4a52595c4e51494f585c5f667d848b96&width=512
 4. If that works then run you probably want to run ffl_testing_2_debug64 with the `SERVER_ONLY` environment variable: `SERVER_ONLY=1 ./ffl_testing_2_debug64`
     - This will hide the window and pause the program when it's not actively rendering.
-5. Jon Pretendo if you are reading please return my 65 inch 4k ultra hd apple tv with dolby vision
-    - **(IMPORTANT IMPORTANT IF YOU ARE PRETENDO STAFF: PLEASE READ THE LICENSE, THANKS)**
+5. **Please note that this is not the most ideal for production use.**
+
+    - By this I mean it'll _work, but not at scale_.
+    - TBD: Improved accuracy (proper body rendering), server rewrite, multi-threading, all-in-one renderer and HTTP server in the same binary.
+
+
+Note: For the frontend on mii-unsecure.ariankordi.net, I am using [nwf-mii-cemu-toy, ffl-renderer-proto-integrate branch](https://github.com/ariankordi/nwf-mii-cemu-toy/tree/ffl-renderer-proto-integrate) as the HTTP server for now, where I've more or less copied the Go server. It supports load balancing to multiple instances of this server.
 
 # Running FFL-Testing
 As of 2024-05-31, I added a Makefile that should more or less "just" work on Linux, or Windows if you have MSYS2.
