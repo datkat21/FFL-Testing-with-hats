@@ -1,7 +1,9 @@
 #include "gpu/rio_Texture.h"
 #include "math/rio_Matrix.h"
-#include "nn/ffl/FFLResourceType.h"
-#include "nn/ffl/detail/FFLiCharInfo.h"
+#include <nn/ffl/FFLResourceType.h>
+#include <nn/ffl/detail/FFLiCharInfo.h>
+#include <nn/ffl/FFLiCreateID.h>
+#include <EnumStrings.h>
 #include <Model.h>
 #include <RootTask.h>
 
@@ -15,6 +17,7 @@
 #include <gfx/mdl/res/rio_ModelCacher.h>
 
 #include <nn/ffl/FFLiSwapEndian.h>
+#include <nn/ffl/detail/FFLiCrc.h>
 
 #include <string>
 #include <array>
@@ -339,9 +342,9 @@ void RootTask::createModel_() {
     FFLiCharInfo charInfo;
     if (!mStoreDataArray.empty()) {
         // Use the custom Mii data array
-        if(!pickupCharInfoFromRenderRequest(&charInfo, mStoreDataArray[mMiiCounter].size(), reinterpret_cast<RenderRequest*>(&mStoreDataArray[mMiiCounter][0])))
+        if(pickupCharInfoFromRenderRequest(&charInfo, mStoreDataArray[mMiiCounter].size(), reinterpret_cast<RenderRequest*>(&mStoreDataArray[mMiiCounter][0])) != FFL_RESULT_OK)
         {
-            RIO_LOG("pickupCharInfoFromRenderRequest returned false on Mii counter: %d\n", mMiiCounter);
+            RIO_LOG("pickupCharInfoFromRenderRequest failed on Mii counter: %d\n", mMiiCounter);
             mpModel = nullptr;
             mCounter = 0.0f;
             mMiiCounter = (mMiiCounter + 1) % maxMiis;
@@ -392,7 +395,7 @@ void RootTask::createModel_() {
     mCounter = 0.0f;
 }
 
-bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, RenderRequest *buf) {
+FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, RenderRequest *buf) {
     MiiDataInputType inputType;
 
     switch (dataLength) {
@@ -403,6 +406,8 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
             break;
         */
         case 76: // RFLStoreData, FFLiStoreDataRFL ....????? (idk if this exists)
+            inputType = INPUT_TYPE_RFL_STOREDATA;
+            break;
         case 74: // RFLCharData, FFLiMiiDataOfficialRFL
             inputType = INPUT_TYPE_RFL_CHARDATA;
             break;
@@ -420,13 +425,15 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
             inputType = INPUT_TYPE_STUDIO_ENCODED;
             break;
         case sizeof(FFLiMiiDataCore):
-        case sizeof(FFLiMiiDataOfficial):
-        case sizeof(FFLStoreData):
+        case sizeof(FFLiMiiDataOfficial): // creator name unused
             inputType = INPUT_TYPE_FFL_MIIDATACORE;
+            break;
+        case sizeof(FFLStoreData):
+            inputType = INPUT_TYPE_FFL_STOREDATA;
             break;
         default:
             // uh oh, we can't detect it
-            return false;
+            return FFL_RESULT_ERROR;
             break;
     }
 
@@ -434,6 +441,10 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
     charInfo charInfoNX;
 
     switch (inputType) {
+        case INPUT_TYPE_RFL_STOREDATA:
+            // 76 = sizeof RFLStoreData
+            if (buf->verifyCRC16 && !FFLiIsValidCRC16(buf->data, 76))
+                return FFL_RESULT_FILE_INVALID;
         case INPUT_TYPE_RFL_CHARDATA:
         {
             // it is NOT FFLiMiiDataCore, it may be RFL tho
@@ -447,7 +458,7 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
             // the create id is actually not the same size either
 
 
-            // TODO: NOT WORKING ATM
+            // NOTE: NOT WORKING ATM
             /*FFLCreateID* createIDRFL = reinterpret_cast<FFLCreateID*>(charDataRFL.m_CreatorID);
 
             // test for if it is NTR data
@@ -455,6 +466,8 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
             RIO_LOG("IS NTR??? %i\n", isNTR);
     */
             // NOTE: NFLCharData for DS can be little endian tho!!!!!!
+
+            // TODO TODO TODO YOU WANT TO MEMCPY THIS INTO A NEW BUFFER
 #if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
             // swap endian for rfl
             static const FFLiSwapEndianDesc SWAP_ENDIAN_DESC_RFL[] = {
@@ -483,6 +496,7 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
             isNTR = FFLiIsNTRMiiID(createIDRFL);
             RIO_LOG("IS NTR (2)??? %i\n", isNTR);
             */
+
             // TODO: HANDLE BOTH BIG AND LITTLE ENDIAN RFL DATA
             FFLiMiiDataCoreRFL2CharInfo(pCharInfo,
                 charDataRFL,
@@ -515,27 +529,45 @@ bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, Re
             coreDataToCharInfoNX(&charInfoNX, reinterpret_cast<::coreData*>(buf->data));
             charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
             break;
-        // note this is miidatacore
-        default:
+        case INPUT_TYPE_FFL_STOREDATA:
+            // only verify CRC16, then fall through
+            if (buf->verifyCRC16 && !FFLiIsValidCRC16(buf->data, sizeof(FFLiStoreDataCFL)))
+                return FFL_RESULT_FILE_INVALID;
+        case INPUT_TYPE_FFL_MIIDATACORE:
             // TODO: SWAP ENDIAN ON WII U OR HANDLE BOTH KINDS
             FFLiMiiDataCore2CharInfo(pCharInfo,
                 reinterpret_cast<FFLiMiiDataCore&>(buf->data),
             // const u16* pCreatorName, bool resetBirthday
             NULL, false);
             break;
+        default: // unknown
+            return FFL_RESULT_ERROR;
+            break;
     }
-    return true;
+    return FFL_RESULT_OK;
 }
 
+const std::string socketErrorPrefix = "ERROR: ";
+
 // create model for render request
-void RootTask::createModel_(RenderRequest *buf) {
+bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
     FFLiCharInfo charInfo;
 
-    if (!pickupCharInfoFromRenderRequest(&charInfo, buf->dataLength, buf)) {
-        RIO_LOG("pickupCharInfoFromRenderRequest returned false\n");
-        mpModel = nullptr;
-        mCounter = 0.0f;
-        return;
+
+    std::string errMsg;
+
+    FFLResult pickupResult = pickupCharInfoFromRenderRequest(&charInfo, buf->dataLength, buf);
+
+    if (pickupResult != FFL_RESULT_OK) {
+        if (pickupResult == FFL_RESULT_FILE_INVALID) { // crc16 fail
+            errMsg = "Data CRC16 verification failed.\n";
+        } else {
+            errMsg = "Unknown data type (pickupCharInfoFromRenderRequest failed)\n";
+        }
+        RIO_LOG("%s", errMsg.c_str());
+        errMsg = socketErrorPrefix + errMsg;
+        send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
+        return false;
     }
 
     // VERIFY CHARINFO
@@ -543,21 +575,33 @@ void RootTask::createModel_(RenderRequest *buf) {
         // get verify char info reason, don't verify name
         FFLiVerifyCharInfoReason verifyCharInfoReason =
             FFLiVerifyCharInfoWithReason(&charInfo, false);
-        // TODO TODO: rn we are still relying on FFL_TEST_DISABLE_MII_COLOR_VERIFY, so OUT OF BOUNDS COLORS ARE NOT VERIFIED AAAAAAAAAAAAAAAAAA
         // I think I want to separate making the model
         // and picking up CharInfo from the request LATER
         // and then apply it when I do that
 
         if (verifyCharInfoReason != FFLI_VERIFY_CHAR_INFO_REASON_OK) {
             // CHARINFO IS INVALID, FAIL!
-            RIO_LOG("FFLiVerifyCharInfoWithReason failed with result: %d\n", verifyCharInfoReason);
-            mpModel = nullptr;
-            mCounter = 0.0f;
-            return;
+            errMsg = "FFLiVerifyCharInfoWithReason (data verification) failed: "
+            + std::string(FFLiVerifyCharInfoReasonToString(verifyCharInfoReason))
+            + "\n";
+            RIO_LOG("%s", errMsg.c_str());
+            errMsg = socketErrorPrefix + errMsg;
+            send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
+            return false;
         }
+/*
+        if (FFLiIsNullMiiID(&charInfo.creatorID)) {
+            errMsg = "FFLiIsNullMiiID returned true (this data will not work on a real console)\n";
+            RIO_LOG("%s", errMsg.c_str());
+            errMsg = socketErrorPrefix + errMsg;
+            send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
+            return false;
+        }
+*/
     }
 
     // NOTE NOTE: MAKE SURE TO CHECK NULL MII ID TOO
+
 
     FFLCharModelSource modelSource;
     // needs to be initialized to zero
@@ -590,14 +634,19 @@ void RootTask::createModel_(RenderRequest *buf) {
         // NOTE: REMOVE LATER..??
         charInfo.parts.glassScale += 1;
     if (!mpModel->initialize(arg, *mpShaders[whichShader])) {
-        RIO_LOG("FFLInitCharModelCPUStep FAILED while initializing model: %d\n", mpModel->getInitializeCpuResult());
+        errMsg = "FFLInitCharModelCPUStep FAILED while initializing model: "
+        + std::string(FFLResultToString(mpModel->getInitializeCpuResult()))
+        + "\n";
+        RIO_LOG("%s", errMsg.c_str());
+        errMsg = socketErrorPrefix + errMsg;
+        send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
         delete mpModel;
         mpModel = nullptr;
-        return;
+        return false;
     }
 
-    // Reset counter or maintain its state based on the application logic
     mCounter = 0.0f;
+    return true;
 }
 
 void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Texture2D* texture, int socket) {
@@ -1118,7 +1167,13 @@ void RootTask::calc_()
         if (read_bytes == RENDERREQUEST_SIZE) {
             delete mpModel;
             hasSocketRequest = true;
-            createModel_(reinterpret_cast<RenderRequest*>(buf));
+
+            RenderRequest* reqBuf = reinterpret_cast<RenderRequest*>(buf);
+
+            if (!createModel_(reqBuf, new_socket)) {
+                mpModel = nullptr;
+                mCounter = 0.0f;
+            };
         } else {
             RIO_LOG("got a request of length %d (should be %lu), dropping\n", read_bytes, RENDERREQUEST_SIZE);
             #ifdef _WIN32

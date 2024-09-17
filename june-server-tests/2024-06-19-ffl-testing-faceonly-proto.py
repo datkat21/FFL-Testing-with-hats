@@ -38,6 +38,7 @@ class RenderRequest:
         # this script then uhhhhhhhhhh
         # you can redefine these here
         self.verify_charinfo = False
+        self.verify_crc16 = True
         self.light_enable = True
         self.expression = expression
         self.resource_type = resource_type
@@ -50,7 +51,7 @@ class RenderRequest:
 
     def pack(self):
         return struct.pack(
-            '96sHII4Biii4B??2x',       # padding at the end
+            '96sHII4Biii4B???2x',       # padding at the end
             self.data,                 # data: 96s
             self.data_length,          # dataLength: H (uint16_t)
             self.resolution,           # resolution: I (unsigned int)
@@ -67,6 +68,7 @@ class RenderRequest:
             self.background_color[2],  # backgroundColor[2]: B (uint8_t)
             self.background_color[3],  # backgroundColor[3]: B (uint8_t)
             self.verify_charinfo,      # verifyCharInfo: ? (bool)
+            self.verify_crc16,         # verifyCRC16: ? (bool)
             self.light_enable          # lightEnable: ? (bool),
         )
 

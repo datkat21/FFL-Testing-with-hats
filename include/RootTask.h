@@ -20,14 +20,16 @@ class Model;
 
 enum MiiDataInputType {
     INPUT_TYPE_FFL_MIIDATACORE = 0,
+    INPUT_TYPE_FFL_STOREDATA,
     INPUT_TYPE_RFL_CHARDATA,
+    INPUT_TYPE_RFL_STOREDATA,
     INPUT_TYPE_NX_CHARINFO,
     INPUT_TYPE_STUDIO_ENCODED,
     // mii studio site decoded URL format/LocalStorage format
     INPUT_TYPE_STUDIO_RAW,
     INPUT_TYPE_NX_COREDATA,
     INPUT_TYPE_NX_STOREDATA,
-    INPUT_TYPE_RFL_CHARDATA_LE
+    //INPUT_TYPE_RFL_CHARDATA_LE
 };
 
 enum ShaderType {
@@ -71,15 +73,14 @@ struct RenderRequest {
 
     // at the end to help with alignment
     bool            verifyCharInfo; // for FFLiVerifyCharInfoWithReason
-    // TBD you may need another one for verifying StoreData CRC16
+    bool            verifyCRC16;
     bool            lightEnable;
     //bool            setLightDirection;
 };
 #define RENDERREQUEST_SIZE sizeof(RenderRequest)
 
-// used for pickupCharInfoFromRenderRequest
-#include <mii_ext_MiiPort.h>
-bool pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, RenderRequest *buf);
+#include <mii_ext_MiiPort.h> // used for below function
+FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, RenderRequest *buf);
 
 class RootTask : public rio::ITask
 {
@@ -95,7 +96,7 @@ private:
 
     void createModel_();
     //void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
-    void createModel_(RenderRequest *buf);
+    bool createModel_(RenderRequest* buf, int socket_handle);
 
     void initializeShaders_() {
         for (int type = 0; type < SHADER_TYPE_MAX; type++) {

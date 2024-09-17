@@ -57,41 +57,26 @@ type RenderRequest struct {
 	BackgroundColor   [4]uint8
 
 	VerifyCharInfo    bool
+	VerifyCRC16       bool
 	LightEnable       bool
-	_                 [2]byte
+	_                 [1]byte
+
 	//SetLightDirection bool
 	//LightDirection    [3]float32
 }
-/*
-struct RenderRequest {
-    char            data[96];   // just a buffer that accounts for maximum size
-    uint16_t        dataLength; // determines the mii data format
-    unsigned int    resolution; // resolution for render buffer
-    // NOTE: texture resolution can control whether mipmap is enabled (1 << 30)
-    FFLResolution   texResolution; // u32, or just uint, i think
-    //unsigned int    scaleFactor;
-    //bool            isHeadOnly;  // in favor of view type
-    uint8_t         viewType;
-    //rio::BaseVec3f  lightDir;
-    uint8_t         expression;
-    uint8_t         resourceType;
-    uint8_t         shaderType;
-    rio::Vector3i   cameraRotate;
-    uint8_t         backgroundColor[4]; // passed to clearcolor
 
-    // at the end to help with alignment
-    bool            verifyCharInfo; // for FFLiVerifyCharInfoWithReason
-    // TBD you may need another one for verifying StoreData CRC16
-    bool            lightEnable;
-    //bool            setLightDirection;
-};
-*/
 var viewTypes = map[string]int {
 	"face":             0,
 	"face_only":        1,
 	"all_body":         2,
 	"fflmakeicon":      3,
 	"variableiconbody": 4,
+}
+
+func isConnectionRefused(err error) bool {
+	return errors.Is(err, syscall.ECONNREFUSED) ||
+		// WSAECONNREFUSED on windows
+		errors.Is(err, syscall.Errno(10061))
 }
 
 func sayHello(w http.ResponseWriter, r *http.Request) {
@@ -359,6 +344,10 @@ func isHex(s string) bool {
 	return err == nil
 }
 
+// if a socket response starts with this it
+// is always read out to the api response
+const socketErrorPrefix = "ERROR: "
+
 // sendRenderRequest sends the render request to the render server and receives the buffer data
 func sendRenderRequest(request RenderRequest) ([]byte, error) {
 	var buffer bytes.Buffer
@@ -386,7 +375,7 @@ func sendRenderRequest(request RenderRequest) ([]byte, error) {
 	receivedData := make([]byte, bufferSize)
 	_, err = io.ReadFull(conn, receivedData)
 	if err != nil {
-		return nil, err
+		return receivedData, err
 	}
 
 	return receivedData, nil
@@ -523,7 +512,15 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	// NOTE: WHAT SHOULD BOOLS LOOK LIKE...???
 	mipmapEnable := query.Get("mipmapEnable") != "" // is present?
 	lightEnable := query.Get("lightEnable") != "0" // 0 = no lighting
-	verifyCharInfo := query.Get("verifyCharInfo") != "0" // 0 = no verify
+	verifyCharInfo := query.Get("verifyCharInfo") != "0" // verify default
+
+	// Parsing and validating resource type
+	resourceType, err := strconv.Atoi(resourceTypeStr)
+	if err != nil {
+		http.Error(w, "resource type is not a number", http.StatusBadRequest)
+		return
+	}
+	verifyCRC16 := query.Get("verifyCRC16") != "0" // 0 = no verify
 
 	// Parsing and validating expression flag
 	/*expressionFlag, err := strconv.Atoi(expressionFlagStr)
@@ -543,6 +540,11 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		// now try to parse it as a string
 		// this defaults to normal if it fails
 		expression = getExpressionInt(expressionStr)
+	}
+
+	if expression > 18 && resourceType < 1 {
+		http.Error(w, "🥺🥺 🥺🥺🥺🥺 🥺🥺🥺, 🥺🥺🥺 😔 (Translation: Sorry, you cannot use this expression with the middle resource.)", http.StatusBadRequest)
+		return
 	}
 
 	// Parsing and validating width
@@ -565,13 +567,6 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	// NOTE: excessive high texture resolutions crash (assert fail) the renderer
 	if texResolution > 8192 {
 		http.Error(w, "you cannot make texture resolution this high it will make your balls explode", http.StatusBadRequest)
-		return
-	}
-
-	// Parsing and validating resource type
-	resourceType, err := strconv.Atoi(resourceTypeStr)
-	if err != nil {
-		http.Error(w, "resource type is not a number", http.StatusBadRequest)
 		return
 	}
 
@@ -646,6 +641,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		CameraRotate:    cameraRotateVec3i,
 		BackgroundColor: bgColor4u8,
 		VerifyCharInfo:  verifyCharInfo,
+		VerifyCRC16:     verifyCRC16,
 		LightEnable:     lightEnable,
 	}
 
@@ -674,34 +670,30 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		*/
 		// Handling incomplete data response
 		if err.Error() == "EOF" ||
-		errors.Is(err, syscall.ECONNRESET) ||
-		// WSAECONNREFUSED on windows
-		errors.Is(err, syscall.Errno(10061)) {
-			http.Error(w, `incomplete data from backend :( render probably failed bc FFLInitCharModelCPUStep failed... probably because data is invalid
-<details>
-<summary>
-TODO: to make this error better here are the steps where the error is discarded:
-</summary>
-<pre>
-* RootTask::calc_ responds to socket
-* Model::initialize makes model nullptr
-* Model::setCharModelSource_ calls initializeCpu_
-* Model::initializeCpu_ calls FFLInitCharModelCPUStep
-  - FFLResult is discarded here
-* FFLInitCharModelCPUStep...
-* FFLiInitCharModelCPUStep...
-* FFLiCharModelCreator::ExecuteCPUStep
-* FFLiDatabaseManager::PickupCharInfo
-now, PickupCharInfo calls:
-* GetCharInfoFromStoreData, fails if StoreData is not big enough or its CRC16 fails - pretty simple.
-* FFLiiVerifyCharInfo or FFLiIsNullMiiID are called.
-  - i think FFLiIsNullMiiID is for if a mii is marked as deleted by setting its ID to null
-  - FFLiiVerifyCharInfo -> FFLiVerifyCharInfoWithReason
-    + FFLiVerifyCharInfoReason is discarded here
-    + <b>FFLiVerifyCharInfoWithReason IS THE MOST LIKELY REASON</b>
-</pre>
-</details>
-		`, http.StatusInternalServerError)
+		err.Error() == "unexpected EOF" || // from io.ReadFull
+		errors.Is(err, syscall.ECONNRESET) {
+			// if it begins with the prefix
+			responseStr := string(bufferData)
+			// Find the first occurrence of the null character (0 byte)
+			if nullIndex := strings.Index(responseStr, string(byte(0))); nullIndex != -1 {
+				// If the null character exists, slice the string until that point
+				responseStr = responseStr[:nullIndex]
+			}
+			if strings.HasPrefix(responseStr, socketErrorPrefix) {
+				// in this case, respond with that error
+				http.Error(w, "renderer returned " + responseStr, http.StatusInternalServerError)
+				return
+			}
+
+			http.Error(w, `incomplete data from backend :( render probably failed for one of the following reasons:
+* FFLInitCharModelCPUStep failed: internal error or use of out-of-bounds parts
+* FFLiVerifyCharInfoWithReason failed: mii data/CharInfo is invalid`, http.StatusInternalServerError)
+			return
+		// handle connection refused/backend down
+		} else if isConnectionRefused(err) {
+			msg := "OH NO!!! the site is up, but the renderer backend is down..."
+			msg += "\nerror detail: " + err.Error()
+			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
 		http.Error(w, "incomplete response from backend, error is: "+err.Error(), http.StatusInternalServerError)
