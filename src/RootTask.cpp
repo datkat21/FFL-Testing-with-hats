@@ -733,7 +733,9 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
     RIO_LOG("Wrote %d bytes out to socket.\n", bufferSize);
 }
 
-void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::BaseMtx44f& proj_mtx) {
+
+void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx) {
+
     // SELECT BODY MODEL
     const rio::mdl::Model* model = mpBodyModels[charInfo->gender];
 
@@ -749,7 +751,7 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::B
         mpModel->getShader()->bindBodyShader(light_enable, charInfo);
         //RIO_GL_CALL(glBindVertexArray(vao));
 
-        rio::BaseMtx34f view_mtx;
+        //rio::BaseMtx34f view_mtx;
         /*rio::LookAtCamera camera;
         camera.pos() = { 0.0f, 130.37f, 415.53f };
         camera.at() = { 0.0f, 130.37f, 0.0f };
@@ -757,7 +759,7 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::B
         camera.getMatrix(&view_mtx);
         */
 
-        rio::BaseVec3f scaleFactors;
+        rio::Vector3f scaleFactors;
 
         float build = charInfo->build;
         float height = charInfo->height;
@@ -775,26 +777,27 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::B
 
         scaleFactors.y = scaleFactors.y * 0.55f + 0.6f;
 
-        scaleFactors.z = scaleFactors.x;
 
+
+        // the below are applied for both sets of factors
+        scaleFactors.z = scaleFactors.x;
         // Ensure scaleFactors.y is clamped to a maximum of 1.0
         scaleFactors.y = std::min(scaleFactors.y, 1.0f);
 
 
-        float bodyHeightOffset = scaleFactors.y * 93.92f;
+        static const float bodyToHeadOffset = -93.92f;
 
-        mCamera.at() = { mCamera.at().x, mCamera.at().y + bodyHeightOffset, mCamera.at().z };
-        mCamera.pos() = { mCamera.pos().x, mCamera.pos().y + bodyHeightOffset, mCamera.pos().z };
-        mCamera.getMatrix(&view_mtx);
+        // make new matrix for body
+        rio::Matrix34f modelMtxBody = rio::Matrix34f::ident;//model_mtx;
 
+        // apply scale factors before anything else
+        modelMtxBody.applyScaleLocal(scaleFactors);
+        // apply transformation for body head offset
+        modelMtxBody.applyTranslationLocal({0.0f, bodyToHeadOffset, 0.0f});
+        // apply original model matrix (rotation)
+        modelMtxBody.setMul(model_mtx, modelMtxBody);
 
-        // Create the scale matrix
-        rio::BaseMtx34f model_mtx = rio::Matrix34f::ident;
-        model_mtx.m[0][0] = scaleFactors.x; // Scale x-axis
-        model_mtx.m[1][1] = scaleFactors.y; // Scale y-axis
-        model_mtx.m[2][2] = scaleFactors.z; // Scale z-axis
-
-        mpModel->getShader()->setViewUniformBody(model_mtx, view_mtx, proj_mtx);
+        mpModel->getShader()->setViewUniformBody(modelMtxBody, view_mtx, proj_mtx);
 
         // finally, the uniforms are all set
 
@@ -807,7 +810,7 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::B
 }
 
 // Convert degrees to radians
-rio::Vector3f convertRotationFrom3i(const rio::Vector3i degrees) {
+rio::Vector3f convertVec3iToRadians3f(const rio::Vector3i degrees) {
     rio::Vector3f radians;
     radians.x = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees.x), 360.0f));
     radians.y = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees.y), 360.0f));
@@ -816,7 +819,7 @@ rio::Vector3f convertRotationFrom3i(const rio::Vector3i degrees) {
 }
 
 // Calculate position based on spherical coordinates
-rio::Vector3f calculatePosition(float radius, const rio::Vector3f& radians) {
+rio::Vector3f calculateCameraOrbitPosition(float radius, const rio::Vector3f& radians) {
     rio::Vector3f position;
     position.x = radius * -std::sin(radians.y) * std::cos(radians.x);
     position.y = radius * std::sin(radians.x);
@@ -907,17 +910,21 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
 
 
     // Update camera position
-    const rio::Vector3f cameraPos = mCamera.pos();
-    const float radius = cameraPos.z;
+    const rio::Vector3f cameraPosInitial = mCamera.pos();
+    const float radius = cameraPosInitial.z;
 
-    rio::Vector3f rotateRadians = convertRotationFrom3i(renderRequest->cameraRotate);
-    rio::Vector3f position = calculatePosition(radius, rotateRadians);
-    const rio::Vector3f upVector = calculateUpVector(rotateRadians);
+    const rio::Vector3f cameraRotate = convertVec3iToRadians3f(renderRequest->cameraRotate);
 
-    mCamera.pos() = { position.x, cameraPos.y + position.y, position.z };
+    rio::Vector3f position = calculateCameraOrbitPosition(radius, cameraRotate);
+    position.y += cameraPosInitial.y;
+    const rio::Vector3f upVector = calculateUpVector(cameraRotate);
+
+    mCamera.pos() = position;
     mCamera.setUp(upVector);
 
     mCamera.getMatrix(&view_mtx);
+
+    rio::Matrix34f model_mtx = rio::Matrix34f::ident;
     #ifdef RIO_NO_CLIP_CONTROL
         // render upside down so glReadPixels is right side up
         if (projMtx->m[1][1] > 0) // if it is not already negative
@@ -1014,7 +1021,7 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
         FFLiCharModel *charModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
 
         //drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);
-        drawMiiBodyREAL(mpModel->getLightEnable(), &charModel->charInfo, *projMtx);
+        drawMiiBodyREAL(mpModel->getLightEnable(), &charModel->charInfo, model_mtx, view_mtx, *projMtx);
     }
 
     renderBuffer.bind();
@@ -1205,15 +1212,26 @@ void RootTask::calc_()
     mCamera.setUp(cameraUp);
     // Move the camera around the target clockwise
     // Define the radius of the orbit in the XZ-plane (distance from the target)
+    rio::Matrix34f model_mtx;// = rio::Matrix34f::ident;
     if (!mpNoSpin && !mpServerOnly && !hasSocketRequest && mpModel != nullptr) {
         radius += 380;
-        mCamera.pos().set(
+        /*mCamera.pos().set(
             // Set the camera's position using the sin and cos functions to move it in a circle around the target
             std::sin(mCounter) * radius,
             CENTER_POS.y * std::sin(mCounter) * 7.5 - 30,
             // Add a minus sign to the cosine to spin CCW (same as SpinMii)
             std::cos(mCounter) * radius
         );
+        */mCamera.pos() = { CENTER_POS.x, CENTER_POS.y, radius };
+
+        model_mtx.makeR({
+            0.0f,
+            mCounter,
+            0.0f
+        });
+
+        mpModel->setMtxRT(model_mtx);
+
         mCamera.at() = { target.x, target.y - 30, target.z };
     } else {
         mCamera.pos() = CENTER_POS;
@@ -1239,7 +1257,7 @@ void RootTask::calc_()
 
     if (mpModel != nullptr) {
         mpModel->drawOpa(view_mtx, mProjMtx);
-        drawMiiBodyREAL(mpModel->getLightEnable(), &reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel())->charInfo, mProjMtx);
+        drawMiiBodyREAL(mpModel->getLightEnable(), &reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel())->charInfo, model_mtx, view_mtx, mProjMtx);
         mpModel->drawXlu(view_mtx, mProjMtx);
     }
 }

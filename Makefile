@@ -26,7 +26,7 @@ PKG_CONFIG_PATH := include/.pkg-config-path-dummy-for-makefile/:$(PKG_CONFIG_PAT
 #export PKG_CONFIG_PATH  # not working???
 
 # libraries passed to pkg-config
-LIBS := zlib glew glfw3
+LIBS := zlib glfw3
 # use pkg-config output as LDFLAGS and CFLAGS later on
 PKG_CONFIG_CFLAGS_CMD := $(TOOLCHAIN_PREFIX)pkg-config --cflags $(LIBS)
 $(info pkg-config cflags command: $(PKG_CONFIG_CFLAGS_CMD))
