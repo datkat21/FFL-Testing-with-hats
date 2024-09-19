@@ -413,9 +413,6 @@ void Shader::applyAlphaTest(bool enable, rio::Graphics::CompareFunc func, f32 re
 {
 #if RIO_IS_CAFE
     GX2SetAlphaTest(enable, GX2CompareFunction(func), ref);
-#elif RIO_IS_WIN
-    mShader.setUniform(u32(func - GL_NEVER), u32(-1), mShader.getFragmentUniformLocation("PS_PUSH.alphaFunc"));
-    mShader.setUniform(ref,                  u32(-1), mShader.getFragmentUniformLocation("PS_PUSH.alphaRef"));
 #endif
 }
 
@@ -539,11 +536,7 @@ void Shader::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 
     mBodyShader.setUniform(favoriteColor.r, favoriteColor.g, favoriteColor.b, u32(-1), mBodyShader.getFragmentUniformLocation("base"));
 
-    mBodyShader.setUniform(u32(7), u32(-1), mBodyShader.getFragmentUniformLocation("PS_PUSH.alphaFunc"));
-    mBodyShader.setUniform(0.0f, u32(-1), mBodyShader.getFragmentUniformLocation("PS_PUSH.alphaRef"));
-
-    // the light direction is passed into this shader NEGATIVE?
-    mBodyShader.setUniform(-cLightDir.x, -cLightDir.y, -cLightDir.z, -0.30943f, mBodyShader.getVertexUniformLocation("lightDir"), u32(-1));
+    mBodyShader.setUniform(cLightDir, mBodyShader.getVertexUniformLocation("lightDir"), u32(-1));
 
     mBodyShader.setUniform(3.0f, u32(-1), mBodyShader.getFragmentUniformLocation("SP_power"));
 

@@ -18,6 +18,21 @@ layout( location = 1 ) in vec2 i_TexCoord;
 layout( location = 2 ) in vec3 i_Normal;
 layout( location = 3 ) in vec4 i_Parameter;
 
+/*
+layout( location = 4 ) in vec4  i_Parameter;
+layout( location = 5 ) in ivec4 i_Index;
+layout(std140) uniform u_Skeleton
+{
+    vec4 mtxPalette[3 * 128];
+};
+
+layout(std140) uniform u_Shape
+{
+    vec4 shapeMtx[3];
+    int vtxSkinCount;
+};
+*/
+
 // TODO: you can use rio mShader.setUniformArray to bind this(?)
 // https://github.com/aboood40091/RIO-Tests/blob/b9db5fb506c92d89c526d6c93efa0d44a7260510/07_Uniform-Variables-2/src/roottask.cpp#L193
 /*
@@ -70,3 +85,47 @@ void main()
 #endif
     
 }
+/*
+    vec4 pos_w = vec4(0, 0, 0, 1);
+    vec3 nrm_w = vec3(0, 0, 0);
+    vec4 tmp = vec4(i_Position.xyz, 1.0f);
+    
+    if (vtxSkinCount == 0)
+    {
+        pos_w.x = dot(shapeMtx[0], tmp);
+        pos_w.y = dot(shapeMtx[1], tmp);
+        pos_w.z = dot(shapeMtx[2], tmp);
+        nrm_w.x = dot(shapeMtx[0].xyz, i_Normal);
+        nrm_w.y = dot(shapeMtx[1].xyz, i_Normal);
+        nrm_w.z = dot(shapeMtx[2].xyz, i_Normal);
+    }
+    else if (vtxSkinCount == 1)
+    {
+        int mtxIndex = i_Index.x * 3;
+        pos_w.x = dot(mtxPalette[mtxIndex + 0], tmp);
+        pos_w.y = dot(mtxPalette[mtxIndex + 1], tmp);
+        pos_w.z = dot(mtxPalette[mtxIndex + 2], tmp);
+        nrm_w.x = dot(mtxPalette[mtxIndex + 0].xyz, i_Normal);
+        nrm_w.y = dot(mtxPalette[mtxIndex + 1].xyz, i_Normal);
+        nrm_w.z = dot(mtxPalette[mtxIndex + 2].xyz, i_Normal);
+    }
+    
+    vec4 pos_v;
+    pos_v.x = dot(cameraMtx[0], pos_w);
+    pos_v.y = dot(cameraMtx[1], pos_w);
+    pos_v.z = dot(cameraMtx[2], pos_w);
+    pos_v.w = 1.0;
+
+    gl_Position.x = dot(projMtx[0], pos_v);
+    gl_Position.y = dot(projMtx[1], pos_v);
+    gl_Position.z = dot(projMtx[2], pos_v);
+    gl_Position.w = dot(projMtx[3], pos_v);
+    
+    Out.normal.x = dot(cameraMtx[0].xyz, nrm_w);
+    Out.normal.y = dot(cameraMtx[1].xyz, nrm_w);
+    Out.normal.z = dot(cameraMtx[2].xyz, nrm_w);
+    Out.texCoord = i_TexCoord.xy;
+    Out.specularMix = i_Parameter.r;
+   
+}
+*/

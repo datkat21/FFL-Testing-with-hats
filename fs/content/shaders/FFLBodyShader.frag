@@ -1,25 +1,15 @@
 #version 330 core
 
-// Uniforms based on the given Pixel Shader
-uniform float SP_power; // GX2_VAR_TYPE_FLOAT
-uniform vec3  ambient;   // GX2_VAR_TYPE_VEC3
-uniform vec3  base;      // GX2_VAR_TYPE_VEC3
-uniform vec3  diffuse;   // GX2_VAR_TYPE_VEC3
-uniform vec3  rim;       // GX2_VAR_TYPE_VEC3
-uniform float rimSP_power; // GX2_VAR_TYPE_FLOAT
-uniform vec3  specular;  // GX2_VAR_TYPE_VEC3
+uniform float SP_power;
+uniform vec3  ambient;
+uniform vec3  base;
+uniform vec3  diffuse;
+uniform vec3  rim;
+uniform float rimSP_power;
+uniform vec3  specular;
 
-struct PS_PUSH_DATA
-{
-    uint alphaFunc;
-    float alphaRef;
-    uint needsPremultiply;
-};
-
-uniform PS_PUSH_DATA PS_PUSH;
-
-in vec4 v_lightDir;
-in vec4 v_normal;
+in vec3 v_lightDir;
+in vec3 v_normal;
 in vec4 v_position;
 
 out vec4 PIXEL_0;
@@ -28,14 +18,13 @@ out vec4 PIXEL_0;
 int stackIdxVar;
 int stateVar;
 vec4 RVar[128];
-vec4 _pixelTmp;
 
 void main()
 {
     stackIdxVar = 0;
     stateVar = 0;
-    RVar[0u] = v_lightDir;
-    RVar[1u] = v_normal;
+    RVar[0u].xyz = v_lightDir;
+    RVar[1u].xyz = v_normal;
     RVar[2u] = v_position;
     if (stateVar == 0)
     {
@@ -146,77 +135,6 @@ void main()
         RVar[3u].y = (_336 * rim.y) + _348;
         RVar[3u].z = (_336 * rim.z) + _335;
     }
-    switch (PS_PUSH.alphaFunc & 255u)
-    {
-        case 0u:
-        {
-            discard;
-        }
-        case 1u:
-        {
-            if (!(RVar[3u].w < PS_PUSH.alphaRef))
-            {
-                discard;
-            }
-            break;
-        }
-        case 2u:
-        {
-            if (abs(RVar[3u].w - PS_PUSH.alphaRef) > 9.9999997473787516355514526367188e-05)
-            {
-                discard;
-            }
-            break;
-        }
-        case 3u:
-        {
-            if (!(RVar[3u].w <= PS_PUSH.alphaRef))
-            {
-                discard;
-            }
-            break;
-        }
-        case 4u:
-        {
-            if (!(RVar[3u].w > PS_PUSH.alphaRef))
-            {
-                discard;
-            }
-            break;
-        }
-        case 5u:
-        {
-            if (abs(RVar[3u].w - PS_PUSH.alphaRef) <= 9.9999997473787516355514526367188e-05)
-            {
-                discard;
-            }
-            break;
-        }
-        case 6u:
-        {
-            if (!(RVar[3u].w >= PS_PUSH.alphaRef))
-            {
-                discard;
-            }
-            break;
-        }
-    }
-    _pixelTmp = RVar[3u];
-    uint _431 = PS_PUSH.alphaFunc >> 8u;
-    if (_431 == 1u)
-    {
-        _pixelTmp = vec4(1.0);
-    }
-    else
-    {
-        if (_431 == 2u)
-        {
-            _pixelTmp = vec4(0.0);
-        }
-    }
-    if ((PS_PUSH.needsPremultiply & 1u) != 0u)
-    {
-        _pixelTmp *= vec4(_pixelTmp.www, 1.0);
-    }
-    PIXEL_0 = _pixelTmp;
+
+    PIXEL_0 = RVar[3u];
 }
