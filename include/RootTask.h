@@ -69,12 +69,21 @@ struct RenderRequest {
     uint8_t         resourceType;
     uint8_t         shaderType;
     rio::Vector3i   cameraRotate;
+    rio::Vector3i   modelRotate;
     uint8_t         backgroundColor[4]; // passed to clearcolor
+    //uint8_t         clothesColor[4]; // fourth color is NOT alpha
+    // but if fourth byte in clothesColor is 0xFF then it is treated as a color instead of an index
 
     // at the end to help with alignment
     bool            verifyCharInfo; // for FFLiVerifyCharInfoWithReason
     bool            verifyCRC16;
     bool            lightEnable;
+    int8_t          clothesColor; // favorite color, -1 for default
+    /*
+    uint8_t         instanceCount;
+    // model/character rotation is default
+    bool            instanceRotationModeIsCamera;
+    */
     //bool            setLightDirection;
 };
 #define RENDERREQUEST_SIZE sizeof(RenderRequest)

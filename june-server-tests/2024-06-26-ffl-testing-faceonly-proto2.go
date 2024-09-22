@@ -54,13 +54,16 @@ type RenderRequest struct {
 	ResourceType      uint8
 	ShaderType        uint8
 	CameraRotate      [3]int32
+	ModelRotate       [3]int32
 	BackgroundColor   [4]uint8
 
 	VerifyCharInfo    bool
 	VerifyCRC16       bool
 	LightEnable       bool
-	_                 [1]byte
-
+	ClothesColor      int8 // default: -1
+	/*InstanceCount     uint8
+	InstanceRotationModeIsCamera bool
+	*/
 	//SetLightDirection bool
 	//LightDirection    [3]float32
 }
@@ -423,6 +426,10 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if shaderTypeStr == "" {
 		shaderTypeStr = "0"
 	}
+	clothesColorStr := query.Get("clothesColor")
+	if clothesColorStr == "" {
+		clothesColorStr = "-1"
+	}
 
 	var storeData []byte
 	var err error
@@ -504,6 +511,11 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		viewTypeStr = "face"
 	}
 
+	instanceCountStr := query.Get("instanceCount")
+	if instanceCountStr == "" {
+		instanceCountStr = "1"
+	}
+
 	viewType, exists := viewTypes[viewTypeStr]
 	if !exists {
 		http.Error(w, "we did not implement that view sorry", http.StatusBadRequest)
@@ -545,6 +557,12 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if expression > 18 && resourceType < 1 {
 		http.Error(w, "🥺🥺 🥺🥺🥺🥺 🥺🥺🥺, 🥺🥺🥺 😔 (Translation: Sorry, you cannot use this expression with the middle resource.)", http.StatusBadRequest)
 		return
+	}
+
+	var clothesColor int
+	clothesColor, err = strconv.Atoi(clothesColorStr)
+	if err != nil {
+		clothesColor = getClothesColorInt(clothesColorStr)
 	}
 
 	// Parsing and validating width
@@ -599,6 +617,33 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	modelRotateVec3i := [3]int32{0, 0, 0}
+
+	if charXPos := query.Get("characterXRotate"); charXPos != "" {
+		x, err := strconv.Atoi(charXPos)
+		if err == nil {
+			modelRotateVec3i[0] = int32(x)
+		}
+	}
+	if charYPos := query.Get("characterYRotate"); charYPos != "" {
+		y, err := strconv.Atoi(charYPos)
+		if err == nil {
+			modelRotateVec3i[1] = int32(y)
+		}
+	}
+	if charZPos := query.Get("characterZRotate"); charZPos != "" {
+		z, err := strconv.Atoi(charZPos)
+		if err == nil {
+			modelRotateVec3i[2] = int32(z)
+		}
+	}
+
+	instanceCount, err := strconv.Atoi(instanceCountStr)
+	if err != nil || instanceCount > 20 {
+		http.Error(w, "instanceCount must be a number less than 20 or whatever i just set the maximum to", http.StatusBadRequest)
+		return
+	}
+
 	// Strip mipmap bit from texResolution
 	texResolution &= FFLResolutionMask
 	// Also multiply it by two if it's particularly low...
@@ -639,10 +684,15 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		ResourceType:    uint8(resourceType),
 		ShaderType:      uint8(shaderType),
 		CameraRotate:    cameraRotateVec3i,
+		ModelRotate:     modelRotateVec3i,
 		BackgroundColor: bgColor4u8,
+		/*InstanceCount:   uint8(instanceCount),
+		InstanceRotationModeIsCamera: false,
+		*/
 		VerifyCharInfo:  verifyCharInfo,
 		VerifyCRC16:     verifyCRC16,
 		LightEnable:     lightEnable,
+		ClothesColor:    int8(clothesColor),
 	}
 
 	// Enabling mipmap if specified
@@ -809,14 +859,42 @@ func getExpressionFlag(input string) int {
 	return 1 << FFL_EXPRESSION_NORMAL
 }
 
+var clothesColorMap = map[string]int{
+	// NOTE: solely based on mii studio consts, not FFL enums
+	"default":     -1,
+	"red":         0,
+	"orange":      1,
+	"yellow":      2,
+	"yellowgreen": 3,
+	"green":       4,
+	"blue":        5,
+	"skyblue":     6,
+	"pink":        7,
+	"purple":      8,
+	"brown":       9,
+	"white":       10,
+	"black":       11,
+}
+
 func getExpressionInt(input string) int {
 	input = strings.ToLower(input)
 	if expression, exists := expressionMap[input]; exists {
 		return expression
 	}
+	// NOTE: mii studio rejects requests if the string doesn't match ..
+	// .. perhaps we should do the same
 	return FFL_EXPRESSION_NORMAL
 }
 
+func getClothesColorInt(input string) int {
+	input = strings.ToLower(input)
+	if colorIdx, exists := clothesColorMap[input]; exists {
+		return colorIdx
+	}
+	// NOTE: mii studio rejects requests if the string doesn't match ..
+	// .. perhaps we should do the same
+	return -1
+}
 
 // NOTE: BELOW IS IN nwf-mii-cemu-toy handlers.go
 

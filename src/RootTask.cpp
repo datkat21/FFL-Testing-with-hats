@@ -1,5 +1,6 @@
 #include "gpu/rio_Texture.h"
 #include "math/rio_Matrix.h"
+#include "nn/ffl/FFLGender.h"
 #include <nn/ffl/FFLResourceType.h>
 #include <nn/ffl/detail/FFLiCharInfo.h>
 #include <nn/ffl/FFLiCreateID.h>
@@ -284,7 +285,7 @@ void RootTask::prepare_()
         mProjMtx = proj.getMatrix();
 
         rio::PerspectiveProjection projIconBody(
-            5.0f,//10.0f,
+            10.0f,//10.0f,
             1000.0f,
             rio::Mathf::deg2rad(15.0f),
             1.0f
@@ -737,6 +738,9 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
 void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx) {
 
     // SELECT BODY MODEL
+    if (charInfo->gender > FFL_GENDER_MAX - 1)
+        return;
+
     const rio::mdl::Model* model = mpBodyModels[charInfo->gender];
 
     const rio::mdl::Mesh* const meshes = model->meshes();
@@ -914,6 +918,7 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
     const float radius = cameraPosInitial.z;
 
     const rio::Vector3f cameraRotate = convertVec3iToRadians3f(renderRequest->cameraRotate);
+    const rio::Vector3f modelRotate = convertVec3iToRadians3f(renderRequest->modelRotate);
 
     rio::Vector3f position = calculateCameraOrbitPosition(radius, cameraRotate);
     position.y += cameraPosInitial.y;
@@ -925,6 +930,13 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
     mCamera.getMatrix(&view_mtx);
 
     rio::Matrix34f model_mtx = rio::Matrix34f::ident;
+    //rio::Matrix34f rotationMtx;
+    model_mtx.makeR(modelRotate); // NOTE: makes the model matrix, the rotation matrix directly
+
+    //model_mtx.setMul(rio::Matrix34f::ident, rotationMtx);
+
+    mpModel->setMtxRT(model_mtx);
+
     #ifdef RIO_NO_CLIP_CONTROL
         // render upside down so glReadPixels is right side up
         if (projMtx->m[1][1] > 0) // if it is not already negative
@@ -1020,8 +1032,19 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
     {
         FFLiCharModel *charModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
 
+        s32 originalFavoriteColor = charModel->charInfo.favoriteColor;
+        if (renderRequest->clothesColor >= 0
+            // verify favorite color is in range here bc it is NOT verified in drawMiiBodyREAL
+            && renderRequest->clothesColor < FFL_FAVORITE_COLOR_MAX
+        ) {
+            // change favorite color after drawing opa
+            charModel->charInfo.favoriteColor = renderRequest->clothesColor;
+        }
+
         //drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);
         drawMiiBodyREAL(mpModel->getLightEnable(), &charModel->charInfo, model_mtx, view_mtx, *projMtx);
+        // restore original favorite color tho
+        charModel->charInfo.favoriteColor = originalFavoriteColor;
     }
 
     renderBuffer.bind();
@@ -1031,87 +1054,6 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
     mpModel->drawXlu(view_mtx, *projMtx);
     RIO_LOG("drawXlu rendered to the buffer.\n");
 
-/*
-    rio::RenderBuffer renderBufferDownsample;
-    renderBufferDownsample.setSize(renderRequest->resolution, renderRequest->resolution);
-
-    RIO_GL_CALL(glViewport(0, 0, renderRequest->resolution, renderRequest->resolution));
-
-    //rio::Window::instance()->getNativeWindow()->getColorBufferTextureFormat();
-    rio::Texture2D *renderTextureDownsampleColor = new rio::Texture2D(rio::TEXTURE_FORMAT_R8_G8_B8_A8_UNORM, renderBufferDownsample.getSize().x, renderBufferDownsample.getSize().y, 1);
-    rio::RenderTargetColor renderTargetDownsampleColor;
-    renderTargetDownsampleColor.linkTexture2D(*renderTextureDownsampleColor);
-    renderBufferDownsample.setRenderTargetColor(&renderTargetDownsampleColor);
-
-    renderBufferDownsample.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR_DEPTH_STENCIL, renderRequest->backgroundColor);
-    renderBufferDownsample.bind();
-
-    rio::RenderState render_state;
-    render_state.setBlendEnable(true);
-    /*
-    render_state.setBlendFactorSrc(rio::Graphics::BlendFactor::BLEND_MODE_ONE_MINUS_DST_ALPHA);
-    render_state.setBlendFactorDst(rio::Graphics::BlendFactor::BLEND_MODE_DST_ALPHA);
-    render_state.setBlendFactorSrcAlpha(rio::Graphics::BlendFactor::BLEND_MODE_ONE);
-    render_state.setBlendFactorDstAlpha(rio::Graphics::BlendFactor::BLEND_MODE_ONE);
-    *
-    render_state.setBlendFactorSrc(rio::Graphics::BlendFactor::BLEND_MODE_SRC_ALPHA);
-    render_state.setBlendFactorDst(rio::Graphics::BlendFactor::BLEND_MODE_ONE_MINUS_SRC_ALPHA);
-    render_state.setBlendFactorSrcAlpha(rio::Graphics::BlendFactor::BLEND_MODE_SRC_ALPHA);
-    render_state.setBlendFactorDstAlpha(rio::Graphics::BlendFactor::BLEND_MODE_ONE_MINUS_SRC_ALPHA);
-
-    render_state.apply();
-/*
-    // Load and compile the downsampling shader
-    rio::Shader downsampleShader;
-    downsampleShader.load("downsample_shader");
-    downsampleShader.bind();
-
-// Bind the high-resolution texture
-rio::TextureSampler2D highResSampler;
-highResSampler.linkTexture2D(renderTextureColor);
-highResSampler.tryBindFS(downsampleShader.getFragmentSamplerLocation("highResTexture"), 0);
-
-// Set shader uniforms if needed
-downsampleShader.setUniform(ssaaFactor, u32(-1), downsampleShader.getFragmentUniformLocation("ssaaFactor"));
-
-downsampleShader.setUniform(f32(renderRequest->resolution), f32(renderRequest->resolution), u32(-1), downsampleShader.getFragmentUniformLocation("resolution"));
-
-
-// Render a full-screen quad to apply the downsampling shader
-GLuint quadVAO, quadVBO;
-float quadVertices[] = {
--1.0f,  1.0f,  0.0f, 1.0f,
--1.0f, -1.0f,  0.0f, 0.0f,
-    1.0f, -1.0f,  1.0f, 0.0f,
--1.0f,  1.0f,  0.0f, 1.0f,
-    1.0f, -1.0f,  1.0f, 0.0f,
-    1.0f,  1.0f,  1.0f, 1.0f
-};
-
-RIO_GL_CALL(glGenVertexArrays(1, &quadVAO));
-RIO_GL_CALL(glGenBuffers(1, &quadVBO));
-RIO_GL_CALL(glBindVertexArray(quadVAO));
-RIO_GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, quadVBO));
-RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW));
-RIO_GL_CALL(glEnableVertexAttribArray(0));
-RIO_GL_CALL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0));
-RIO_GL_CALL(glEnableVertexAttribArray(1));
-RIO_GL_CALL(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float))));
-
-RIO_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
-
-RIO_GL_CALL(glBindVertexArray(0));
-
-// Unbind the framebuffer
-RIO_GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
-    if (hasSocketRequest) {
-
-// Clean up
-RIO_GL_CALL(glDeleteVertexArrays(1, &quadVAO));
-RIO_GL_CALL(glDeleteBuffers(1, &quadVBO));
-
-downsampleShader.unload();
-*/
 
     copyAndSendRenderBufferToSocket(renderBuffer, renderTextureColor, new_socket);
 

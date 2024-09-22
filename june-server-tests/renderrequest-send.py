@@ -18,23 +18,26 @@ def main():
     fflstoredata = read_fflstoredata(fflstoredata_file)
 
     #resolution = 1600
-    tex_resolution = 768
+    tex_resolution = 512
     data_length = len(fflstoredata)
     view_type = 0  # face
     #expression = 0
     resource_type = 1
     shader_type = 0
     camera_rotate = [0, 0, 0]
+    model_rotate = [0, 0, 0]
     background_color = [1, 1, 1, 0]
     verify_charinfo = True
+    verify_crc16 = True
     light_enable = True
+    clothes_color = -1
 
     # Ensure fflstoredata is exactly 96 bytes
     #fflstoredata = fflstoredata[:96] + b'\x00' * (96 - len(fflstoredata))
     # Crafting the struct
     # struct format: 'I?' means a 4-byte unsigned int and a 1-byte bool
     # Adjust the format string according to your needs
-    struct_format = '96sHII4Biii4B??2x'  # padding at the end
+    struct_format = '96sHII4Biiiiii4B???b'  # padding at the end
     #background_color_vec4 = [component / 255.0 for component in background_color]
     packed_data = struct.pack(
         struct_format,
@@ -49,12 +52,17 @@ def main():
         camera_rotate[0],               # cameraRotate.x: i (int32_t)
         camera_rotate[1],               # cameraRotate.y: i (int32_t)
         camera_rotate[2],               # cameraRotate.z: i (int32_t)
+        model_rotate[0],                # modelRotate.x: i (int32_t)
+        model_rotate[1],                # modelRotate.y: i (int32_t)
+        model_rotate[2],                # modelRotate.z: i (int32_t)
         background_color[0],            # backgroundColor[0]: B (uint8_t)
         background_color[1],            # backgroundColor[1]: B (uint8_t)
         background_color[2],            # backgroundColor[2]: B (uint8_t)
         background_color[3],            # backgroundColor[3]: B (uint8_t)
         verify_charinfo,                # verifyCharInfo: ? (bool)
-        light_enable                    # lightEnable: ? (bool),
+        verify_crc16,                   # verifyCRC16: ? (bool)
+        light_enable,                   # lightEnable: ? (bool),
+        clothes_color,                  # clothesColor: b (int8_t)
     )
 
     # Write the packed data to the output file

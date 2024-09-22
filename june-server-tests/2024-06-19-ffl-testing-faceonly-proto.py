@@ -15,7 +15,7 @@ except ImportError as e:
 
 try:
     import mysql.connector
-    MYSQL_AVAILABLE = True
+    MYSQL_AVAILABLE = False
 except ImportError as e:
     print(e)
     MYSQL_AVAILABLE = False
@@ -48,10 +48,12 @@ class RenderRequest:
         #self.background_color = [component / 255.0 for component in background_color]
         self.background_color = background_color
         self.camera_rotate = [0, 0, 0]
+        self.model_rotate = [0, 0, 0]
+        self.clothes_color = -1
 
     def pack(self):
         return struct.pack(
-            '96sHII4Biii4B???2x',       # padding at the end
+            '96sHII4Biiiiii4B???b',    # padding at the end
             self.data,                 # data: 96s
             self.data_length,          # dataLength: H (uint16_t)
             self.resolution,           # resolution: I (unsigned int)
@@ -63,13 +65,17 @@ class RenderRequest:
             self.camera_rotate[0],     # cameraRotate.x: i (int32_t)
             self.camera_rotate[1],     # cameraRotate.y: i (int32_t)
             self.camera_rotate[2],     # cameraRotate.z: i (int32_t)
+            self.model_rotate[0],      # modelRotate.x: i (int32_t)
+            self.model_rotate[1],      # modelRotate.y: i (int32_t)
+            self.model_rotate[2],      # modelRotate.z: i (int32_t)
             self.background_color[0],  # backgroundColor[0]: B (uint8_t)
             self.background_color[1],  # backgroundColor[1]: B (uint8_t)
             self.background_color[2],  # backgroundColor[2]: B (uint8_t)
             self.background_color[3],  # backgroundColor[3]: B (uint8_t)
             self.verify_charinfo,      # verifyCharInfo: ? (bool)
             self.verify_crc16,         # verifyCRC16: ? (bool)
-            self.light_enable          # lightEnable: ? (bool),
+            self.light_enable,         # lightEnable: ? (bool),
+            self.clothes_color         # clothesColor: b (int8_t)
         )
 
 def load_rgba_buffer(buffer_data, width, height):
