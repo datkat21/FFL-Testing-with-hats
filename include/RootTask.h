@@ -45,6 +45,13 @@ enum ShaderType {
     SHADER_TYPE_MAX = 3,
 };
 
+enum InstanceRotationMode {
+    INSTANCE_ROTATION_MODE_MODEL,
+    INSTANCE_ROTATION_MODE_CAMERA,
+    INSTANCE_ROTATION_MODE_EXPRESSION, // neewwww
+    INSTANCE_ROATATION_MODE_MAX = 3,
+};
+
 enum ViewType {
     VIEW_TYPE_FACE,  // head with body
     VIEW_TYPE_FACE_ONLY,  // head only
@@ -55,36 +62,46 @@ enum ViewType {
     VIEW_TYPE_MAX = 5,
 };
 
+enum DrawStageMode {
+    DRAW_STAGE_MODE_ALL,
+    DRAW_STAGE_MODE_OPA_ONLY,
+    DRAW_STAGE_MODE_XLU_ONLY,
+    DRAW_STAGE_MODE_MASK_ONLY,
+    DRAW_STAGE_MODE_MAX = 4,
+};
+
 struct RenderRequest {
-    char            data[96];   // just a buffer that accounts for maximum size
-    uint16_t        dataLength; // determines the mii data format
-    unsigned int    resolution; // resolution for render buffer
-    // NOTE: texture resolution can control whether mipmap is enabled (1 << 30)
-    FFLResolution   texResolution; // u32, or just uint, i think
-    //unsigned int    scaleFactor;
-    //bool            isHeadOnly;  // in favor of view type
-    uint8_t         viewType;
-    //rio::BaseVec3f  lightDir;
-    uint8_t         expression;
-    uint8_t         resourceType;
-    uint8_t         shaderType;
-    rio::Vector3i   cameraRotate;
-    rio::Vector3i   modelRotate;
-    uint8_t         backgroundColor[4]; // passed to clearcolor
-    //uint8_t         clothesColor[4]; // fourth color is NOT alpha
+    char     data[96];       // just a buffer that accounts for maximum size
+    uint16_t dataLength;     // determines the mii data format
+    uint8_t  modelType;      // head model type, FFLModelType
+    bool     exportAsGLTF;   // completely changes the response type
+    // NOTE: arbitrary resolutions CRASH THE BACKEND
+    uint16_t resolution;     // resolution for render buffer
+    // texture resolution can control whether mipmap is enabled (1 << 30)
+    int16_t  texResolution;  // FFLResolution/u32, negative = mipmap
+    uint8_t  viewType;       // camera
+    uint8_t  resourceType;   // FFLResourceType
+    uint8_t  shaderType;
+    uint8_t  expression;     // used if expressionFlag is 0
+    uint32_t expressionFlag; // for multiple expressions
+    // expressionFlag will only apply in gltf mode for now
+    int16_t  cameraRotate[3];
+    int16_t  modelRotate[3];
+    uint8_t  backgroundColor[4]; // passed to clearcolor
+    //uint8_t      clothesColor[4]; // fourth color is NOT alpha
     // but if fourth byte in clothesColor is 0xFF then it is treated as a color instead of an index
 
-    // at the end to help with alignment
-    bool            verifyCharInfo; // for FFLiVerifyCharInfoWithReason
-    bool            verifyCRC16;
-    bool            lightEnable;
-    int8_t          clothesColor; // favorite color, -1 for default
-    /*
-    uint8_t         instanceCount;
-    // model/character rotation is default
-    bool            instanceRotationModeIsCamera;
-    */
-    //bool            setLightDirection;
+    uint8_t  aaMethod;       // TODO: TO BE USED SOON? POTENTIALLY?
+    uint8_t  drawStageMode;  // opa, xlu, all
+    bool     verifyCharInfo; // for FFLiVerifyCharInfoWithReason
+    bool     verifyCRC16;
+    bool     lightEnable;
+    int8_t   clothesColor;   // favorite color, -1 for default
+
+    uint8_t  instanceCount;  // TODO
+    uint8_t  instanceRotationMode;
+    //bool          setLightDirection;
+    //int16_t       lightDirection[3];
 };
 #define RENDERREQUEST_SIZE sizeof(RenderRequest)
 
@@ -102,6 +119,7 @@ private:
     void exit_() override;
 
     void handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx);
+    void handleGLTFRequest(RenderRequest* renderRequest);
 
     void createModel_();
     //void createModel_(char (*buf)[FFLICHARINFO_SIZE]);

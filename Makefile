@@ -84,7 +84,7 @@ FFL_SRC := $(shell find ffl/src -name '*.c' -o -name '*.cpp')
 # include both shaders
 SHADER ?= src/Shader.cpp src/ShaderSwitch.cpp src/ShaderMiitomo.cpp
 # Main source
-SRC := src/main.cpp src/Model.cpp src/RootTask.cpp $(SHADER) src/DataUtils.cpp
+SRC := src/main.cpp src/Model.cpp src/RootTask.cpp $(SHADER) src/DataUtils.cpp src/tinygltf_impl.cpp src/GLTFExportCallback.cpp
 
 # Object files
 NINTEXUTILS_OBJ := $(NINTEXUTILS_SRC:.c=.o)

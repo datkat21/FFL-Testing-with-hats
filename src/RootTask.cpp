@@ -35,6 +35,7 @@ RootTask::RootTask()
 #if RIO_IS_WIN && defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#define close closesocket
 #pragma comment(lib, "ws2_32.lib")
 #elif RIO_IS_WIN
 #include <sys/socket.h>
@@ -612,14 +613,27 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
     //modelSource.dataSource = FFL_DATA_SOURCE_BUFFER; // aka CharInfo
     modelSource.pBuffer = &charInfo;
 
+    const FFLExpressionFlag expressionFlag = (buf->expressionFlag != 0 ? buf->expressionFlag
+        : static_cast<FFLExpressionFlag>(1) << buf->expression
+        // % (FFL_EXPRESSION_MAX - 1),
+    );
+
+    FFLResolution texResolution;
+    if (buf->texResolution < 0) { // if it is negative...
+        texResolution = static_cast<FFLResolution>(
+            static_cast<u32>(buf->texResolution * -1) // remove negative
+            | FFL_RESOLUTION_MIP_MAP_ENABLE_MASK); // enable mipmap
+    } else {
+        texResolution = static_cast<FFLResolution>(buf->texResolution);
+    }
+
     // otherwise just fall through and use default
     Model::InitArgStoreData arg = {
         .desc = {
-            .resolution = buf->texResolution,
-            .expressionFlag = static_cast<FFLExpressionFlag>(1) <<
-                        buf->expression,// % (FFL_EXPRESSION_MAX - 1),
-            .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
-            .resourceType = static_cast<FFLResourceType>(buf->resourceType % FFL_RESOURCE_TYPE_MAX),
+            .resolution = texResolution,
+            .expressionFlag = expressionFlag,
+            .modelFlag = static_cast<u32>(1) << buf->modelType,
+            .resourceType = static_cast<FFLResourceType>(buf->resourceType),
         },
         .source = modelSource
     };
@@ -814,11 +828,11 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::M
 }
 
 // Convert degrees to radians
-rio::Vector3f convertVec3iToRadians3f(const rio::Vector3i degrees) {
+rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3]) {
     rio::Vector3f radians;
-    radians.x = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees.x), 360.0f));
-    radians.y = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees.y), 360.0f));
-    radians.z = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees.z), 360.0f));
+    radians.x = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[0]), 360.0f));
+    radians.y = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[1]), 360.0f));
+    radians.z = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[2]), 360.0f));
     return radians;
 }
 
@@ -844,17 +858,36 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
     if (mpModel == nullptr) {
         /*const char* errMsg = "mpModel == nullptr";
         send(new_socket, errMsg, strlen(errMsg), 0);
-        */#ifdef _WIN32
-            closesocket(new_socket);
-        #else
-            close(new_socket);
-        #endif
+        */
+        close(new_socket);
         return;
     }
 
     // hopefully renderrequest is proper
     RenderRequest* renderRequest = reinterpret_cast<RenderRequest*>(buf);
 
+    if (renderRequest->exportAsGLTF) {
+        handleGLTFRequest(renderRequest);
+        close(new_socket);
+        return;
+    }
+
+    // mask ONLY - which was already initialized, so nothing else needs to happen
+    if (renderRequest->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY) {
+        FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
+
+        // select mask texture for current expression
+        const FFLiRenderTexture* pRenderTexture = pCharModel->maskTextures.pRenderTextures[pCharModel->expression];
+        RIO_ASSERT(pRenderTexture != nullptr);
+
+        pRenderTexture->pRenderBuffer->bind();
+
+        // NOTE the resolution of this is the texture resolution so that would have to match what the client expects
+        copyAndSendRenderBufferToSocket(*pRenderTexture->pRenderBuffer, pRenderTexture->pTexture2D, new_socket);
+
+        close(new_socket);
+        return;
+    }
     // switch between two projection matrxies
     rio::BaseMtx44f *projMtx;
     switch (renderRequest->viewType) {
@@ -952,21 +985,21 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
     //renderBuffer.setSize(renderRequest->resolution * 2, renderRequest->resolution * 2);    hasSocketRequest = false;
 
     int ssaaFactor = 1;  // Super Sampling factor, e.g., 2 for 2x SSAA
-    int width = renderRequest->resolution * ssaaFactor;
-    int height = renderRequest->resolution * ssaaFactor;
+    int width = static_cast<int>(renderRequest->resolution) * ssaaFactor;
+    int height = static_cast<int>(renderRequest->resolution) * ssaaFactor;
 
     renderBuffer.setSize(width, height);
     RIO_LOG("Render buffer created with size: %dx%d\n", renderBuffer.getSize().x, renderBuffer.getSize().y);
 
     //rio::Window::instance()->getNativeWindow()->getColorBufferTextureFormat();
-    rio::Texture2D *renderTextureColor = new rio::Texture2D(rio::TEXTURE_FORMAT_R8_G8_B8_A8_UNORM, renderBuffer.getSize().x, renderBuffer.getSize().y, 1);
+    rio::Texture2D renderTextureColor(rio::TEXTURE_FORMAT_R8_G8_B8_A8_UNORM, renderBuffer.getSize().x, renderBuffer.getSize().y, 1);
     rio::RenderTargetColor renderTargetColor;
-    renderTargetColor.linkTexture2D(*renderTextureColor);
+    renderTargetColor.linkTexture2D(renderTextureColor);
     renderBuffer.setRenderTargetColor(&renderTargetColor);
 
-    rio::Texture2D *renderTextureDepth = new rio::Texture2D(rio::DEPTH_TEXTURE_FORMAT_R32_FLOAT, renderBuffer.getSize().x, renderBuffer.getSize().y, 1);
+    rio::Texture2D renderTextureDepth(rio::DEPTH_TEXTURE_FORMAT_R32_FLOAT, renderBuffer.getSize().x, renderBuffer.getSize().y, 1);
     rio::RenderTargetDepth renderTargetDepth;
-    renderTargetDepth.linkTexture2D(*renderTextureDepth);
+    renderTargetDepth.linkTexture2D(renderTextureDepth);
 
     renderBuffer.setRenderTargetDepth(&renderTargetDepth);
 
@@ -1021,8 +1054,11 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
     glDepthFunc(GL_GREATER);
     glDepthRange(0.98593f, 0.f);
 */
+    DrawStageMode drawStages = static_cast<DrawStageMode>(renderRequest->drawStageMode);
+
     // Render the first frame to the buffer
-    mpModel->drawOpa(view_mtx, *projMtx);
+    if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_OPA_ONLY)
+        mpModel->drawOpa(view_mtx, *projMtx);
     RIO_LOG("drawOpa rendered to the buffer.\n");
 
     // draw body?
@@ -1030,48 +1066,40 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
         && renderRequest->viewType != VIEW_TYPE_FACE_ONLY_FFLMAKEICON
     )
     {
-        FFLiCharModel *charModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
+        FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
 
-        s32 originalFavoriteColor = charModel->charInfo.favoriteColor;
+        s32 originalFavoriteColor = pCharModel->charInfo.favoriteColor;
         if (renderRequest->clothesColor >= 0
             // verify favorite color is in range here bc it is NOT verified in drawMiiBodyREAL
             && renderRequest->clothesColor < FFL_FAVORITE_COLOR_MAX
         ) {
             // change favorite color after drawing opa
-            charModel->charInfo.favoriteColor = renderRequest->clothesColor;
+            pCharModel->charInfo.favoriteColor = renderRequest->clothesColor;
         }
 
         //drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);
-        drawMiiBodyREAL(mpModel->getLightEnable(), &charModel->charInfo, model_mtx, view_mtx, *projMtx);
+        drawMiiBodyREAL(mpModel->getLightEnable(), &pCharModel->charInfo, model_mtx, view_mtx, *projMtx);
         // restore original favorite color tho
-        charModel->charInfo.favoriteColor = originalFavoriteColor;
+        pCharModel->charInfo.favoriteColor = originalFavoriteColor;
     }
 
     renderBuffer.bind();
 
     // draw xlu mask only after body is drawn
     // in case there are elements of the mask that go in the body region
-    mpModel->drawXlu(view_mtx, *projMtx);
+    if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_XLU_ONLY)
+        mpModel->drawXlu(view_mtx, *projMtx);
     RIO_LOG("drawXlu rendered to the buffer.\n");
 
 
-    copyAndSendRenderBufferToSocket(renderBuffer, renderTextureColor, new_socket);
+    copyAndSendRenderBufferToSocket(renderBuffer, &renderTextureColor, new_socket);
 
     // Unbind the render buffer
     renderBuffer.getRenderTargetColor()->invalidateGPUCache();
     renderBuffer.getRenderTargetDepth()->invalidateGPUCache();
-    renderTextureColor->setCompMap(0x00010205);
-    delete renderTextureColor;
-    delete renderTextureDepth;
-    // Clean up
-    /*glDeleteFramebuffers(1, &msaaFBO);
-    glDeleteRenderbuffers(1, &msaaColorRBO);
-    glDeleteRenderbuffers(1, &msaaDepthRBO);
-    glDeleteFramebuffers(1, &resolveFBO);
-    glDeleteRenderbuffers(1, &resolveColorRBO);
-*/
+    renderTextureColor.setCompMap(0x00010205);
 
-    RIO_LOG("Render buffer unbound and GPU cache invalidated.\n");
+    //RIO_LOG("Render buffer unbound and GPU cache invalidated.\n");
 
     if (!mpServerOnly) {
         #ifdef RIO_NO_CLIP_CONTROL
@@ -1090,12 +1118,7 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
         RIO_LOG("Viewport and scissor reset to window dimensions: %dx%d\n", width, height);
     }
 
-    #ifdef _WIN32
-        closesocket(new_socket);
-    #else
-        close(new_socket);
-    #endif
-
+    close(new_socket);
 }
 
 void RootTask::calc_()
@@ -1125,11 +1148,7 @@ void RootTask::calc_()
             };
         } else {
             RIO_LOG("got a request of length %d (should be %lu), dropping\n", read_bytes, RENDERREQUEST_SIZE);
-            #ifdef _WIN32
-                closesocket(new_socket);
-            #else
-                close(new_socket);
-            #endif
+            close(new_socket);
         }
     } else {
         // otherwise just fall through and use default
@@ -1202,6 +1221,73 @@ void RootTask::calc_()
         drawMiiBodyREAL(mpModel->getLightEnable(), &reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel())->charInfo, model_mtx, view_mtx, mProjMtx);
         mpModel->drawXlu(view_mtx, mProjMtx);
     }
+}
+
+#include "GLTFExportCallback.h"
+
+void RootTask::handleGLTFRequest(RenderRequest* renderRequest)
+{
+    // Initialize ExportShader
+    GLTFExportCallback exportShader;
+
+    exportShader.SetCharModel(mpModel->getCharModel());
+
+    RIO_LOG("Created glTF export callback.\n");
+
+    // Get the shader callback
+    FFLShaderCallback callback = exportShader.GetShaderCallback();
+
+    DrawStageMode drawStages = static_cast<DrawStageMode>(renderRequest->drawStageMode);
+
+    if (renderRequest->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY) {
+        // only draw the xlu mask in this mode
+        const FFLDrawParam* maskParam = FFLGetDrawParamXluMask(mpModel->getCharModel());
+        exportShader.Draw(*maskParam);
+    } else {
+        if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_OPA_ONLY)
+            FFLDrawOpaWithCallback(mpModel->getCharModel(), &callback);
+
+        if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_XLU_ONLY)
+            FFLDrawXluWithCallback(mpModel->getCharModel(), &callback);
+    }
+    RIO_LOG("Drawn model to glTF callback data.\n");
+    /*
+    const std::time_t now = std::time(nullptr);
+    std::ostringstream oss;
+    oss << std::put_time(std::localtime(&now), "/dev/shm/%Y-%m-%d_%H-%M-%S.glb");
+    std::string output = oss.str();
+    RIO_LOG("outputting glb to: %s\n", output.c_str());
+    exportShader.ExportModelToFile(output);
+    */
+
+    // Create a stream buffer to hold the GLTF model data
+    std::ostringstream modelStream;
+
+    // Export the GLTF model to the stream
+    if (!exportShader.ExportModelToStream(&modelStream))
+    {
+        RIO_LOG("Failed to export GLTF model to stream.\n");
+        return;
+    }
+
+    // Get the model data from the stream
+    std::string modelData = modelStream.str();
+
+
+    // Send the actual GLTF model data
+    size_t totalSent = 0;
+    const unsigned long fileSize = modelData.size();
+    while (totalSent < fileSize)
+    {
+        ssize_t sent = send(new_socket, modelData.data() + totalSent, fileSize - totalSent, 0);
+        if (sent < 0)
+        {
+            RIO_LOG("Failed to send GLTF data\n");
+            return;
+        }
+        totalSent += sent;
+    }
+    RIO_LOG("Wrote %lu bytes out to socket.\n", fileSize);
 }
 
 void RootTask::exit_()

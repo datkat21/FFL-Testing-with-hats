@@ -22,16 +22,14 @@ except ImportError as e:
 
 app = Flask(__name__)
 
-FFL_RESOLUTION_MASK = 0x3fffffff
-FFL_RESOLUTION_MIP_MAP_ENABLE_MASK = 1 << 30
 # Define the RenderRequest struct
 class RenderRequest:
     def __init__(self, data, resolution=1024, tex_resolution=1024, is_head_only=False, expression=0, resource_type=1, mipmap_enable=False, background_color=[1, 1, 1, 0]):
         self.data = bytes(data)
         self.data_length = len(data)
         self.resolution = resolution
-        actual_tex_resolution = tex_resolution & FFL_RESOLUTION_MASK
-        mipmap_tex_resolution = tex_resolution + FFL_RESOLUTION_MIP_MAP_ENABLE_MASK
+        actual_tex_resolution = tex_resolution
+        mipmap_tex_resolution = tex_resolution * -1
         self.tex_resolution = mipmap_tex_resolution if mipmap_enable else actual_tex_resolution
         #self.is_head_only = is_head_only
         # NOTE: if you want to still use
@@ -50,33 +48,42 @@ class RenderRequest:
         self.camera_rotate = [0, 0, 0]
         self.model_rotate = [0, 0, 0]
         self.clothes_color = -1
+        self.export_as_gltf = False
 
     def pack(self):
         return struct.pack(
-            '96sHII4Biiiiii4B???b',    # padding at the end
+            '96sHB?HhBBBBIhhhhhhBBBBBB???bBB',
             self.data,                 # data: 96s
             self.data_length,          # dataLength: H (uint16_t)
-            self.resolution,           # resolution: I (unsigned int)
-            self.tex_resolution,       # texResolution: I (unsigned int)
+            0,                         # modelType: B (uint8_t)
+            self.export_as_gltf,       # exportAsGLTF: ? (bool)
+            self.resolution,           # resolution: H (uint16_t)
+            self.tex_resolution,       # texResolution: h (int16_t)
             self.view_type,            # viewType: B (uint8_t)
-            self.expression,           # expression: B (uint8_t)
             self.resource_type,        # resourceType: B (uint8_t)
             self.shader_type,          # shaderType: B (uint8_t)
-            self.camera_rotate[0],     # cameraRotate.x: i (int32_t)
-            self.camera_rotate[1],     # cameraRotate.y: i (int32_t)
-            self.camera_rotate[2],     # cameraRotate.z: i (int32_t)
-            self.model_rotate[0],      # modelRotate.x: i (int32_t)
-            self.model_rotate[1],      # modelRotate.y: i (int32_t)
-            self.model_rotate[2],      # modelRotate.z: i (int32_t)
+            self.expression,           # expression: B (uint8_t)
+            0,                         # expressionFlag: I (uint32_t)
+            self.camera_rotate[0],     # cameraRotate.x: h (int16_t)
+            self.camera_rotate[1],     # cameraRotate.y: h (int16_t)
+            self.camera_rotate[2],     # cameraRotate.z: h (int16_t)
+            self.model_rotate[0],      # modelRotate.x: h (int16_t)
+            self.model_rotate[1],      # modelRotate.y: h (int16_t)
+            self.model_rotate[2],      # modelRotate.z: h (int16_t)
             self.background_color[0],  # backgroundColor[0]: B (uint8_t)
             self.background_color[1],  # backgroundColor[1]: B (uint8_t)
             self.background_color[2],  # backgroundColor[2]: B (uint8_t)
             self.background_color[3],  # backgroundColor[3]: B (uint8_t)
+            0,                         # aaMethod: B (uint8_t)
+            0,                         # drawStageMode: B (uint8_t)
             self.verify_charinfo,      # verifyCharInfo: ? (bool)
             self.verify_crc16,         # verifyCRC16: ? (bool)
-            self.light_enable,         # lightEnable: ? (bool),
-            self.clothes_color         # clothesColor: b (int8_t)
+            self.light_enable,         # lightEnable: ? (bool)
+            self.clothes_color,        # clothesColor: b (int8_t)
+            0,                         # instanceCount: B (uint8_t)
+            0                          # instanceRotationMode: B (uint8_t)
         )
+
 
 def load_rgba_buffer(buffer_data, width, height):
     return [struct.unpack_from('4B', buffer_data, offset=i * 4) for i in range(width * height)]

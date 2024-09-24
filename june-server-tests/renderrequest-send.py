@@ -14,6 +14,7 @@ def main():
     resolution = int(sys.argv[2])
     output_file = sys.argv[3]
     expression = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+    export_as_gltf = True if len(sys.argv) > 5 else False
 
     fflstoredata = read_fflstoredata(fflstoredata_file)
 
@@ -34,35 +35,39 @@ def main():
 
     # Ensure fflstoredata is exactly 96 bytes
     #fflstoredata = fflstoredata[:96] + b'\x00' * (96 - len(fflstoredata))
-    # Crafting the struct
-    # struct format: 'I?' means a 4-byte unsigned int and a 1-byte bool
-    # Adjust the format string according to your needs
-    struct_format = '96sHII4Biiiiii4B???b'  # padding at the end
-    #background_color_vec4 = [component / 255.0 for component in background_color]
+
+    struct_format = '96sHB?HhBBBBIhhhhhhBBBBBB???bBB'
     packed_data = struct.pack(
         struct_format,
-        fflstoredata,                   # data: 96s
-        data_length,                    # dataLength: H (uint16_t)
-        resolution,                     # resolution: I (unsigned int)
-        tex_resolution,                 # texResolution: I (unsigned int)
-        view_type,                      # viewType: B (uint8_t)
-        expression,                     # expression: B (uint8_t)
-        resource_type,                  # resourceType: B (uint8_t)
-        shader_type,                    # shaderType: B (uint8_t)
-        camera_rotate[0],               # cameraRotate.x: i (int32_t)
-        camera_rotate[1],               # cameraRotate.y: i (int32_t)
-        camera_rotate[2],               # cameraRotate.z: i (int32_t)
-        model_rotate[0],                # modelRotate.x: i (int32_t)
-        model_rotate[1],                # modelRotate.y: i (int32_t)
-        model_rotate[2],                # modelRotate.z: i (int32_t)
-        background_color[0],            # backgroundColor[0]: B (uint8_t)
-        background_color[1],            # backgroundColor[1]: B (uint8_t)
-        background_color[2],            # backgroundColor[2]: B (uint8_t)
-        background_color[3],            # backgroundColor[3]: B (uint8_t)
-        verify_charinfo,                # verifyCharInfo: ? (bool)
-        verify_crc16,                   # verifyCRC16: ? (bool)
-        light_enable,                   # lightEnable: ? (bool),
-        clothes_color,                  # clothesColor: b (int8_t)
+        fflstoredata,         # data: 96s
+        data_length,          # dataLength: H (uint16_t)
+        0,                    # modelType: B (uint8_t)
+        export_as_gltf,       # exportAsGLTF: ? (bool)
+        resolution,           # resolution: H (uint16_t)
+        tex_resolution,       # texResolution: h (int16_t)
+        view_type,            # viewType: B (uint8_t)
+        resource_type,        # resourceType: B (uint8_t)
+        shader_type,          # shaderType: B (uint8_t)
+        expression,           # expression: B (uint8_t)
+        0,                    # expressionFlag: I (uint32_t)
+        camera_rotate[0],     # cameraRotate.x: h (int16_t)
+        camera_rotate[1],     # cameraRotate.y: h (int16_t)
+        camera_rotate[2],     # cameraRotate.z: h (int16_t)
+        model_rotate[0],      # modelRotate.x: h (int16_t)
+        model_rotate[1],      # modelRotate.y: h (int16_t)
+        model_rotate[2],      # modelRotate.z: h (int16_t)
+        background_color[0],  # backgroundColor[0]: B (uint8_t)
+        background_color[1],  # backgroundColor[1]: B (uint8_t)
+        background_color[2],  # backgroundColor[2]: B (uint8_t)
+        background_color[3],  # backgroundColor[3]: B (uint8_t)
+        0,                    # aaMethod: B (uint8_t)
+        0,                    # drawStageMode: B (uint8_t)
+        verify_charinfo,      # verifyCharInfo: ? (bool)
+        verify_crc16,         # verifyCRC16: ? (bool)
+        light_enable,         # lightEnable: ? (bool)
+        clothes_color,        # clothesColor: b (int8_t)
+        0,                    # instanceCount: B (uint8_t)
+        0                     # instanceRotationMode: B (uint8_t)
     )
 
     # Write the packed data to the output file

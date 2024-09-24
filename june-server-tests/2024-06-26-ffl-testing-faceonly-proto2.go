@@ -35,37 +35,34 @@ var (
 	useXForwardedFor bool
 )
 
-const (
-	FFLResolutionMask             = 0x3fffffff
-	FFLResolutionMipmapEnableMask = 1 << 30
-)
-
 // RenderRequest is the equivalent struct in Go for handling the render request data.
-// Added padding bytes to ensure compliance with the original C++ struct.
 type RenderRequest struct {
 	Data              [96]byte
 	DataLength        uint16
-	_                 [2]byte
-	// NOTE: arbitrary resolutions CRASH THE BACKEND
-	Resolution        uint32
-	TexResolution     uint32
+	ModelType         uint8
+	ExportAsGLTF      bool
+	Resolution        uint16
+	TexResolution     int16
 	ViewType          uint8
-	Expression        uint8
 	ResourceType      uint8
 	ShaderType        uint8
-	CameraRotate      [3]int32
-	ModelRotate       [3]int32
+	Expression        uint8
+	ExpressionFlag    uint32   // used if there are multiple
+	CameraRotate      [3]int16
+	ModelRotate       [3]int16
 	BackgroundColor   [4]uint8
 
+	AAMethod          uint8    // UNUSED
+	DrawStageMode     uint8
 	VerifyCharInfo    bool
 	VerifyCRC16       bool
 	LightEnable       bool
-	ClothesColor      int8 // default: -1
-	/*InstanceCount     uint8
-	InstanceRotationModeIsCamera bool
-	*/
+	ClothesColor      int8     // default: -1
+	InstanceCount     uint8    // UNUSED
+	InstanceRotationMode uint8 // UNUSED
+	//_                  [1]byte // padding for alignment
 	//SetLightDirection bool
-	//LightDirection    [3]float32
+	//LightDirection    [3]int32
 }
 
 var viewTypes = map[string]int {
@@ -74,6 +71,19 @@ var viewTypes = map[string]int {
 	"all_body":         2,
 	"fflmakeicon":      3,
 	"variableiconbody": 4,
+}
+
+var modelTypes = map[string]int {
+	"normal":    0,
+	"hat":       1,
+	"face_only": 2,
+}
+
+var drawStageModes = map[string]int {
+	"all":      0,
+	"opa_only": 1,
+	"xlu_only": 2,
+	"mask_only": 3,
 }
 
 func isConnectionRefused(err error) bool {
@@ -86,6 +96,8 @@ func sayHello(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 	fmt.Fprintln(w, "you are probably looking for /miis/image.png")
 }
+
+const gltfPath = "/miis/image.glb"
 
 func main() {
 	// Command-line arguments
@@ -110,6 +122,7 @@ func main() {
 
 	http.HandleFunc("/", sayHello)
 	http.HandleFunc("/miis/image.png", renderImage)
+	http.HandleFunc(gltfPath, renderImage)
 
 	address := fmt.Sprintf("%s:%d", *host, *port)
 	fmt.Printf("Starting server at %s\n", address)
@@ -374,7 +387,10 @@ func sendRenderRequest(request RenderRequest) ([]byte, error) {
 	}
 
 	// Calculating the expected buffer size
-	bufferSize := request.Resolution * request.Resolution * 4
+	// NOTE: since request.Resolution is a uint16, it
+	// needs to be converted before multiplying it
+	// or else it will not exceed 65535 which will not work
+	bufferSize := int(request.Resolution) * int(request.Resolution) * 4
 	receivedData := make([]byte, bufferSize)
 	_, err = io.ReadFull(conn, receivedData)
 	if err != nil {
@@ -383,6 +399,59 @@ func sendRenderRequest(request RenderRequest) ([]byte, error) {
 
 	return receivedData, nil
 }
+
+// streamRenderRequest streams the render request to the render server and directly writes the TCP response to the http writer
+func streamRenderRequest(w http.ResponseWriter, request RenderRequest, outFileName string) ([]byte, error) {
+	// Create a buffer to serialize the request
+	var buffer bytes.Buffer
+
+	// Writing the struct to the buffer
+	err := binary.Write(&buffer, binary.LittleEndian, request)
+	if err != nil {
+		return nil, err
+	}
+
+	// Connect to the render server via TCP
+	conn, err := net.Dial("tcp", upstreamTCP)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// Send the request over the TCP connection
+	_, err = conn.Write(buffer.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	// Buffer the first KB of the response (initialBufferSize)
+	initialBuffer := make([]byte, 1024)
+	n, err := io.ReadFull(conn, initialBuffer)
+	if err != nil {
+		/*if err == io.EOF {
+			return fmt.Errorf("connection closed prematurely after reading %d bytes", n)
+		}*/
+		return initialBuffer, err
+	}
+
+	// now set header
+	w.Header().Add("Content-Disposition", "attachment; filename=" + outFileName)
+
+	// Write the buffered data to the HTTP response
+	_, err = w.Write(initialBuffer[:n])
+	if err != nil {
+		return initialBuffer, err
+	}
+
+	// Stream the rest of the data directly to the HTTP response without buffering
+	_, err = io.Copy(w, conn)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
 
 // ssaaFactor controls the resolution and scale multiplier.
 //const ssaaFactor = 2
@@ -397,7 +466,9 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 	expressionStr := query.Get("expression")
 	widthStr := query.Get("width")
+	usingDefaultWidth := false
 	if widthStr == "" {
+		usingDefaultWidth = true
 		widthStr = "270" // default width
 	}
 	ssaaFactorStr := query.Get("scale")
@@ -431,6 +502,9 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		clothesColorStr = "-1"
 	}
 
+
+	exportAsGLTF := r.URL.Path == gltfPath
+
 	var storeData []byte
 	var err error
 
@@ -440,7 +514,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}*/
 	if data == "" && nnid == "" {
-		http.Error(w, "specify data as FFLStoreData/mii studio data in hex/base64, or nnid as an nnid, also specify \"width\" as the resolution", http.StatusBadRequest)
+		http.Error(w, "specify \"data\" as FFLStoreData/mii studio data in hex/base64, or \"nnid\" as an nnid (add &api_id=1 if it is a pnid), finally specify \"width\" as the resolution", http.StatusBadRequest)
 		return
 	}
 
@@ -506,14 +580,14 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	viewTypeStr := query.Get("type")
-	if viewTypeStr == "" {
-		viewTypeStr = "face"
-	}
-
 	instanceCountStr := query.Get("instanceCount")
 	if instanceCountStr == "" {
 		instanceCountStr = "1"
+	}
+
+	viewTypeStr := query.Get("type")
+	if viewTypeStr == "" {
+		viewTypeStr = "face"
 	}
 
 	viewType, exists := viewTypes[viewTypeStr]
@@ -521,6 +595,33 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "we did not implement that view sorry", http.StatusBadRequest)
 		return
 	}
+
+	modelTypeStr := query.Get("modelType")
+	if modelTypeStr == "" {
+		modelTypeStr = "normal"
+	}
+	modelType, exists := modelTypes[modelTypeStr]
+	if !exists {
+		http.Error(w, "valid model types: normal, hat, face_only", http.StatusBadRequest)
+		return
+	}
+	/*
+	modelType, err := strconv.Atoi(modelTypeStr)
+	if err != nil || modelType > 2 {
+		http.Error(w, "modelType must be 0-2", http.StatusBadRequest)
+		return
+	}
+	*/
+
+	drawStageModeStr := query.Get("drawStageMode")
+	if drawStageModeStr == "" {
+		drawStageModeStr = "all"
+	}
+	drawStageMode, exists := drawStageModes[drawStageModeStr]
+	if !exists {
+		drawStageMode = 0
+	}
+
 	// NOTE: WHAT SHOULD BOOLS LOOK LIKE...???
 	mipmapEnable := query.Get("mipmapEnable") != "" // is present?
 	lightEnable := query.Get("lightEnable") != "0" // 0 = no lighting
@@ -559,6 +660,27 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var expressionFlag uint32 = 0
+	// check for multiple expressions
+	// (only applies for glTF!!!!!!!)
+	if exportAsGLTF && query.Has("expression") && len(query["expression"]) > 1 {
+		expressions := query["expression"]
+
+		// Multiple expressions provided, compose the expression flag
+		for _, expressionStr := range expressions {
+			// parse expression or use as an int
+			var expression int
+			expression, err = strconv.Atoi(expressionStr)
+			if err != nil {
+				// now try to parse it as a string
+				// this defaults to normal if it fails
+				expression = getExpressionInt(expressionStr)
+			}
+			// Bitwise OR to combine all the flags
+			expressionFlag |= (1 << expression)
+		}
+	}
+
 	var clothesColor int
 	clothesColor, err = strconv.Atoi(clothesColorStr)
 	if err != nil {
@@ -582,8 +704,9 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "texResolution is not a number", http.StatusBadRequest)
 		return
 	}
+
 	// NOTE: excessive high texture resolutions crash (assert fail) the renderer
-	if texResolution > 8192 {
+	if texResolution > 6000 {
 		http.Error(w, "you cannot make texture resolution this high it will make your balls explode", http.StatusBadRequest)
 		return
 	}
@@ -595,46 +718,46 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 
-	cameraRotateVec3i := [3]int32{0, 0, 0}
+	cameraRotateVec3i := [3]int16{0, 0, 0}
 
 	// Read and parse query parameters
 	if camXPos := query.Get("cameraXRotate"); camXPos != "" {
 		x, err := strconv.Atoi(camXPos)
 		if err == nil {
-			cameraRotateVec3i[0] = int32(x)
+			cameraRotateVec3i[0] = int16(x)
 		}
 	}
 	if camYPos := query.Get("cameraYRotate"); camYPos != "" {
 		y, err := strconv.Atoi(camYPos)
 		if err == nil {
-			cameraRotateVec3i[1] = int32(y)
+			cameraRotateVec3i[1] = int16(y)
 		}
 	}
 	if camZPos := query.Get("cameraZRotate"); camZPos != "" {
 		z, err := strconv.Atoi(camZPos)
 		if err == nil {
-			cameraRotateVec3i[2] = int32(z)
+			cameraRotateVec3i[2] = int16(z)
 		}
 	}
 
-	modelRotateVec3i := [3]int32{0, 0, 0}
+	modelRotateVec3i := [3]int16{0, 0, 0}
 
 	if charXPos := query.Get("characterXRotate"); charXPos != "" {
 		x, err := strconv.Atoi(charXPos)
 		if err == nil {
-			modelRotateVec3i[0] = int32(x)
+			modelRotateVec3i[0] = int16(x)
 		}
 	}
 	if charYPos := query.Get("characterYRotate"); charYPos != "" {
 		y, err := strconv.Atoi(charYPos)
 		if err == nil {
-			modelRotateVec3i[1] = int32(y)
+			modelRotateVec3i[1] = int16(y)
 		}
 	}
 	if charZPos := query.Get("characterZRotate"); charZPos != "" {
 		z, err := strconv.Atoi(charZPos)
 		if err == nil {
-			modelRotateVec3i[2] = int32(z)
+			modelRotateVec3i[2] = int16(z)
 		}
 	}
 
@@ -644,17 +767,24 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Strip mipmap bit from texResolution
-	texResolution &= FFLResolutionMask
 	// Also multiply it by two if it's particularly low...
 	if width < 256 && !overrideTexResolution {
 		texResolution *= 2
 	}
-	// Apply ssaaFactor to width
-	width *= ssaaFactor
-	// Also apply it to texResolution
-	if !overrideTexResolution {
-		texResolution *= ssaaFactor
+	if drawStageMode == 3 { // mask only means it will return the texResolution
+		if usingDefaultWidth {
+			width = texResolution
+		} else {
+			texResolution = width
+		}
+		ssaaFactor = 1
+	} else { // do not upscale aa or change texresolution then
+		// Apply ssaaFactor to width
+		width *= ssaaFactor
+		// Also apply it to texResolution
+		if !overrideTexResolution {
+			texResolution *= ssaaFactor
+		}
 	}
 
 	// convert bgColor to floats
@@ -677,18 +807,22 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	renderRequest := RenderRequest{
 		Data:            [96]byte{},
 		DataLength:      uint16(len(storeData)),
-		Resolution:      uint32(width),
-		TexResolution:   uint32(texResolution),
+		ModelType:       uint8(modelType),
+		ExportAsGLTF:    exportAsGLTF,
+		Resolution:      uint16(width),
+		TexResolution:   int16(texResolution),
 		ViewType:        uint8(viewType),
-		Expression:      uint8(expression),
 		ResourceType:    uint8(resourceType),
 		ShaderType:      uint8(shaderType),
+		Expression:      uint8(expression),
+		ExpressionFlag:  expressionFlag,
 		CameraRotate:    cameraRotateVec3i,
 		ModelRotate:     modelRotateVec3i,
 		BackgroundColor: bgColor4u8,
 		/*InstanceCount:   uint8(instanceCount),
 		InstanceRotationModeIsCamera: false,
 		*/
+		DrawStageMode:   uint8(drawStageMode),
 		VerifyCharInfo:  verifyCharInfo,
 		VerifyCRC16:     verifyCRC16,
 		LightEnable:     lightEnable,
@@ -697,14 +831,29 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 	// Enabling mipmap if specified
 	if mipmapEnable {
-		renderRequest.TexResolution += FFLResolutionMipmapEnableMask
+		renderRequest.TexResolution *= -1
 	}
 
 	// Copying store data into the request data buffer
 	copy(renderRequest.Data[:], storeData)
 
+	requestResolutionX := int(renderRequest.Resolution)
+	requestResolutionY := int(renderRequest.Resolution)
+
+	var bufferData []byte
 	// Sending the render request and receiving buffer data
-	bufferData, err := sendRenderRequest(renderRequest)
+	if exportAsGLTF {
+		filename := time.Now().Format("2006-01-02_15-04-05-")
+		if nnid != "" {
+			filename += nnid
+		} else {
+			filename += "mii-data"
+		}
+		filename += ".glb"
+		bufferData, err = streamRenderRequest(w, renderRequest, filename)
+	} else {
+		bufferData, err = sendRenderRequest(renderRequest)
+	}
 	if err != nil {
 		/*
 		isIncompleteData := err.Error() == "EOF"
@@ -753,14 +902,15 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	// Creating an image directly using the buffer
 	img := &image.NRGBA{
 		Pix:    bufferData,
-		Stride: width * 4,
-		Rect:   image.Rect(0, 0, width, width),
+		Stride: requestResolutionX * 4,
+		Rect:   image.Rect(0, 0, requestResolutionX, requestResolutionY),
 	}
 
 	if ssaaFactor != 1 {
 		// Scale down image by the ssaaFactor
-		width /= ssaaFactor
-		scaledImg := image.NewNRGBA(image.Rect(0, 0, width, width))
+		requestResolutionX /= ssaaFactor
+		requestResolutionY /= ssaaFactor
+		scaledImg := image.NewNRGBA(image.Rect(0, 0, requestResolutionX, requestResolutionY))
 		// Use draw.ApproxBiLinear method
 		// TODO: try better scaling but this is already pretty fast
 		draw.ApproxBiLinear.Scale(scaledImg, scaledImg.Bounds(), img, img.Bounds(), draw.Over, nil)
@@ -796,29 +946,6 @@ const (
 	FFL_EXPRESSION_FRUSTRATED            = 18
 )
 
-// Expression flag constants
-const (
-	FFL_EXPRESSION_FLAG_NORMAL                = 1 << FFL_EXPRESSION_NORMAL
-	FFL_EXPRESSION_FLAG_SMILE                 = 1 << FFL_EXPRESSION_SMILE
-	FFL_EXPRESSION_FLAG_ANGER                 = 1 << FFL_EXPRESSION_ANGER
-	FFL_EXPRESSION_FLAG_SORROW                = 1 << FFL_EXPRESSION_SORROW
-	FFL_EXPRESSION_FLAG_SURPRISE              = 1 << FFL_EXPRESSION_SURPRISE
-	FFL_EXPRESSION_FLAG_BLINK                 = 1 << FFL_EXPRESSION_BLINK
-	FFL_EXPRESSION_FLAG_OPEN_MOUTH            = 1 << FFL_EXPRESSION_OPEN_MOUTH
-	FFL_EXPRESSION_FLAG_HAPPY                 = 1 << FFL_EXPRESSION_HAPPY
-	FFL_EXPRESSION_FLAG_ANGER_OPEN_MOUTH      = 1 << FFL_EXPRESSION_ANGER_OPEN_MOUTH
-	FFL_EXPRESSION_FLAG_SORROW_OPEN_MOUTH     = 1 << FFL_EXPRESSION_SORROW_OPEN_MOUTH
-	FFL_EXPRESSION_FLAG_SURPRISE_OPEN_MOUTH   = 1 << FFL_EXPRESSION_SURPRISE_OPEN_MOUTH
-	FFL_EXPRESSION_FLAG_BLINK_OPEN_MOUTH      = 1 << FFL_EXPRESSION_BLINK_OPEN_MOUTH
-	FFL_EXPRESSION_FLAG_WINK_LEFT             = 1 << FFL_EXPRESSION_WINK_LEFT
-	FFL_EXPRESSION_FLAG_WINK_RIGHT            = 1 << FFL_EXPRESSION_WINK_RIGHT
-	FFL_EXPRESSION_FLAG_WINK_LEFT_OPEN_MOUTH  = 1 << FFL_EXPRESSION_WINK_LEFT_OPEN_MOUTH
-	FFL_EXPRESSION_FLAG_WINK_RIGHT_OPEN_MOUTH = 1 << FFL_EXPRESSION_WINK_RIGHT_OPEN_MOUTH
-	FFL_EXPRESSION_FLAG_LIKE                  = 1 << FFL_EXPRESSION_LIKE
-	FFL_EXPRESSION_FLAG_LIKE_WINK_RIGHT       = 1 << FFL_EXPRESSION_LIKE_WINK_RIGHT
-	FFL_EXPRESSION_FLAG_FRUSTRATED            = 1 << FFL_EXPRESSION_FRUSTRATED
-)
-
 // Map of expression strings to their respective flags
 // NOTE: Mii Studio expression parameters, which
 // this aims to be compatible with, use
@@ -848,15 +975,6 @@ var expressionMap = map[string]int{
 	"open_mouth":            FFL_EXPRESSION_OPEN_MOUTH,
 	"puzzled":               FFL_EXPRESSION_SORROW, // assuming PUZZLED is similar to SORROW
 	"normal_open_mouth":     FFL_EXPRESSION_OPEN_MOUTH,
-}
-
-// Function to map a string input to an expression flag
-func getExpressionFlag(input string) int {
-	input = strings.ToLower(input)
-	if expression, exists := expressionMap[input]; exists {
-		return 1 << expression
-	}
-	return 1 << FFL_EXPRESSION_NORMAL
 }
 
 var clothesColorMap = map[string]int{
