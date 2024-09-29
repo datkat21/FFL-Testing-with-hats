@@ -106,7 +106,7 @@ struct RenderRequest {
 #define RENDERREQUEST_SIZE sizeof(RenderRequest)
 
 #include <mii_ext_MiiPort.h> // used for below function
-FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, RenderRequest *buf);
+FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest *buf);
 
 class RootTask : public rio::ITask
 {
@@ -119,7 +119,9 @@ private:
     void exit_() override;
 
     void handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx);
+#ifndef NO_GLTF
     void handleGLTFRequest(RenderRequest* renderRequest);
+#endif
 
     void createModel_();
     //void createModel_(char (*buf)[FFLICHARINFO_SIZE]);

@@ -658,7 +658,7 @@ void ShaderSwitch::setModulate_(const FFLModulateParam& modulateParam)
     bindTexture_(modulateParam);
 }
 
-void ShaderSwitch::setMaterial_(const FFLModulateType modulateType)
+void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
 {
     // we need to get favorite/faceline/hair/beard color from somewhere so
     //FFLiCharInfo* mpCharInfo = &reinterpret_cast<FFLiCharModel*>(mpCharModel)->charInfo;
@@ -667,7 +667,7 @@ void ShaderSwitch::setMaterial_(const FFLModulateType modulateType)
 
     DrawParamMaterial drawParamMaterial;
     int commonColor;
-    switch (modulateType) {
+    switch (modulateParam.type) {
         case FFL_MODULATE_TYPE_SHAPE_NOSELINE:
         case FFL_MODULATE_TYPE_SHAPE_MASK:
             drawParamMaterial = cMaskMaterial;
@@ -741,13 +741,16 @@ void ShaderSwitch::setMaterial_(const FFLModulateType modulateType)
     #define DRAW_TYPE_HAIR     2
     int drawType;
 
-    switch (modulateType) {
-        case FFL_MODULATE_TYPE_SHAPE_FACELINE:
-            drawType = DRAW_TYPE_FACELINE;
-            break;
+    switch (modulateParam.type) {
         case FFL_MODULATE_TYPE_SHAPE_HAIR:
             drawType = DRAW_TYPE_HAIR;
             break;
+        case FFL_MODULATE_TYPE_SHAPE_FACELINE:
+            if (modulateParam.pTexture2D)
+            {
+                drawType = DRAW_TYPE_FACELINE;
+                break;
+            }
         default:
             drawType = DRAW_TYPE_NORMAL;
             break;
@@ -774,14 +777,14 @@ void ShaderSwitch::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
         nullptr  // no texture
     };
     setModulate_(modulateParam);
-    setMaterial_(modulateType);
+    setMaterial_(modulateParam);
 }
 
 void ShaderSwitch::draw_(const FFLDrawParam& draw_param)
 {
     setCulling(draw_param.cullMode);
     setModulate_(draw_param.modulateParam);
-    setMaterial_(draw_param.modulateParam.type);
+    setMaterial_(draw_param.modulateParam);
 
     // HACK: INJECT SWITCH GLASS NORMALS
     // the switch shader does a reflection on the glasses

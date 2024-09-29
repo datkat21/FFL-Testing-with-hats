@@ -492,10 +492,14 @@ FFLColor multiplyColorIfNeeded(FFLModulateType modulateType, FFLColor color)
 {
     // faceline/skin color should be excluded from this
     if (
-        // faceline (texture) will already not use this color
-        // forehead, nose etc. will
-        // NOTE: also exclude favorite/body color from this????
-        modulateType == FFL_MODULATE_TYPE_SHAPE_FOREHEAD
+        // forehead, nose etc. use faceline color
+        // faceline usually uses texture but if there is no
+        // wrinkles or blush then faceline will go through this
+        // though that is only because of an optimization
+
+        // TODO: decide whether to favorite/body color from this????
+        modulateType == FFL_MODULATE_TYPE_SHAPE_FACELINE
+        || modulateType == FFL_MODULATE_TYPE_SHAPE_FOREHEAD
         || modulateType == FFL_MODULATE_TYPE_SHAPE_NOSE
         || modulateType == FFL_MODULATE_TYPE_SHAPE_GLASS
     )

@@ -97,8 +97,6 @@ func sayHello(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "you are probably looking for /miis/image.png")
 }
 
-const gltfPath = "/miis/image.glb"
-
 func main() {
 	// Command-line arguments
 	host := flag.String("host", "0.0.0.0", "Host for the web server")
@@ -122,7 +120,7 @@ func main() {
 
 	http.HandleFunc("/", sayHello)
 	http.HandleFunc("/miis/image.png", renderImage)
-	http.HandleFunc(gltfPath, renderImage)
+	http.HandleFunc("/miis/image.glb", renderImage)
 
 	address := fmt.Sprintf("%s:%d", *host, *port)
 	fmt.Printf("Starting server at %s\n", address)
@@ -503,7 +501,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 
-	exportAsGLTF := r.URL.Path == gltfPath
+	exportAsGLTF := strings.HasSuffix(r.URL.Path, ".glb")
 
 	var storeData []byte
 	var err error

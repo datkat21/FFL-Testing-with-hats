@@ -247,8 +247,6 @@ void RootTask::prepare_()
         return;
     }
 
-    FFLiEnableSpecialMii(333326543);
-
     RIO_ASSERT(FFLIsAvailable());
 
     FFLInitResGPUStep();
@@ -344,7 +342,11 @@ void RootTask::createModel_() {
     FFLiCharInfo charInfo;
     if (!mStoreDataArray.empty()) {
         // Use the custom Mii data array
-        if(pickupCharInfoFromRenderRequest(&charInfo, mStoreDataArray[mMiiCounter].size(), reinterpret_cast<RenderRequest*>(&mStoreDataArray[mMiiCounter][0])) != FFL_RESULT_OK)
+        RenderRequest fakeRenderRequest;
+        fakeRenderRequest.dataLength = mStoreDataArray[mMiiCounter].size();
+        fakeRenderRequest.verifyCRC16 = false;
+        rio::MemUtil::copy(fakeRenderRequest.data, &mStoreDataArray[mMiiCounter][0], fakeRenderRequest.dataLength);
+        if(pickupCharInfoFromRenderRequest(&charInfo, &fakeRenderRequest) != FFL_RESULT_OK)
         {
             RIO_LOG("pickupCharInfoFromRenderRequest failed on Mii counter: %d\n", mMiiCounter);
             mpModel = nullptr;
@@ -397,10 +399,10 @@ void RootTask::createModel_() {
     mCounter = 0.0f;
 }
 
-FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLength, RenderRequest *buf) {
+FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest *buf) {
     MiiDataInputType inputType;
 
-    switch (dataLength) {
+    switch (buf->dataLength) {
         /*case sizeof(FFLStoreData):
         case sizeof(FFLiMiiDataOfficial):
         case sizeof(FFLiMiiDataCore):
@@ -451,7 +453,9 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLengt
         {
             // it is NOT FFLiMiiDataCore, it may be RFL tho
             // cast to FFLiMiIDataCoreRFL to check create id
-            FFLiMiiDataCoreRFL& charDataRFL = reinterpret_cast<FFLiMiiDataCoreRFL&>(buf->data);
+            FFLiMiiDataCoreRFL& charDataRFLData = reinterpret_cast<FFLiMiiDataCoreRFL&>(buf->data);
+            FFLiMiiDataCoreRFL charDataRFL;
+            rio::MemUtil::copy(&charDataRFL, &charDataRFLData, sizeof(FFLiMiiDataCoreRFL));
             // look at create id to run FFLiIsNTRMiiID
             // NOTE: FFLiMiiDataCoreRFL2CharInfo is SUPPOSED to check
             // whether it is an NTR mii id or not and store
@@ -469,7 +473,6 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLengt
     */
             // NOTE: NFLCharData for DS can be little endian tho!!!!!!
 
-            // TODO TODO TODO YOU WANT TO MEMCPY THIS INTO A NEW BUFFER
 #if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
             // swap endian for rfl
             static const FFLiSwapEndianDesc SWAP_ENDIAN_DESC_RFL[] = {
@@ -490,7 +493,7 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLengt
                 { FFLI_SWAP_ENDIAN_TYPE_U16, 1 },  // m_MoleFlag
                 { FFLI_SWAP_ENDIAN_TYPE_U16, 10 } // creator name
             };
-            FFLiSwapEndianGroup(buf->data, SWAP_ENDIAN_DESC_RFL, sizeof(SWAP_ENDIAN_DESC_RFL) / sizeof(FFLiSwapEndianDesc));
+            FFLiSwapEndianGroup(&charDataRFL, SWAP_ENDIAN_DESC_RFL, sizeof(SWAP_ENDIAN_DESC_RFL) / sizeof(FFLiSwapEndianDesc));
 #endif
             /*if (pCharInfo->birthPlatform != FFL_BIRTH_PLATFORM_NTR) {
                 // flip endian
@@ -499,7 +502,6 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLengt
             RIO_LOG("IS NTR (2)??? %i\n", isNTR);
             */
 
-            // TODO: HANDLE BOTH BIG AND LITTLE ENDIAN RFL DATA
             FFLiMiiDataCoreRFL2CharInfo(pCharInfo,
                 charDataRFL,
                 NULL, false
@@ -513,7 +515,7 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, int dataLengt
             // mii studio url data format is obfuscated
             // this decodes it in place and falls through
             char decodedData[STUDIO_DATA_ENCODED_LENGTH];
-            std::memcpy(decodedData, buf->data, STUDIO_DATA_ENCODED_LENGTH);
+            rio::MemUtil::copy(decodedData, buf->data, STUDIO_DATA_ENCODED_LENGTH);
             studioURLObfuscationDecode(decodedData);
             studioToCharInfoNX(&charInfoNX, reinterpret_cast<::charInfoStudio*>(decodedData));
             charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
@@ -558,7 +560,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
 
     std::string errMsg;
 
-    FFLResult pickupResult = pickupCharInfoFromRenderRequest(&charInfo, buf->dataLength, buf);
+    FFLResult pickupResult = pickupCharInfoFromRenderRequest(&charInfo, buf);
 
     if (pickupResult != FFL_RESULT_OK) {
         if (pickupResult == FFL_RESULT_FILE_INVALID) { // crc16 fail
@@ -867,7 +869,9 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
     RenderRequest* renderRequest = reinterpret_cast<RenderRequest*>(buf);
 
     if (renderRequest->exportAsGLTF) {
+#ifndef NO_GLTF
         handleGLTFRequest(renderRequest);
+#endif
         close(new_socket);
         return;
     }
@@ -1223,6 +1227,8 @@ void RootTask::calc_()
     }
 }
 
+#ifndef NO_GLTF
+
 #include "GLTFExportCallback.h"
 
 void RootTask::handleGLTFRequest(RenderRequest* renderRequest)
@@ -1289,6 +1295,8 @@ void RootTask::handleGLTFRequest(RenderRequest* renderRequest)
     }
     RIO_LOG("Wrote %lu bytes out to socket.\n", fileSize);
 }
+
+#endif // NO_GLTF
 
 void RootTask::exit_()
 {

@@ -48,7 +48,7 @@ private:
     void setModulateMode_(FFLModulateMode mode);
     void setModulate_(const FFLModulateParam& modulateParam);
 
-    void setMaterial_(const FFLModulateType modulateType);
+    void setMaterial_(const FFLModulateParam& modulateParam);
 
     void draw_(const FFLDrawParam& draw_param);
     static void drawCallback_(void* p_obj, const FFLDrawParam& draw_param);
