@@ -265,9 +265,10 @@ void main()
         }
         /// Specularの色を取得
         mediump vec3 specular = calculateSpecularColor(u_light_specular.xyz, u_material_specular.xyz, reflection, strength);
-        
-        vec3 rimColor = calculateRimColor(u_rim_color.rgb, norm.z, v_color.a, u_rim_power);
-        
+
+        // リムの色を計算
+        mediump vec3 rimColor = calculateRimColor(u_rim_color.rgb, norm.z, rimWidth, u_rim_power);
+
         // カラーの計算
         color.rgb = (ambient + diffuse) * color.rgb + specular + rimColor;
     }
