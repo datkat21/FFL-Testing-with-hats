@@ -13,14 +13,16 @@
 RootTask::RootTask()
     : ITask("FFL Testing")
     , mInitialized(false)
+    , mpNoSpin(getenv("NO_SPIN"))
 {
 }
 
 #if RIO_IS_WIN && defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#define close closesocket
 #pragma comment(lib, "ws2_32.lib")
-#elif RIO_IS_WIN
+#elif RIO_IS_WIN && !defined(__EMSCRIPTEN__)
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -31,14 +33,111 @@ RootTask::RootTask()
 #include <nn/ffl/FFLiMiiData.h>
 
 #if RIO_IS_WIN
+
+// for opening ffsd folder
+#include <filesystem>
+#include <fstream>
+
+// read Mii data from a folder
+void RootTask::fillStoreDataArray_()
+{
+    // Path to the folder
+    const std::string folderPath = "place_ffsd_files_here";
+    // Check if the folder exists
+    if (std::filesystem::exists(folderPath) && std::filesystem::is_directory(folderPath)) {
+        for (const auto& entry : std::filesystem::directory_iterator(folderPath)) {
+            if (entry.is_regular_file()
+                && entry.file_size() >= sizeof(FFLStoreData)
+                && entry.path().filename().string().at(0) != '.')
+            {
+                // Read the file content
+                std::ifstream file(entry.path(), std::ios::binary);
+                if (file.is_open()) {
+                    std::vector<char> data;
+                    data.resize(entry.file_size());
+                    file.read(&data[0], entry.file_size());
+                    //if (file.gcount() == sizeof(FFLStoreData)) {
+                        mStoreDataArray.push_back(data);
+                    //}
+                    file.close();
+                }
+            }
+        }
+        RIO_LOG("Loaded %lu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
+    }
+}
+
+#ifndef __EMSCRIPTEN__
+
 int server_fd, new_socket;
 struct sockaddr_in address;
 int opt = 1;
 int addrlen = sizeof(address);
 
-// for opening ffsd folder
-#include <filesystem>
-#include <fstream>
+// Setup socket to send data to
+void RootTask::setupSocket_()
+{
+    #ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+        perror("WSAStartup failed");
+        exit(EXIT_FAILURE);
+    }
+    #endif // ifdef _WIN32
+
+    // Creating socket file descriptor
+    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Forcefully attaching socket to the port
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt))) {
+        perror("setsockopt");
+        exit(EXIT_FAILURE);
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    // Get port number from environment or use default
+    char portReminder[] ="\033[2m(you can change the port with the PORT environment variable)\033[0m\n";
+    const char* env_port = getenv("PORT");
+    int port = 12346; // default port
+    if (env_port) {
+        port = atoi(env_port);
+        portReminder[0] = '\0';
+    }
+    // Forcefully attaching socket to the port
+    address.sin_port = htons(port);
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        perror("bind failed");
+        RIO_LOG("\033[1m" \
+        "TIP: Change the default port of 12346 with the PORT environment variable" \
+        "\033[0m\n");
+        exit(EXIT_FAILURE);
+    }
+    if (listen(server_fd, 3) < 0) {
+        perror("listen");
+        exit(EXIT_FAILURE);
+    } else {
+        // Set socket to non-blocking mode
+#ifdef _WIN32
+        u_long mode = 1;
+        ioctlsocket(server_fd, FIONBIO, &mode);
+#else
+        fcntl(server_fd, F_SETFL, O_NONBLOCK);
+#endif
+
+        mSocketIsListening = true;
+
+        RIO_LOG("\033[1m" \
+        "tcp server listening on port %d\033[0m\n" \
+        "%s",
+        port, portReminder);
+    }
+}
+#endif // __EMSCRIPTEN__
+
 #endif
 
 void RootTask::prepare_()
@@ -50,6 +149,8 @@ void RootTask::prepare_()
     init_desc._c = false;
     init_desc._10 = true;
 
+#ifndef TEST_FFL_DEFAULT_RESOURCE_LOADING
+
 #if RIO_IS_CAFE
     FSInit();
 #endif // RIO_IS_CAFE
@@ -58,7 +159,7 @@ void RootTask::prepare_()
         std::string resPath;
         resPath.resize(256);
         // Middle (now being skipped bc it is not even used here)
-        /*{
+        {
             FFLGetResourcePath(resPath.data(), 256, FFL_RESOURCE_TYPE_MIDDLE, false);
             {
                 rio::FileDevice::LoadArg arg;
@@ -77,8 +178,8 @@ void RootTask::prepare_()
                     mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = arg.read_size;
                 }
             }
-        }*/
-        mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = 0;
+        }
+        //mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = 0;
         // High, load from FFL path or current working directory
         {
             // Two different paths
@@ -115,14 +216,15 @@ void RootTask::prepare_()
     }
 
     FFLResult result = FFLInitResEx(&init_desc, &mResourceDesc);
+#else
+    FFLResult result = FFLInitResEx(&init_desc, nullptr);
+#endif
     if (result != FFL_RESULT_OK)
     {
         RIO_LOG("FFLInitResEx() failed with result: %d\n", (s32)result);
         RIO_ASSERT(false);
         return;
     }
-
-    FFLiEnableSpecialMii(333326543);
 
     RIO_ASSERT(FFLIsAvailable());
 
@@ -151,8 +253,8 @@ void RootTask::prepare_()
         // Create perspective projection instance
         rio::PerspectiveProjection proj(
             500.0f, // Near
-            700.0f, // Far
-            fovy, // fovy
+            1200.0f, // Far
+            fovy,// * 1.6f, // fovy
             aspect // Aspect ratio
         );
         // The near and far values define the depth range of the view frustum (500.0f to 700.0f)
@@ -163,98 +265,18 @@ void RootTask::prepare_()
 
 
     // read Mii data from a folder
-    #if RIO_IS_WIN
-    // Path to the folder
-    const std::string folderPath = "place_ffsd_files_here";
-    // Check if the folder exists
-    if (std::filesystem::exists(folderPath) && std::filesystem::is_directory(folderPath)) {
-        for (const auto& entry : std::filesystem::directory_iterator(folderPath)) {
-            if (entry.is_regular_file() && entry.file_size() == sizeof(FFLStoreData)) {
-                // Read the file content
-                std::ifstream file(entry.path(), std::ios::binary);
-                if (file.is_open()) {
-                    FFLStoreData data;
-                    file.read(reinterpret_cast<char*>(&data), sizeof(FFLStoreData));
-                    if (file.gcount() == sizeof(FFLStoreData)) {
-                        mStoreDataArray.push_back(data);
-                    }
-                    file.close();
-                }
-            }
-        }
-        RIO_LOG("Loaded %lu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
-    }
-    #endif // RIO_IS_WIN (folder)
+#if RIO_IS_WIN
+    fillStoreDataArray_();
+#ifndef __EMSCRIPTEN__
+    setupSocket_();
+    // Set window aspect ratio, so that when resizing it will not change
+    GLFWwindow* glfwWindow = rio::Window::instance()->getNativeWindow().getGLFWwindow();
+    glfwSetWindowAspectRatio(glfwWindow, window->getWidth(), window->getHeight());
+#endif // __EMSCRIPTEN__
+#endif // RIO_IS_WIN
 
     mMiiCounter = 0;
     createModel_();
-
-    // Setup socket to send data to
-    #if RIO_IS_WIN
-    {
-        #ifdef _WIN32
-        WSADATA wsaData;
-        if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
-            perror("WSAStartup failed");
-            exit(EXIT_FAILURE);
-        }
-        #endif // ifdef _WIN32
-
-        // Creating socket file descriptor
-        if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-            perror("socket failed");
-            exit(EXIT_FAILURE);
-        }
-
-        // Forcefully attaching socket to the port
-        if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt))) {
-            perror("setsockopt");
-            exit(EXIT_FAILURE);
-        }
-
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = INADDR_ANY;
-        // Get port number from environment or use default
-        const char* env_port = getenv("PORT");
-        int port = env_port ? atoi(env_port) : 12346;
-        // Forcefully attaching socket to the port
-        address.sin_port = htons(port);
-        if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-            perror("bind failed");
-            RIO_LOG("\033[1m" \
-            "TIP: Change the default port of 12346 with the PORT environment variable" \
-            "\033[0m\n");
-            exit(EXIT_FAILURE);
-        }
-        if (listen(server_fd, 3) < 0) {
-            perror("listen");
-            exit(EXIT_FAILURE);
-        } else {
-            // Set socket to non-blocking mode
-            #ifdef _WIN32
-            u_long mode = 1;
-            ioctlsocket(server_fd, FIONBIO, &mode);
-            #else
-            fcntl(server_fd, F_SETFL, O_NONBLOCK);
-            #endif
-
-            mSocketIsListening = true;
-
-            RIO_LOG("\033[1m" \
-            "tcp server listening on port %d\033[0m\n" \
-            "\033[2m(you can change the port with the PORT environment variable)\033[0m\n" \
-            "try sending FFLStoreData or FFLiCharInfo (little endian) to it with netcat\n",
-            port);
-        }
-    }
-
-    #endif // RIO_IS_WIN (socket)
-
-    // Set window aspect ratio, so that when resizing it will not change
-    #if RIO_IS_WIN
-        GLFWwindow* glfwWindow = rio::Window::instance()->getNativeWindow().getGLFWwindow();
-        glfwSetWindowAspectRatio(glfwWindow, window->getWidth(), window->getHeight());
-    #endif // RIO_IS_WIN
 
     mInitialized = true;
 }
@@ -264,8 +286,11 @@ void RootTask::prepare_()
 // GetMiiDataNum()
 int maxMiis = 6;
 
+// create model for displaying on screen
 void RootTask::createModel_() {
     FFLCharModelSource modelSource;
+
+    RIO_LOG("mMiiCounter: %d\n", mMiiCounter);
 
     // default model source if there is no socket
     #if RIO_IS_CAFE
@@ -277,7 +302,7 @@ void RootTask::createModel_() {
         // Use the custom Mii data array
         modelSource.index = 0;
         modelSource.dataSource = FFL_DATA_SOURCE_STORE_DATA;
-        modelSource.pBuffer = &mStoreDataArray[mMiiCounter];
+        modelSource.pBuffer = &mStoreDataArray[mMiiCounter][0];
         // limit current counter by the amount of custom miis
         maxMiis = mStoreDataArray.size();
     } else {
@@ -299,8 +324,8 @@ void RootTask::createModel_() {
 
     Model::InitArgStoreData arg = {
         .desc = {
-            .resolution = FFLResolution(768),
-            .expressionFlag = 1,
+            .resolution = FFLResolution(768 | FFL_RESOLUTION_MIP_MAP_ENABLE_MASK),
+            .expressionFlag = 1 << 0,
             .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
             .resourceType = FFL_RESOURCE_TYPE_HIGH,
         },
@@ -350,9 +375,7 @@ void RootTask::createModel_(char (*buf)[FFLICHARINFO_SIZE]) {
     RIO_LOG("\033[1mLoaded Mii: %s\033[0m\n",
             convert.to_bytes((char16_t*) pCharInfo->name).c_str());
     // close connection which should happen as soon as we read it
-    #if RIO_IS_WIN && defined(_WIN32)
-        closesocket(new_socket);
-    #elif RIO_IS_WIN
+    #if RIO_IS_WIN && !defined(__EMSCRIPTEN__)
         close(new_socket);
     #endif
     // otherwise just fall through and use default
@@ -369,14 +392,13 @@ void RootTask::createModel_(char (*buf)[FFLICHARINFO_SIZE]) {
 
     mpModel = new Model();
     if (!mpModel->initialize(arg, mShader)) {
-        RIO_LOG("mpModel initialize, initializeCpu_, FFLInitCharModelCPUStep: ONE OF THESE FAILED!\n");
+        RIO_LOG("FFLInitCharModelCPUStep FAILED while initializing model: %d\n", mpModel->getInitializeCpuResult());
         delete mpModel;
         mpModel = nullptr;
     } else {
         mpModel->setScale({ 1.f, 1.f, 1.f });
     }
 
-    // Reset counter or maintain its state based on the application logic
     mCounter = 0.0f;
 }
 
@@ -387,7 +409,7 @@ void RootTask::calc_()
     if (!mInitialized)
         return;
 
-    #if RIO_IS_WIN
+#if RIO_IS_WIN && !defined(__EMSCRIPTEN__)
     // maximum received is the size of FFLiCharInfo
     char buf[sizeof(FFLiCharInfo)];
 
@@ -404,33 +426,23 @@ void RootTask::calc_()
         if (read_bytes >= sizeof(FFLStoreData)) {
             createModel_(&buf);
         } else {
-            RIO_LOG("got a request of length %lu (should be %lu), dropping\n", read_bytes, sizeof(FFLStoreData));
-            #ifdef _WIN32
-                closesocket(new_socket);
-            #else
-                close(new_socket);
-            #endif
+            RIO_LOG("got a request of length %d (should be %lu), dropping\n", read_bytes, sizeof(FFLStoreData));
+            close(new_socket);
         }
     } else {
+#endif // RIO_IS_WIN && !defined(__EMSCRIPTEN__)
         // otherwise just fall through and use default
         // when mii is directly in front of the camera
-    #endif // RIO_IS_WIN
         if (mCounter >= rio::Mathf::pi2())
         {
             delete mpModel;
             createModel_();
         }
-    #if RIO_IS_WIN
+#if RIO_IS_WIN && !defined(__EMSCRIPTEN__)
     }
-    {
-        // close connection which should happen as soon as we read it
-        #ifdef _WIN32
-            closesocket(new_socket);
-        #else
-            close(new_socket);
-        #endif
-    }
-    #endif
+    // close connection which should happen as soon as we read it
+    close(new_socket);
+#endif // RIO_IS_WIN && !defined(__EMSCRIPTEN__)
 
     // Distance in the XZ-plane from the center to the camera position
     static const float radius = 600.0f;
@@ -447,8 +459,7 @@ void RootTask::calc_()
 
     // Move the camera around the target clockwise
     // Define the radius of the orbit in the XZ-plane (distance from the target)
-    const char* noSpin = getenv("NO_SPIN");
-    if (!noSpin) {
+    if (!mpNoSpin) {
         mCamera.pos().set(
             // Set the camera's position using the sin and cos functions to move it in a circle around the target
             std::sin(mCounter) * radius,
@@ -483,7 +494,6 @@ void RootTask::calc_()
     //rio::Window::instance()->setSwapInterval(0);  // disable v-sync
 
     if (mpModel != nullptr) {
-        mpModel->enableSpecialDraw();
         mpModel->drawOpa(view_mtx, mProjMtx);
         mpModel->drawXlu(view_mtx, mProjMtx);
     }

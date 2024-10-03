@@ -17,7 +17,7 @@ public:
 
     void initialize();
 
-    void bind(bool light_enable) const;
+    void bind(bool light_enable, FFLiCharInfo* charInfo);
 
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const;
 
@@ -37,6 +37,7 @@ public:
 
 private:
     static void applyAlphaTestCallback_(void* p_obj, bool enable, rio::Graphics::CompareFunc func, f32 ref);
+    void setShaderCallback_();
 
     void bindTexture_(const FFLModulateParam& modulateParam);
     void setConstColor_(u32 ps_loc, const FFLColor& color);
@@ -95,4 +96,5 @@ private:
 #endif
     FFLShaderCallback       mCallback;
     rio::TextureSampler2D   mSampler;
+    FFLiCharInfo*           mpCharInfo;
 };

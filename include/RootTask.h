@@ -25,12 +25,16 @@ private:
 
     void createModel_();
     void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
+#if RIO_IS_WIN
+    void fillStoreDataArray_();
+    void setupSocket_();
+#endif
 
 private:
     bool                mInitialized;
     bool                mSocketIsListening;
     #if RIO_IS_WIN
-    std::vector<FFLStoreData> mStoreDataArray;
+    std::vector<std::vector<char>> mStoreDataArray;
     #endif
     FFLResourceDesc     mResourceDesc;
     Shader              mShader;
@@ -39,4 +43,5 @@ private:
     f32                 mCounter;
     s32                 mMiiCounter;
     Model*              mpModel;
+    const char*         mpNoSpin;
 };

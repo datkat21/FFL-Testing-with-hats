@@ -2,15 +2,19 @@
 # Prepend toolchain prefix that you can choose
 CXX := $(TOOLCHAIN_PREFIX)g++
 
-INCLUDES := -IninTexUtils/include -Irio/include -Iffl/include -Iinclude $(INCLUDES)
+INCLUDES := -Irio/include -Iffl/include -Iinclude $(INCLUDES)
+# ninTexUtils is added conditionally later
 
 # --- Definitions
 
 # MLC path is where it expects "sys" and "usr" to be,
 # , where it can open the database and resource files
-# FFL_NO_OPEN_DATABASE makes sure it doesn't try to open the database by default if you don't need it
-# FFL_TEST_DISABLE_MII_COLOR_VERIFY is a testing option that allows you to use out of bound color values in CharInfo
-DEFS := -DFFL_MLC_PATH="\"./\"" -DRIO_DEBUG -DFFL_NO_OPEN_DATABASE -DFFL_TEST_DISABLE_MII_COLOR_VERIFY $(DEFS)
+# FFL_NO_OPEN_DATABASE_FILE: will not try to open database files
+# all others: databases or functionality that is not used
+# FFL_NO_FS: just means that, on top of no db, we will open and provide the resource file ourselves
+
+# TODO: neeeed a good way to set debug and release!!!
+DEFS := -DRIO_DEBUG -DRIO_NO_CONTROLLERS_WIN -DFFL_NO_FS -DFFL_NO_DATABASE_FILE -DFFL_NO_MIDDLE_DB -DFFL_NO_DATABASE_RANDOM -DFFL_NO_DRAW_MASK_TWICE $(DEFS)
 
 # Binary name which you can change if you want
 EXEC := ffl_testing_2_debug64
@@ -26,7 +30,19 @@ PKG_CONFIG_PATH := include/.pkg-config-path-dummy-for-makefile/:$(PKG_CONFIG_PAT
 #export PKG_CONFIG_PATH  # not working???
 
 # libraries passed to pkg-config
-LIBS := zlib glew glfw3
+LIBS := glfw3
+ifeq (,$(findstring FFL_NO_ZLIB, $(DEFS)))
+LIBS += zlib
+endif
+
+ifneq (,$(findstring RIO_USE_GLEW, $(DEFS)))
+LIBS += glew
+endif
+
+ifneq (,$(findstring RIO_GLES, $(DEFS)))
+LIBS += glesv2
+endif
+
 # use pkg-config output as LDFLAGS and CFLAGS later on
 PKG_CONFIG_CFLAGS_CMD := $(TOOLCHAIN_PREFIX)pkg-config --cflags $(LIBS)
 $(info pkg-config cflags command: $(PKG_CONFIG_CFLAGS_CMD))
@@ -72,12 +88,19 @@ endif
 #INCLUDES += -I$(PKG_CONFIG_SYSTEM_INCLUDE_PATH)
 #endif
 
+ifeq (,$(findstring FFL_NO_NINTEXUTILS, $(DEFS)))
+INCLUDES += -IninTexUtils/include
+endif
+
 # Build for debug by default, use C++17
 CXXFLAGS := -g -std=c++17 $(CXXFLAGS) $(INCLUDES) $(PKG_CONFIG_CFLAGS_OUTPUT) $(DEFS)
 
 # Source directories
 # glob all files in here for now
+ifeq (,$(findstring FFL_NO_NINTEXUTILS, $(DEFS)))
+# then FFL_NO_NINTEXUTILS is NOT defined
 NINTEXUTILS_SRC := $(shell find ninTexUtils/src/ninTexUtils -name '*.c' -o -name '*.cpp')
+endif
 RIO_SRC := $(shell find rio/src -name '*.c' -o -name '*.cpp')
 FFL_SRC := $(shell find ffl/src -name '*.c' -o -name '*.cpp')
 
@@ -120,7 +143,7 @@ $(EXEC): $(NINTEXUTILS_OBJ) $(RIO_OBJ) $(FFL_OBJ) $(OBJ)
 
 # Clean up
 clean:
-	rm -f $(NINTEXUTILS_OBJ) $(RIO_OBJ) $(FFL_OBJ) $(OBJ) $(EXEC) src/Shader*.o build/*.o build/*.d build/*.map
+	rm -f $(NINTEXUTILS_OBJ) $(RIO_OBJ) $(FFL_OBJ) $(OBJ) $(EXEC) src/Shader*.o build/*.o build/*.d build/*.map $(EXEC)_no_clip_control
 
 # Phony targets
 .PHONY: all clean no_clip_control
