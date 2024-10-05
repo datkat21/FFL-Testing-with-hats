@@ -20,9 +20,9 @@ RootTask::RootTask()
 #if RIO_IS_WIN && defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#define close closesocket
 #pragma comment(lib, "ws2_32.lib")
 #elif RIO_IS_WIN && !defined(__EMSCRIPTEN__)
+#define closesocket close
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -376,7 +376,7 @@ void RootTask::createModel_(char (*buf)[FFLICHARINFO_SIZE]) {
             convert.to_bytes((char16_t*) pCharInfo->name).c_str());
     // close connection which should happen as soon as we read it
     #if RIO_IS_WIN && !defined(__EMSCRIPTEN__)
-        close(new_socket);
+        closesocket(new_socket);
     #endif
     // otherwise just fall through and use default
 
@@ -427,7 +427,7 @@ void RootTask::calc_()
             createModel_(&buf);
         } else {
             RIO_LOG("got a request of length %d (should be %lu), dropping\n", read_bytes, sizeof(FFLStoreData));
-            close(new_socket);
+            closesocket(new_socket);
         }
     } else {
 #endif // RIO_IS_WIN && !defined(__EMSCRIPTEN__)
@@ -441,7 +441,7 @@ void RootTask::calc_()
 #if RIO_IS_WIN && !defined(__EMSCRIPTEN__)
     }
     // close connection which should happen as soon as we read it
-    close(new_socket);
+    closesocket(new_socket);
 #endif // RIO_IS_WIN && !defined(__EMSCRIPTEN__)
 
     // Distance in the XZ-plane from the center to the camera position

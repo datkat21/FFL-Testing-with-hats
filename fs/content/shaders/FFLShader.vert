@@ -1,4 +1,4 @@
-#version 100
+#version 330 core
 /******************************************************//**
  * @file    sample.vsh
  * @brief   Vertex Shader
@@ -14,18 +14,18 @@ precision highp float;
 #endif
 
 // 頂点シェーダーに入力される attribute 変数
-attribute vec4 a_position;   //!< 入力: 位置情報
-attribute vec2 a_texCoord;   //!< 入力: テクスチャー座標
-attribute vec3 a_normal;     //!< 入力: 法線ベクトル
-attribute vec4 a_color;      //!< 入力: 頂点の色
-attribute vec3 a_tangent;    //!< 入力: 異方位
+in vec4 a_position;   //!< 入力: 位置情報
+in vec2 a_texCoord;   //!< 入力: テクスチャー座標
+in vec3 a_normal;     //!< 入力: 法線ベクトル
+in vec4 a_color;      //!< 入力: 頂点の色
+in vec3 a_tangent;    //!< 入力: 異方位
 
 // フラグメントシェーダーへの入力
-varying   vec4 v_color;      //!< 出力: 頂点の色
-varying   vec4 v_position;   //!< 出力: 位置情報
-varying   vec3 v_normal;     //!< 出力: 法線ベクトル
-varying   vec3 v_tangent;    //!< 出力: 異方位
-varying   vec2 v_texCoord;   //!< 出力: テクスチャー座標
+out   vec4 v_color;      //!< 出力: 頂点の色
+out   vec4 v_position;   //!< 出力: 位置情報
+out   vec3 v_normal;     //!< 出力: 法線ベクトル
+out   vec3 v_tangent;    //!< 出力: 異方位
+out   vec2 v_texCoord;   //!< 出力: テクスチャー座標
 
 // ユニフォーム
 uniform   mat3 u_it;         //!< ユニフォーム: モデルの法線用行列
