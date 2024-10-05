@@ -35,9 +35,9 @@ RootTask::RootTask()
 #if RIO_IS_WIN && defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#define close closesocket
 #pragma comment(lib, "ws2_32.lib")
 #elif RIO_IS_WIN
+#define closesocket close
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -139,12 +139,12 @@ void RootTask::setupSocket_()
         char serverOnlyReminder[] = "\033[1mRemember to add the environment variable SERVER_ONLY=1 to hide the main window.\n\033[0m";
         // except if we are server only, in which case we WANT to block
         if (!mpServerOnly) {
-            #ifdef _WIN32
+#ifdef _WIN32
             u_long mode = 1;
             ioctlsocket(server_fd, FIONBIO, &mode);
-            #else
+#else
             fcntl(server_fd, F_SETFL, O_NONBLOCK);
-            #endif
+#endif
         } else {
             // don't show the reminder with server only
             serverOnlyReminder[0] = '\0';
@@ -669,10 +669,10 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
 void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Texture2D* texture, int socket) {
     // does operations on the renderbuffer assuming it is already bound
 
-    const uint width = texture->getWidth();
-    const uint height = texture->getHeight();
+    const u32 width = texture->getWidth();// / ssaaFactor;
+    const u32 height = texture->getHeight();// / ssaaFactor;
     // Read the rendered data into a buffer and save it to a file
-    uint bufferSize = rio::Texture2DUtil::calcImageSize(texture->getTextureFormat(), width, height);
+    u32 bufferSize = rio::Texture2DUtil::calcImageSize(texture->getTextureFormat(), width, height);
 
     //int bufferSize = renderRequest->resolution * renderRequest->resolution * 4;
 /*
@@ -861,7 +861,7 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
         /*const char* errMsg = "mpModel == nullptr";
         send(new_socket, errMsg, strlen(errMsg), 0);
         */
-        close(new_socket);
+        closesocket(new_socket);
         return;
     }
 
@@ -872,7 +872,7 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
 #ifndef NO_GLTF
         handleGLTFRequest(renderRequest);
 #endif
-        close(new_socket);
+        closesocket(new_socket);
         return;
     }
 
@@ -889,7 +889,7 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
         // NOTE the resolution of this is the texture resolution so that would have to match what the client expects
         copyAndSendRenderBufferToSocket(*pRenderTexture->pRenderBuffer, pRenderTexture->pTexture2D, new_socket);
 
-        close(new_socket);
+        closesocket(new_socket);
         return;
     }
     // switch between two projection matrxies
@@ -1122,7 +1122,7 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
         RIO_LOG("Viewport and scissor reset to window dimensions: %dx%d\n", width, height);
     }
 
-    close(new_socket);
+    closesocket(new_socket);
 }
 
 void RootTask::calc_()
@@ -1152,7 +1152,7 @@ void RootTask::calc_()
             };
         } else {
             RIO_LOG("got a request of length %d (should be %lu), dropping\n", read_bytes, RENDERREQUEST_SIZE);
-            close(new_socket);
+            closesocket(new_socket);
         }
     } else {
         // otherwise just fall through and use default
@@ -1230,6 +1230,7 @@ void RootTask::calc_()
 #ifndef NO_GLTF
 
 #include "GLTFExportCallback.h"
+#include <sstream>
 
 void RootTask::handleGLTFRequest(RenderRequest* renderRequest)
 {

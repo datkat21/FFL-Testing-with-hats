@@ -1,4 +1,4 @@
-#version 100
+#version 330 core
 //
 //  sample.flg
 //  Fragment shader
@@ -146,11 +146,11 @@ mediump float calculateDot(mediump vec3 light, mediump vec3 normal)
 }
 
 // フラグメントシェーダーに入力される varying 変数
-varying mediump vec4 v_color;          //!< 出力: 頂点の色
-varying mediump vec4 v_position;       //!< 出力: 位置情報
-varying mediump vec3 v_normal;         //!< 出力: 法線ベクトル
-varying mediump vec3 v_tangent;        //!< 出力: 異方位
-varying mediump vec2 v_texCoord;       //!< 出力: テクスチャー座標
+in mediump vec4 v_color;          //!< 出力: 頂点の色
+in mediump vec4 v_position;       //!< 出力: 位置情報
+in mediump vec3 v_normal;         //!< 出力: 法線ベクトル
+in mediump vec3 v_tangent;        //!< 出力: 異方位
+in mediump vec2 v_texCoord;       //!< 出力: テクスチャー座標
 
 /// constカラー
 uniform mediump vec4  u_const1; ///< constカラー1
@@ -181,6 +181,7 @@ uniform mediump float u_rim_power;
 // サンプラー
 uniform sampler2D s_texture;
 
+out vec4 o_Color;
 
 // -------------------------------------------------------
 // メイン文
@@ -199,34 +200,34 @@ void main()
 //#elif defined(FFL_MODULATE_MODE_TEXTURE_DIRECT)
     else if(u_mode == FFL_MODULATE_MODE_TEXTURE_DIRECT)
     {
-        color = texture2D(s_texture, v_texCoord);
+        color = texture(s_texture, v_texCoord);
     }
 //#elif defined(FFL_MODULATE_MODE_RGB_LAYERED)
     else if(u_mode == FFL_MODULATE_MODE_RGB_LAYERED)
     {
-        color = texture2D(s_texture, v_texCoord);
+        color = texture(s_texture, v_texCoord);
         color = vec4(color.r * u_const1.rgb + color.g * u_const2.rgb + color.b * u_const3.rgb, color.a);
     }
 //#elif defined(FFL_MODULATE_MODE_ALPHA)
     else if(u_mode == FFL_MODULATE_MODE_ALPHA)
     {
-        color = texture2D(s_texture, v_texCoord);
+        color = texture(s_texture, v_texCoord);
         color = vec4(u_const1.rgb, color.r);
     }
 //#elif defined(FFL_MODULATE_MODE_LUMINANCE_ALPHA)
     else if(u_mode == FFL_MODULATE_MODE_LUMINANCE_ALPHA)
     {
-        color = texture2D(s_texture, v_texCoord);
+        color = texture(s_texture, v_texCoord);
         color = vec4(color.g * u_const1.rgb, color.r);
     }
 //#elif defined(FFL_MODULATE_MODE_ALPHA_OPA)
     else if(u_mode == FFL_MODULATE_MODE_ALPHA_OPA)
     {
-        color = texture2D(s_texture, v_texCoord);
+        color = texture(s_texture, v_texCoord);
         color = vec4(color.r * u_const1.rgb, 1.0);
     }
 //#endif
-    
+
 //#ifdef FFL_LIGHT_MODE_ENABLE
     if(u_light_enable)
     {
@@ -238,16 +239,16 @@ void main()
 
         /// 視線ベクトル
         mediump vec3 eye = normalize(-v_position.xyz);
-        
+
         // ライトの向き
         mediump float fDot = calculateDot(u_light_dir, norm);
 
         /// Diffuse計算
         mediump vec3 diffuse = calculateDiffuseColor(u_light_diffuse.xyz, u_material_diffuse.xyz, fDot);
-        
+
         /// Specular計算
         mediump float specularBlinn = calculateBlinnSpecular(u_light_dir, norm, eye, u_material_specular_power);
-        
+
         /// Specularの値を確保する変数を宣言
         mediump float reflection;
         mediump float strength = v_color.g;
@@ -274,5 +275,5 @@ void main()
     }
 //#endif
 
-    gl_FragColor = color;
+    o_Color = color;
 }

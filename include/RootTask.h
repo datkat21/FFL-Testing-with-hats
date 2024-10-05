@@ -144,10 +144,10 @@ private:
             mpShaders[type]->initialize();
         }
     }
-    #if RIO_IS_WIN
+#if RIO_IS_WIN
     void fillStoreDataArray_();
     void setupSocket_();
-    #endif
+#endif
 
     // NOTE: bc of the amount of arguments, consider putting this in mpModel
     void drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx);

@@ -3,6 +3,10 @@
 #include <rio.h>
 #include <gfx/rio_Window.h>
 
+#ifdef __EMSCRIPTEN__
+    #include <emscripten/emscripten.h>
+#endif
+
 static rio::InitializeArg initializeArg = {
     .window = {
         .width = 600,
@@ -13,6 +17,13 @@ static rio::InitializeArg initializeArg = {
     }
 };
 
+
+#ifdef __EMSCRIPTEN__
+void mainLoop() {
+    rio::EnterMainLoop();
+}
+#endif
+
 int main()
 {
     char* isServerOnly = getenv("SERVER_ONLY");
@@ -20,10 +31,14 @@ int main()
     if (isServerOnly)
         initializeArg.window.invisible = true;
 
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(mainLoop, 30, 0);
+#endif
+
     // Initialize RIO, make window...
     if (!rio::Initialize<RootTask>(initializeArg))
         return -1;
-
+#ifndef __EMSCRIPTEN__
     // do not draw/present to window when server only
     // may avoid an issue where, when window hasn't been updated
     // for a while (which it won't be if SERVER_ONLY is enabled
@@ -52,6 +67,6 @@ int main()
 
     // Exit RIO
     rio::Exit();
-
+#endif
     return 0;
 }
