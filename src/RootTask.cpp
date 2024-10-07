@@ -30,6 +30,9 @@ RootTask::RootTask()
     , mpServerOnly(getenv("SERVER_ONLY"))
     , mpNoSpin(getenv("NO_SPIN"))
 {
+#ifdef RIO_USE_OSMESA // off screen rendering
+    mpServerOnly = "1"; // force it truey
+#endif
 }
 
 #if RIO_IS_WIN && defined(_WIN32)
@@ -634,7 +637,9 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
         .desc = {
             .resolution = texResolution,
             .expressionFlag = expressionFlag,
-            .modelFlag = static_cast<u32>(1) << buf->modelType,
+            // model flag includes model type (required)
+            // and flatten nose bit at pos 4
+            .modelFlag = static_cast<u32>(buf->modelFlag),
             .resourceType = static_cast<FFLResourceType>(buf->resourceType),
         },
         .source = modelSource
@@ -785,18 +790,18 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::M
         float height = charInfo->height;
 
         // "calculateScaleFactors" anonymous function referenced in nn::mii::detail::VariableIconBodyImpl::CalculateWorldMatrix
-        /*scaleFactors.x = (build * (height * 0.003671875f + 0.4f)) / 128.0f +
+        scaleFactors.x = (build * (height * 0.003671875f + 0.4f)) / 128.0f +
                         height * 0.001796875f + 0.4f;//0.4f;
 
         scaleFactors.y = (height * 0.006015625f) + 0.5f;
-*/
+
         // WII U FACTORS?
-        scaleFactors.y = height / 128.0f;
+        /*scaleFactors.y = height / 128.0f;
         scaleFactors.x = scaleFactors.y * 0.3f + 0.6f;
         scaleFactors.x = ((scaleFactors.y * 0.6f + 0.8f) - scaleFactors.x) * build / 128.0f + scaleFactors.x;
 
         scaleFactors.y = scaleFactors.y * 0.55f + 0.6f;
-
+        */
 
 
         // the below are applied for both sets of factors
@@ -900,8 +905,6 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
         {
             // if it has body then use the matrix we just defined
             projMtx = mProjMtxIconBody;
-            // NOTE: adjusted to be slightly closer but still not right
-            // FFLMakeIconWithBody view uses 37.05f, 415.53f
 
             //RIO_LOG("x = %i, y = %i, z = %i\n", renderRequest->cameraRotate.x, renderRequest->cameraRotate.y, renderRequest->cameraRotate.z);
             /*
@@ -911,19 +914,20 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
                 fmod(static_cast<f32>(renderRequest->cameraRotate.z), 360),
             };*/
 
-            mCamera.pos() = { 0.0f, 34.20f, 412.0f };
-            mCamera.at() = { 0.0f, 34.20f, 0.0f };
+            // FFLMakeIconWithBody view uses 37.05f, 415.53f
+            // below values are extracted from wii u mii maker
+            mCamera.pos() = { 0.0f, 33.016785f, 411.181793f };
+            mCamera.at() = { 0.0f, 33.016785f, 0.0f };
             mCamera.setUp({ 0.0f, 1.0f, 0.0f });
             break;
         }
         case VIEW_TYPE_NNMII_VARIABLEICONBODY_VIEW:
         {
             projMtx = mProjMtxIconBody;
-            // nn::mii::VariableIconBody::StoreCameraMatrix uses 37.0f, 380.0f
+            // nn::mii::VariableIconBody::StoreCameraMatrix values
             mCamera.pos() = { 0.0f, 37.0f, 380.0f };
             mCamera.at() = { 0.0f, 37.0f, 0.0f };
             mCamera.setUp({ 0.0f, 1.0f, 0.0f });
-            //projMtx.m
             break;
         }
         case VIEW_TYPE_ALL_BODY:

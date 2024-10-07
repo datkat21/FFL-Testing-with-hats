@@ -1095,8 +1095,15 @@ void GLTFExportCallback::IncludeCharacterModelInfo(tinygltf::Model& model)
         transformObj["headTopRotate"] = FFLVec3ToGltfValue(partsTransform._3c);
         transformObj["headTopTranslate"] = FFLVec3ToGltfValue(partsTransform._48);
 
+        // Include body build and height, u32 cast to s32
+        tinygltf::Value buildValue = tinygltf::Value(*reinterpret_cast<s32*>(&pCharInfo->build));
+        tinygltf::Value heightValue = tinygltf::Value(*reinterpret_cast<s32*>(&pCharInfo->height));
+
         // Add charInfo and partsTransform to the model's extras
         model.asset.extras = tinygltf::Value(tinygltf::Value::Object{
+            {"build", buildValue},
+            {"height", heightValue},
+            // FFLiCharInfo value, not parsable or used by anything
             {"charInfo", tinygltf::Value(charInfoB64)},
             {"partsTransform", tinygltf::Value(transformObj)}
         });

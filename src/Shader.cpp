@@ -207,7 +207,7 @@ const FFLColor cLightAmbient  = { 0.73f, 0.73f, 0.73f, 1.0f };
 const FFLColor cLightDiffuse  = { 0.60f, 0.60f, 0.60f, 1.0f };
 const FFLColor cLightSpecular = { 0.70f, 0.70f, 0.70f, 1.0f };
 
-const rio::BaseVec3f cLightDir = { -0.4531539381f, 0.4226179123f, 0.7848858833f };
+const rio::BaseVec3f cLightDir = { -0.4531539381f, 0.4226179123f, 0.7848858833f }; // , 0.30943f
 // nwf light direction but doesn't seem to differ much
 //const rio::BaseVec3f cLightDir = { -0.455f, 0.348f, 0.5f };
 
@@ -540,11 +540,14 @@ void Shader::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 
     mBodyShader.setUniform(3.0f, u32(-1), mBodyShader.getFragmentUniformLocation("SP_power"));
 
-    mBodyShader.setUniform(0.7f, 0.7f, 0.7f, u32(-1), mBodyShader.getFragmentUniformLocation("ambient"));
-    mBodyShader.setUniform(0.3f, 0.3f, 0.3f, u32(-1), mBodyShader.getFragmentUniformLocation("diffuse"));
+    mBodyShader.setUniform(0.69804f, 0.69804f, 0.69804f, u32(-1), mBodyShader.getFragmentUniformLocation("ambient"));
+    mBodyShader.setUniform(0.29804f, 0.29804f, 0.29804f, u32(-1), mBodyShader.getFragmentUniformLocation("diffuse"));
+    // NOTE: for pants
+    //mBodyShader.setUniform(0.65098f, 0.65098f, 0.65098f, u32(-1), mBodyShader.getFragmentUniformLocation("diffuse"));
+
     mBodyShader.setUniform(0.4f, 0.4f, 0.4f, u32(-1), mBodyShader.getFragmentUniformLocation("rim"));
     mBodyShader.setUniform(2.0f, u32(-1), mBodyShader.getFragmentUniformLocation("rimSP_power"));
-    mBodyShader.setUniform(0.17f, 0.17f, 0.17f, u32(-1), mBodyShader.getFragmentUniformLocation("specular"));
+    mBodyShader.setUniform(0.16863f, 0.16863f, 0.16863f, u32(-1), mBodyShader.getFragmentUniformLocation("specular"));
 }
 
 void Shader::draw_(const FFLDrawParam& draw_param)

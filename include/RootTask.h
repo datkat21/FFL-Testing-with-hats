@@ -73,7 +73,7 @@ enum DrawStageMode {
 struct RenderRequest {
     char     data[96];       // just a buffer that accounts for maximum size
     uint16_t dataLength;     // determines the mii data format
-    uint8_t  modelType;      // head model type, FFLModelType
+    uint8_t  modelFlag;      // FFLModelType + nose flatten @ bit 4
     bool     exportAsGLTF;   // completely changes the response type
     // NOTE: arbitrary resolutions CRASH THE BACKEND
     uint16_t resolution;     // resolution for render buffer
