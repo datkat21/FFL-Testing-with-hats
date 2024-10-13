@@ -434,6 +434,13 @@ void Shader::bindTexture_(const FFLModulateParam& modulateParam)
         mSampler.linkTexture2D(modulateParam.pTexture2D);
         mSampler.tryBindFS(mSamplerLocation, 0);
     }
+#ifdef __EMSCRIPTEN__
+    // not sure how to do this in a way
+    // where it works on apple and everywhere else
+    else {
+        mSampler.tryBindFS(mSamplerLocation, 0);
+    }
+#endif
 }
 
 void Shader::setConstColor_(u32 ps_loc, const FFLColor& color)
@@ -560,6 +567,9 @@ void Shader::draw_(const FFLDrawParam& draw_param)
                     break;
                 }
             }
+            else if (location != -1)
+                // Disable the attribute to avoid using uninitialized data
+                RIO_GL_CALL(glDisableVertexAttribArray(location));
         }
 #endif
 
@@ -568,14 +578,16 @@ void Shader::draw_(const FFLDrawParam& draw_param)
         RIO_GL_CALL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, draw_param.primitiveParam.indexCount * sizeof(u16), draw_param.primitiveParam.pIndexBuffer, GL_STATIC_DRAW));
 #endif
         // glDrawElements
+
         rio::Drawer::DrawElements(
             draw_param.primitiveParam.primitiveType,
             draw_param.primitiveParam.indexCount,
 #ifdef __EMSCRIPTEN__
-            //(const u16*)0
+            (const u16*)0
 #else
-#endif
             (const u16*)draw_param.primitiveParam.pIndexBuffer
+
+#endif
         );
     }
 }

@@ -1,6 +1,6 @@
 # Default compiler and flags
 # Prepend toolchain prefix that you can choose
-CXX := $(TOOLCHAIN_PREFIX)g++
+CXX := $(TOOLCHAIN_PREFIX)em++
 
 INCLUDES := -Irio/include -Iffl/include -Iinclude $(INCLUDES)
 # ninTexUtils is added conditionally later
@@ -14,10 +14,10 @@ INCLUDES := -Irio/include -Iffl/include -Iinclude $(INCLUDES)
 # FFL_NO_FS: just means that, on top of no db, we will open and provide the resource file ourselves
 
 # TODO: neeeed a good way to set debug and release!!!
-DEFS := -DRIO_DEBUG -DRIO_NO_CONTROLLERS_WIN -DFFL_NO_FS -DFFL_NO_DATABASE_FILE -DFFL_NO_MIDDLE_DB -DFFL_NO_DATABASE_RANDOM -DFFL_NO_DRAW_MASK_TWICE $(DEFS)
+DEFS := -DRIO_DEBUG -DRIO_NO_CONTROLLERS_WIN -DFFL_NO_FS -DFFL_NO_DATABASE_FILE -DFFL_NO_MIDDLE_DB -DFFL_NO_DATABASE_RANDOM -DFFL_NO_DRAW_MASK_TWICE $(DEFS) -DRIO_GLES -DFFL_NO_NINTEXUTILS
 
 # Binary name which you can change if you want
-EXEC := ffl_testing_2_debug64
+EXEC := ffl_testing_2_debug64.html
 
 # --- LDFLAGS
 
@@ -64,23 +64,6 @@ $(info $(LDFLAGS))
 
 # --- Platform specific flags
 
-# macOS (doesn't support cross compiling tho)
-ifeq ($(shell uname), Darwin)
-    LDFLAGS += -framework OpenGL -framework Foundation -framework CoreGraphics -framework AppKit -framework IOKit
-    EXEC := ffl_testing_2_debug_apple64
-    # clip control is for opengl 4.5 and later and macos only supports 4.1
-    DEFS += -DRIO_NO_CLIP_CONTROL
-endif
-# mingw
-# usually these ldflags are added by pkg-config but in this case they weren't
-ifeq ($(OS), Windows_NT)
-    LDFLAGS += -lopengl32 -lws2_32
-# or try to find mingw32 in the CXX
-else ifneq (,$(findstring mingw32, $(CXX)))
-    # pkg-config should include opengl32 but not socket stuff
-    LDFLAGS += -lws2_32
-endif
-
 # --- CXXFLAGS and source
 
 # MINGW64 has the default include path in here
@@ -94,6 +77,8 @@ endif
 
 # Build for debug by default, use C++17, catch all errors
 CXXFLAGS := -g -std=c++17 -Wall $(CXXFLAGS) $(INCLUDES) $(PKG_CONFIG_CFLAGS_OUTPUT) $(DEFS)
+
+LDFLAGS := -sINITIAL_MEMORY=22937600 -sALLOW_MEMORY_GROWTH -sMAX_WEBGL_VERSION=2 -sUSE_GLFW=3 -sUSE_ZLIB=1 --embed-file fs --preload-file FFLResHigh.dat --embed-file place_ffsd_files_here
 
 # Source directories
 # glob all files in here for now

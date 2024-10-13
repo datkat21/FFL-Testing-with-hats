@@ -63,7 +63,7 @@ void RootTask::fillStoreDataArray_()
                 }
             }
         }
-        RIO_LOG("Loaded %lu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
+        RIO_LOG("Loaded %zu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
     }
 }
 
@@ -209,7 +209,7 @@ void RootTask::prepare_()
 
             if (!resLoaded) {
                 RIO_LOG("Was not able to load high resource!!!\n");
-                RIO_LOG("\e[1;31mThe FFLResHigh.dat needs to be present, or else this program won't work. It will probably crash right now.\e[0m\n");
+                RIO_LOG("\033[1;31mThe FFLResHigh.dat needs to be present, or else this program won't work. It will probably crash right now.\033[0m\n");
                 RIO_ASSERT(false);
             }
         }
@@ -237,9 +237,9 @@ void RootTask::prepare_()
     // Set projection matrix
     {
         // Calculate the aspect ratio based on the window dimensions
-        float aspect = f32(window->getWidth()) / f32(window->getHeight());
+        f32 aspect = f32(window->getWidth()) / f32(window->getHeight());
         // Calculate the field of view (fovy) based on the given parameters
-        float fovy;
+        f32 fovy;
         if (f32(window->getWidth()) < f32(window->getHeight())) {
             fovy = 2 * atan2f(43.2f / aspect, 500.0f);
         } else {
@@ -304,7 +304,7 @@ void RootTask::createModel_() {
         modelSource.dataSource = FFL_DATA_SOURCE_STORE_DATA;
         modelSource.pBuffer = &mStoreDataArray[mMiiCounter][0];
         // limit current counter by the amount of custom miis
-        maxMiis = mStoreDataArray.size();
+        maxMiis = static_cast<int>(mStoreDataArray.size());
     } else {
         // default mii source, otherwise known as guest miis
         modelSource.dataSource = FFL_DATA_SOURCE_DEFAULT;
@@ -445,7 +445,7 @@ void RootTask::calc_()
 #endif // RIO_IS_WIN && !defined(__EMSCRIPTEN__)
 
     // Distance in the XZ-plane from the center to the camera position
-    static const float radius = 600.0f;
+    static const f32 radius = 600.0f;
     // Define a constant position in the 3D space for the center position of the camera
     static const rio::Vector3f CENTER_POS = { 0.0f, 34.5f, radius };
 
