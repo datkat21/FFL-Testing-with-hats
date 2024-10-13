@@ -136,7 +136,7 @@ struct FFLiDefaultShaderMaterial
     s32 specularMode;
 };
 
-const u32 cMaterialParamSize = 9;
+const int cMaterialParamSize = 9;
 const FFLiDefaultShaderMaterial cMaterialParam[cMaterialParamSize] = {
     { // ShapeFaceline
         { 0.85f, 0.75f, 0.75f, 1.0f }, // ambient
@@ -622,6 +622,9 @@ void Shader::draw_(const FFLDrawParam& draw_param)
                     break;
                 }
             }
+            else if (location != -1)
+                // Disable the attribute to avoid using uninitialized data
+                RIO_GL_CALL(glDisableVertexAttribArray(location));
         }
 #endif
 

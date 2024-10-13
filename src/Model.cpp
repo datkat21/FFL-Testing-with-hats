@@ -121,12 +121,16 @@ void Model::drawXluNormal_()
     render_state.setDepthFunc(rio::Graphics::COMPARE_FUNC_LESS);
     render_state.applyDepthAndStencilTest();
     mpShader->applyAlphaTestEnable();
+
+    // "interpolated alpha blending"
     render_state.setBlendEnable(true);
+    render_state.setBlendEquation(rio::Graphics::BLEND_FUNC_ADD);
     render_state.setBlendFactorSrcRGB(rio::Graphics::BLEND_MODE_SRC_ALPHA);
     render_state.setBlendFactorDstRGB(rio::Graphics::BLEND_MODE_ONE_MINUS_SRC_ALPHA);
-    render_state.setBlendFactorSrcAlpha(rio::Graphics::BLEND_MODE_SRC_ALPHA);
+
+    render_state.setBlendEquationAlpha(rio::Graphics::BLEND_FUNC_MAX);
+    render_state.setBlendFactorSrcAlpha(rio::Graphics::BLEND_MODE_ONE);
     render_state.setBlendFactorDstAlpha(rio::Graphics::BLEND_MODE_ONE);
-    render_state.setBlendEquation(rio::Graphics::BLEND_FUNC_ADD);
     render_state.setBlendConstantColor({ 0.0f, 0.0f, 0.0f, 0.0f });
     render_state.apply();
 

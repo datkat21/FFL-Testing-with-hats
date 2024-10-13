@@ -46,7 +46,10 @@ RootTask::RootTask()
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
+#ifdef USE_SYSTEMD_SOCKET
+#include <systemd/sd-daemon.h>
 #endif
+#endif // RIO_IS_WIN && defined(_WIN32)
 
 #include <nn/ffl/FFLiMiiData.h>
 #include <nn/ffl/FFLiMiiDataCore.h>
@@ -83,7 +86,7 @@ void RootTask::fillStoreDataArray_()
                 }
             }
         }
-        RIO_LOG("Loaded %lu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
+        RIO_LOG("Loaded %zu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
     }
 }
 
@@ -95,6 +98,21 @@ int addrlen = sizeof(address);
 // Setup socket to send data to
 void RootTask::setupSocket_()
 {
+#ifdef USE_SYSTEMD_SOCKET
+    if (getenv("LISTEN_FDS")) {
+        // systemd socket activation detected
+        int n_fds = sd_listen_fds(0);
+        if (n_fds > 0) {
+            server_fd = SD_LISTEN_FDS_START + 0; // Use only one socket
+            mSocketIsListening = true;
+            RIO_LOG("\033[1mUsing systemd socket activation, socket fd: %d\033[0m\n", server_fd);
+
+            mpServerOnly = "1"; // force server only when using systemd socket
+            return; // Exit the function as the socket is already set up
+       }
+    }
+#endif
+
     #ifdef _WIN32
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
@@ -233,7 +251,7 @@ void RootTask::prepare_()
 
             if (!resLoaded) {
                 RIO_LOG("Was not able to load high resource!!!\n");
-                RIO_LOG("\e[1;31mThe FFLResHigh.dat needs to be present, or else this program won't work. It will probably crash right now.\e[0m\n");
+                RIO_LOG("\033[1;31mThe FFLResHigh.dat needs to be present, or else this program won't work. It will probably crash right now.\033[0m\n");
                 RIO_ASSERT(false);
             }
         }
@@ -245,7 +263,7 @@ void RootTask::prepare_()
 #endif
     if (result != FFL_RESULT_OK)
     {
-        RIO_LOG("FFLInitResEx() failed with result: %d\n", (s32)result);
+        RIO_LOG("FFLInitResEx() failed with result: %s\n", FFLResultToString(result));
         RIO_ASSERT(false);
         return;
     }
@@ -261,9 +279,9 @@ void RootTask::prepare_()
     // Set projection matrix
     {
         // Calculate the aspect ratio based on the window dimensions
-        float aspect = f32(window->getWidth()) / f32(window->getHeight());
+        f32 aspect = f32(window->getWidth()) / f32(window->getHeight());
         // Calculate the field of view (fovy) based on the given parameters
-        float fovy;
+        f32 fovy;
         if (f32(window->getWidth()) < f32(window->getHeight())) {
             fovy = 2 * atan2f(43.2f / aspect, 500.0f);
         } else {
@@ -346,10 +364,10 @@ void RootTask::createModel_() {
     if (!mStoreDataArray.empty()) {
         // Use the custom Mii data array
         RenderRequest fakeRenderRequest;
-        fakeRenderRequest.dataLength = mStoreDataArray[mMiiCounter].size();
+        fakeRenderRequest.dataLength = static_cast<u16>(mStoreDataArray[mMiiCounter].size());
         fakeRenderRequest.verifyCRC16 = false;
         rio::MemUtil::copy(fakeRenderRequest.data, &mStoreDataArray[mMiiCounter][0], fakeRenderRequest.dataLength);
-        if(pickupCharInfoFromRenderRequest(&charInfo, &fakeRenderRequest) != FFL_RESULT_OK)
+        if (pickupCharInfoFromRenderRequest(&charInfo, &fakeRenderRequest) != FFL_RESULT_OK)
         {
             RIO_LOG("pickupCharInfoFromRenderRequest failed on Mii counter: %d\n", mMiiCounter);
             mpModel = nullptr;
@@ -362,7 +380,7 @@ void RootTask::createModel_() {
         modelSource.dataSource = FFL_DATA_SOURCE_DIRECT_POINTER;
         modelSource.pBuffer = &charInfo;
         // limit current counter by the amount of custom miis
-        maxMiis = mStoreDataArray.size();
+        maxMiis = static_cast<int>(mStoreDataArray.size());
     } else {
         // default mii source, otherwise known as guest miis
         modelSource.dataSource = FFL_DATA_SOURCE_DEFAULT;
@@ -452,6 +470,7 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest
             // 76 = sizeof RFLStoreData
             if (buf->verifyCRC16 && !FFLiIsValidCRC16(buf->data, 76))
                 return FFL_RESULT_FILE_INVALID;
+            [[fallthrough]];
         case INPUT_TYPE_RFL_CHARDATA:
         {
             // it is NOT FFLiMiiDataCore, it may be RFL tho
@@ -516,7 +535,7 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest
         case INPUT_TYPE_STUDIO_ENCODED:
         {
             // mii studio url data format is obfuscated
-            // this decodes it in place and falls through
+            // decodes it in a buffer
             char decodedData[STUDIO_DATA_ENCODED_LENGTH];
             rio::MemUtil::copy(decodedData, buf->data, STUDIO_DATA_ENCODED_LENGTH);
             studioURLObfuscationDecode(decodedData);
@@ -540,6 +559,7 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest
             // only verify CRC16, then fall through
             if (buf->verifyCRC16 && !FFLiIsValidCRC16(buf->data, sizeof(FFLiStoreDataCFL)))
                 return FFL_RESULT_FILE_INVALID;
+            [[fallthrough]];
         case INPUT_TYPE_FFL_MIIDATACORE:
             // TODO: SWAP ENDIAN ON WII U OR HANDLE BOTH KINDS
             FFLiMiiDataCore2CharInfo(pCharInfo,
@@ -671,13 +691,114 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
     return true;
 }
 
-void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Texture2D* texture, int socket) {
+void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Texture2D* texture, int socket, int ssaaFactor) {
     // does operations on the renderbuffer assuming it is already bound
-
-    const u32 width = texture->getWidth();// / ssaaFactor;
-    const u32 height = texture->getHeight();// / ssaaFactor;
+#ifdef TRY_SCALING
+    const u32 width = texture->getWidth() / ssaaFactor;
+    const u32 height = texture->getHeight() / ssaaFactor;
+#else
+    const u32 width = texture->getWidth();
+    const u32 height = texture->getHeight();
+#endif
     // Read the rendered data into a buffer and save it to a file
     u32 bufferSize = rio::Texture2DUtil::calcImageSize(texture->getTextureFormat(), width, height);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#ifdef TRY_SCALING
+
+    rio::RenderBuffer renderBufferDownsample;
+    renderBufferDownsample.setSize(width, height);
+    RIO_GL_CALL(glViewport(0, 0, width, height));
+    //rio::Window::instance()->getNativeWindow()->getColorBufferTextureFormat();
+    rio::Texture2D *renderTextureDownsampleColor = new rio::Texture2D(rio::TEXTURE_FORMAT_R8_G8_B8_A8_UNORM, renderBufferDownsample.getSize().x, renderBufferDownsample.getSize().y, 1);
+    rio::RenderTargetColor renderTargetDownsampleColor;
+    renderTargetDownsampleColor.linkTexture2D(*renderTextureDownsampleColor);
+    renderBufferDownsample.setRenderTargetColor(&renderTargetDownsampleColor);
+    renderBufferDownsample.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR_DEPTH_STENCIL, {0.0f, 0.0f, 0.0f, 0.0f});
+    renderBufferDownsample.bind();
+    rio::RenderState render_state;
+    render_state.setBlendEnable(true);
+
+    // premultiplied alpha blending
+    render_state.setBlendEquation(rio::Graphics::BLEND_FUNC_ADD);
+    render_state.setBlendFactorSrcRGB(rio::Graphics::BLEND_MODE_ONE);
+    render_state.setBlendFactorDstRGB(rio::Graphics::BLEND_MODE_ONE_MINUS_SRC_ALPHA);
+
+    render_state.setBlendEquationAlpha(rio::Graphics::BLEND_FUNC_ADD);
+    render_state.setBlendFactorSrcAlpha(rio::Graphics::BLEND_MODE_ONE_MINUS_DST_ALPHA);
+    render_state.setBlendFactorDstAlpha(rio::Graphics::BLEND_MODE_ONE);
+    render_state.apply();
+
+    // Load and compile the downsampling shader
+    rio::Shader downsampleShader;
+    downsampleShader.load("TransparentAdjuster");
+    downsampleShader.bind();
+
+    // Bind the high-resolution texture
+    rio::TextureSampler2D highResSampler;
+    highResSampler.linkTexture2D(texture);
+    highResSampler.tryBindFS(downsampleShader.getFragmentSamplerLocation("s_Tex"), 0);
+
+    const float oneDivisionWidth = 1.0f / (width * ssaaFactor);
+    const float oneDivisionHeight = 1.0f / (height * ssaaFactor);
+
+    // Set shader uniforms if needed
+    downsampleShader.setUniform(oneDivisionWidth, oneDivisionHeight, u32(-1), downsampleShader.getFragmentUniformLocation("u_OneDivisionResolution"));
+    // Render a full-screen quad to apply the downsampling shader
+    GLuint quadVAO, quadVBO;
+
+    float quadVertices[] = {
+#ifndef RIO_NO_CLIP_CONTROL
+        -1.0f, 1.0f,  0.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f, 1.0f,
+        1.0f,  -1.0f, 1.0f, 1.0f,
+        -1.0f, 1.0f,  0.0f, 0.0f,
+        1.0f,  -1.0f, 1.0f, 1.0f,
+        1.0f,  1.0f,  1.0f, 0.0f
+#else
+        -1.0f, -1.0f, 0.0f, 0.0f,
+        -1.0f, 1.0f,  0.0f, 1.0f,
+        1.0f,  1.0f,  1.0f, 1.0f,
+        -1.0f, -1.0f, 0.0f, 0.0f,
+        1.0f,  1.0f,  1.0f, 1.0f,
+        1.0f,  -1.0f, 1.0f, 0.0f
+#endif
+    };
+
+    RIO_GL_CALL(glGenVertexArrays(1, &quadVAO));
+    RIO_GL_CALL(glGenBuffers(1, &quadVBO));
+    RIO_GL_CALL(glBindVertexArray(quadVAO));
+    RIO_GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, quadVBO));
+    RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW));
+    RIO_GL_CALL(glEnableVertexAttribArray(0));
+    RIO_GL_CALL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0));
+    RIO_GL_CALL(glEnableVertexAttribArray(1));
+    RIO_GL_CALL(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float))));
+    RIO_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
+    RIO_GL_CALL(glBindVertexArray(0));
+    // Unbind the framebuffer
+    RIO_GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+    // Clean up
+    RIO_GL_CALL(glDeleteVertexArrays(1, &quadVAO));
+    RIO_GL_CALL(glDeleteBuffers(1, &quadVBO));
+    downsampleShader.unload();
+
+    renderBufferDownsample.bind();
+
+
+
 
     //int bufferSize = renderRequest->resolution * renderRequest->resolution * 4;
 /*
@@ -704,6 +825,9 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
 
     RIO_GL_CALL(glReadPixels(0, 0, renderRequest->resolution, renderRequest->resolution, GL_RGBA, GL_UNSIGNED_BYTE, readBuffer));
 */
+
+#endif
+
     //renderBufferDownsample.read(0, readBuffer, renderBufferDownsample.getSize().x, renderBufferDownsample.getSize().y, renderTextureDownsampleColor->getNativeTexture().surface.nativeFormat);
 
     rio::NativeTextureFormat nativeFormat = texture->getNativeTexture().surface.nativeFormat;
@@ -786,8 +910,8 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::M
 
         rio::Vector3f scaleFactors;
 
-        float build = charInfo->build;
-        float height = charInfo->height;
+        f32 build = static_cast<f32>(charInfo->build);
+        f32 height = static_cast<f32>(charInfo->height);
 
         // "calculateScaleFactors" anonymous function referenced in nn::mii::detail::VariableIconBodyImpl::CalculateWorldMatrix
         scaleFactors.x = (build * (height * 0.003671875f + 0.4f)) / 128.0f +
@@ -807,10 +931,10 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::M
         // the below are applied for both sets of factors
         scaleFactors.z = scaleFactors.x;
         // Ensure scaleFactors.y is clamped to a maximum of 1.0
-        scaleFactors.y = std::min(scaleFactors.y, 1.0f);
+        scaleFactors.y = std::min<float>(scaleFactors.y, 1.0f);
 
 
-        static const float bodyToHeadOffset = -93.92f;
+        static const f32 bodyToHeadOffset = -93.92f;
 
         // make new matrix for body
         rio::Matrix34f modelMtxBody = rio::Matrix34f::ident;//model_mtx;
@@ -844,7 +968,7 @@ rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3]) {
 }
 
 // Calculate position based on spherical coordinates
-rio::Vector3f calculateCameraOrbitPosition(float radius, const rio::Vector3f& radians) {
+rio::Vector3f calculateCameraOrbitPosition(f32 radius, const rio::Vector3f& radians) {
     rio::Vector3f position;
     position.x = radius * -std::sin(radians.y) * std::cos(radians.x);
     position.y = radius * std::sin(radians.x);
@@ -892,7 +1016,7 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
         pRenderTexture->pRenderBuffer->bind();
 
         // NOTE the resolution of this is the texture resolution so that would have to match what the client expects
-        copyAndSendRenderBufferToSocket(*pRenderTexture->pRenderBuffer, pRenderTexture->pTexture2D, new_socket);
+        copyAndSendRenderBufferToSocket(*pRenderTexture->pRenderBuffer, pRenderTexture->pTexture2D, new_socket, 1);
 
         closesocket(new_socket);
         return;
@@ -956,7 +1080,7 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
 
     // Update camera position
     const rio::Vector3f cameraPosInitial = mCamera.pos();
-    const float radius = cameraPosInitial.z;
+    const f32 radius = cameraPosInitial.z;
 
     const rio::Vector3f cameraRotate = convertVec3iToRadians3f(renderRequest->cameraRotate);
     const rio::Vector3f modelRotate = convertVec3iToRadians3f(renderRequest->modelRotate);
@@ -992,7 +1116,12 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
     rio::RenderBuffer renderBuffer;
     //renderBuffer.setSize(renderRequest->resolution * 2, renderRequest->resolution * 2);    hasSocketRequest = false;
 
-    int ssaaFactor = 1;  // Super Sampling factor, e.g., 2 for 2x SSAA
+    int ssaaFactor =
+#ifdef TRY_SCALING
+    2;  // Super Sampling factor, e.g., 2 for 2x SSAA
+#else
+    1;
+#endif
     int width = static_cast<int>(renderRequest->resolution) * ssaaFactor;
     int height = static_cast<int>(renderRequest->resolution) * ssaaFactor;
 
@@ -1100,7 +1229,8 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
     RIO_LOG("drawXlu rendered to the buffer.\n");
 
 
-    copyAndSendRenderBufferToSocket(renderBuffer, &renderTextureColor, new_socket);
+    //copyAndSendRenderBufferToSocket(renderBuffer, &renderTextureColor, new_socket);
+    copyAndSendRenderBufferToSocket(renderBuffer, &renderTextureColor, new_socket, ssaaFactor);
 
     // Unbind the render buffer
     renderBuffer.getRenderTargetColor()->invalidateGPUCache();
@@ -1155,7 +1285,7 @@ void RootTask::calc_()
                 mCounter = 0.0f;
             };
         } else {
-            RIO_LOG("got a request of length %d (should be %lu), dropping\n", read_bytes, RENDERREQUEST_SIZE);
+            RIO_LOG("got a request of length %i (should be %d), dropping\n", read_bytes, static_cast<u32>(RENDERREQUEST_SIZE));
             closesocket(new_socket);
         }
     } else {
@@ -1172,7 +1302,7 @@ void RootTask::calc_()
     #endif
 
     // Distance in the XZ-plane from the center to the camera position
-    float radius = 600.0f;
+    f32 radius = 600.0f;
     // Define a constant position in the 3D space for the center position of the camera
     static const rio::Vector3f CENTER_POS = { 0.0f, 34.5f, radius };
     static const rio::Vector3f target = { 0.0f, 34.5f, 0.0f };
@@ -1181,7 +1311,7 @@ void RootTask::calc_()
     mCamera.setUp(cameraUp);
     // Move the camera around the target clockwise
     // Define the radius of the orbit in the XZ-plane (distance from the target)
-    rio::Matrix34f model_mtx;// = rio::Matrix34f::ident;
+    rio::Matrix34f model_mtx = rio::Matrix34f::ident;
     if (!mpNoSpin && !mpServerOnly && !hasSocketRequest && mpModel != nullptr) {
         radius += 380;
         /*mCamera.pos().set(
@@ -1286,11 +1416,11 @@ void RootTask::handleGLTFRequest(RenderRequest* renderRequest)
 
 
     // Send the actual GLTF model data
-    size_t totalSent = 0;
+    unsigned long totalSent = 0;
     const unsigned long fileSize = modelData.size();
     while (totalSent < fileSize)
     {
-        ssize_t sent = send(new_socket, modelData.data() + totalSent, fileSize - totalSent, 0);
+        long sent = send(new_socket, modelData.data() + totalSent, fileSize - totalSent, 0);
         if (sent < 0)
         {
             RIO_LOG("Failed to send GLTF data\n");

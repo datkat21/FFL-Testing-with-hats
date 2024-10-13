@@ -41,7 +41,7 @@ def main():
         struct_format,
         fflstoredata,         # data: 96s
         data_length,          # dataLength: H (uint16_t)
-        0,                    # modelType: B (uint8_t)
+        1 << 0,               # modelType: B (uint8_t)
         export_as_gltf,       # exportAsGLTF: ? (bool)
         resolution,           # resolution: H (uint16_t)
         tex_resolution,       # texResolution: h (int16_t)

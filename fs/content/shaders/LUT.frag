@@ -1,4 +1,4 @@
-#version 100
+#version 330 core
 
 #define AGX_FEATURE_ALBEDO_TEXTURE
 #define AGX_FEATURE_MII
@@ -81,28 +81,30 @@ uniform sampler2D       uSphereMapTexture;  //!< 入力: スフィア環境マ�
 
 // ----------------------------------------
 // フラグメントシェーダーに渡される varying 変数
-varying lowp    vec4    vModelColor;                            //!< 出力:[ 1 : 1 ] モデルの色
+in lowp    vec4    vModelColor;                            //!< 出力:[ 1 : 1 ] モデルの色
 #if !defined(AGX_FEATURE_BUMP_TEXTURE)
-varying mediump vec3    vNormal;                                //!< 出力:[ 1 : 2 ] モデルの法線
+in mediump vec3    vNormal;                                //!< 出力:[ 1 : 2 ] モデルの法線
 #endif
 #if defined(AGX_FEATURE_ALBEDO_TEXTURE) || defined(AGX_FEATURE_BUMP_TEXTURE) || defined(AGX_FEATURE_MASK_TEXTURE) || defined(AGX_FEATURE_ALPHA_TEXTURE)
-varying mediump vec2    vTexcoord0;                             //!< 出力:[ 1 : 3 ] テクスチャーUV
+in mediump vec2    vTexcoord0;                             //!< 出力:[ 1 : 3 ] テクスチャーUV
 #endif
 // camera
-varying mediump vec3    vEyeVecWorldOrTangent;                  //!< 出力:[ 1 : 4 ] 視線ベクトル
+in mediump vec3    vEyeVecWorldOrTangent;                  //!< 出力:[ 1 : 4 ] 視線ベクトル
 //#if !defined(AGX_FEATURE_DISABLE_LIGHT)
 // punctual light
-varying mediump vec3    vPunctualLightDirWorldOrTangent;        //!< 出力:[ 1 : 5 ] ライトの方向
-varying mediump vec3    vPunctualLightHalfVecWorldOrTangent;    //!< 出力:[ 1 : 6 ] カメラとライトのハーフベクトル
+in mediump vec3    vPunctualLightDirWorldOrTangent;        //!< 出力:[ 1 : 5 ] ライトの方向
+in mediump vec3    vPunctualLightHalfVecWorldOrTangent;    //!< 出力:[ 1 : 6 ] カメラとライトのハーフベクトル
 // GI
-varying mediump vec3    vGISpecularLightColor;                  //!< 出力:[ 1 : 7 ] GIフレネルで使用するカラー
+in mediump vec3    vGISpecularLightColor;                  //!< 出力:[ 1 : 7 ] GIフレネルで使用するカラー
 // Lighting Result
-varying mediump vec3    vDiffuseColor;                          //!< 出力:[ 1 : 8 ] ディフューズライティング結果
+in mediump vec3    vDiffuseColor;                          //!< 出力:[ 1 : 8 ] ディフューズライティング結果
 //#endif
 // Reflect
 #if defined(AGX_FEATURE_SPHERE_MAP_TEXTURE)
-varying lowp    vec3    vReflectDir;                            //!< 出力:[ 1 : 9 ] 環境マップの反射ベクトル
+in lowp    vec3    vReflectDir;                            //!< 出力:[ 1 : 9 ] 環境マップの反射ベクトル
 #endif
+
+out mediump vec4 o_Color;
 
 // ------------------------------------------------------------
 // フラグメントシェーダーのエントリーポイント
@@ -126,31 +128,31 @@ void main()
     //#elif defined(AGX_FEATURE_MII_TEXTURE_DIRECT)
     else if(uMode == FFL_MODULATE_MODE_TEXTURE_DIRECT)
     {
-        albedoColor = texture2D(uAlbedoTexture, vTexcoord0);
+        albedoColor = texture(uAlbedoTexture, vTexcoord0);
     }
     //#elif defined(AGX_FEATURE_MII_RGB_LAYERED)
     else if(uMode == FFL_MODULATE_MODE_RGB_LAYERED)
     {
-        albedoColor = texture2D(uAlbedoTexture, vTexcoord0);
+        albedoColor = texture(uAlbedoTexture, vTexcoord0);
         albedoColor = vec4(albedoColor.r * uColor0.rgb + albedoColor.g * uColor1.rgb + albedoColor.b * uColor2.rgb,
                            albedoColor.a);
     }
     //#elif defined(AGX_FEATURE_MII_ALPHA)
     else if(uMode == FFL_MODULATE_MODE_ALPHA)
     {
-        albedoColor = texture2D(uAlbedoTexture, vTexcoord0);
+        albedoColor = texture(uAlbedoTexture, vTexcoord0);
         albedoColor = vec4(uColor0.rgb, albedoColor.r);
     }
     //#elif defined(AGX_FEATURE_MII_LUMINANCE_ALPHA)
     else if(uMode == FFL_MODULATE_MODE_LUMINANCE_ALPHA)
     {
-        albedoColor = texture2D(uAlbedoTexture, vTexcoord0);
+        albedoColor = texture(uAlbedoTexture, vTexcoord0);
         albedoColor = vec4(albedoColor.g * uColor0.rgb, albedoColor.r);
     }
     //#elif defined(AGX_FEATURE_MII_ALPHA_OPA)
     else if(uMode == FFL_MODULATE_MODE_ALPHA_OPA)
     {
-        albedoColor = texture2D(uAlbedoTexture, vTexcoord0);
+        albedoColor = texture(uAlbedoTexture, vTexcoord0);
         albedoColor = vec4(albedoColor.r * uColor0.rgb, 1.0);
     }
 //#endif
@@ -162,10 +164,10 @@ void main()
     //  Albedo Texture
     // ============================================================
 #if !defined(AGX_FEATURE_MII) && defined(AGX_FEATURE_ALBEDO_TEXTURE)
-    albedoColor = texture2D(uAlbedoTexture, vTexcoord0);
+    albedoColor = texture(uAlbedoTexture, vTexcoord0);
 #endif
 #if defined(AGX_FEATURE_ALPHA_TEXTURE)
-    albedoColor.a   = texture2D(uAlphaTexture, vTexcoord0).r;
+    albedoColor.a   = texture(uAlphaTexture, vTexcoord0).r;
 #endif
     
     // ============================================================
@@ -178,7 +180,7 @@ void main()
     albedoColor.rgb = (albedoColor.rgb * albedoColor.a + uColor0.rgb * (1.0 - albedoColor.a));
     albedoColor.a = 1.0;
 #elif defined(AGX_FEATURE_MASK_TEXTURE)
-    lowp vec3  maskTextureColor = texture2D(uMaskTexture, vTexcoord0).rgb;
+    lowp vec3  maskTextureColor = texture(uMaskTexture, vTexcoord0).rgb;
     
 #   if defined(AGX_FEATURE_SKIN_MASK) && defined(AGX_FEATURE_HAIR_MASK)
     // 肌と髪両方マスクが存在する
@@ -214,7 +216,7 @@ void main()
     lowp vec3 normalWorldOrTangent;
 #if defined(AGX_FEATURE_BUMP_TEXTURE)
     // バンプマップから法線を取得する
-    mediump vec3 bumpNormal = texture2D(uNormalTexture, vTexcoord0).rgb;
+    mediump vec3 bumpNormal = texture(uNormalTexture, vTexcoord0).rgb;
     
     // 法線の正規化は処理が重いのでいったん正規化しない様に...
 //    normalWorldOrTangent = normalize(bumpNormal * 2.0 - 1.0);
@@ -249,7 +251,7 @@ if (uLightEnable) {
     {
         lowp float fSpecular = dot(N, H);
         
-        lowp float specularIntensity = texture2D(uLUTSpecTexture, vec2(fSpecular)).r;
+        lowp float specularIntensity = texture(uLUTSpecTexture, vec2(fSpecular)).r;
         specular = (specularIntensity * uLightColor.rgb);
     }
     
@@ -258,7 +260,7 @@ if (uLightEnable) {
     // 半球ライトやIBL、SHのように法線方向に半球積分された結果でライティング計算を行なうもの
     {
         lowp float fFresnel = dot(N, V);
-        lowp float fresnelIntensity = texture2D(uLUTFresTexture, vec2(fFresnel)).r;
+        lowp float fresnelIntensity = texture(uLUTFresTexture, vec2(fFresnel)).r;
         
         fresnel = (fresnelIntensity * vGISpecularLightColor.rgb);
     }
@@ -267,7 +269,7 @@ if (uLightEnable) {
     
 #if defined(AGX_FEATURE_SPHERE_MAP_TEXTURE)
     // スフィア環境マップ
-    specular += texture2D(uSphereMapTexture, vReflectDir.xy).rgb;
+    specular += texture(uSphereMapTexture, vReflectDir.xy).rgb;
 #endif
     
     // ============================================================
@@ -297,5 +299,5 @@ else
 #endif
     
     // 色を反映させる
-    gl_FragColor = colorOut;
+    o_Color = colorOut;
 }

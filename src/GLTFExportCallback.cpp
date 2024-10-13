@@ -73,8 +73,7 @@ int GLTFExportCallback::MapPrimitiveMode(rio::Drawer::PrimitiveMode mode)
     case rio::Drawer::POINTS:
         return TINYGLTF_MODE_POINTS;
     case rio::Drawer::LINES:
-        RIO_ASSERT(false);
-        //return TINYGLTF_MODE_LINES;
+        return TINYGLTF_MODE_LINE;
     case rio::Drawer::LINE_STRIP:
         return TINYGLTF_MODE_LINE_STRIP;
     case rio::Drawer::TRIANGLES:
@@ -262,8 +261,8 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
         meshData.positions.resize(vertexCount * 3, 0.0f);
         meshData.normals.resize(vertexCount * 3, 0.0f);
         meshData.texcoords.resize(vertexCount * 2, 0.0f);
-        meshData.tangents.resize(vertexCount * 3, 0.0f);//4, 0.0f);
-        meshData.colors.resize(vertexCount * 4, 0.0f);
+        meshData.tangents.resize(vertexCount * 4, 0.0f);
+        meshData.colors.resize(vertexCount * 4, 0);
 
         // Now process attribute buffers
         for (int type = FFL_ATTRIBUTE_BUFFER_TYPE_POSITION; type <= FFL_ATTRIBUTE_BUFFER_TYPE_COLOR; ++type)
@@ -280,7 +279,7 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
                 {
                     RIO_LOG("Error: Stride is 0 and this is not the color attribute.\n");
                     continue;
-                } else if(stride > 0) {
+                } else if (stride > 0) {
                     uint32_t numElements = size / stride;
 
                     if (numElements < vertexCount)
@@ -332,7 +331,7 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
                         float x = tangent[0] / 127.0f;
                         float y = tangent[1] / 127.0f;
                         float z = tangent[2] / 127.0f;
-                        //float w = tangent[3] / 127.0f; // Usually, w is 1.0 or -1.0
+                        float w = tangent[3] / 127.0f; // Usually, w is 1.0 or -1.0
                         // Calculate magnitude of the tangent vector (x, y, z)
                         float magnitude = sqrtf(x * x + y * y + z * z);
 
@@ -344,23 +343,19 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
                         }
 
                         // Assign back to meshData
-                        /*
                         meshData.tangents[i * 4 + 0] = x;
                         meshData.tangents[i * 4 + 1] = y;
                         meshData.tangents[i * 4 + 2] = z;
                         meshData.tangents[i * 4 + 3] = w; // w is not part of the normalization
-                        */
-                        meshData.tangents[i * 3 + 0] = x;
-                        meshData.tangents[i * 3 + 1] = y;
-                        meshData.tangents[i * 3 + 2] = z;
+                        break;
                     }
                     case FFL_ATTRIBUTE_BUFFER_TYPE_COLOR:
                     {
                         // default if there is no color
                         if (stride < 1)
                         {
-                            meshData.colors[i * 4 + 0] = 0;
-                            meshData.colors[i * 4 + 1] = 0;
+                            meshData.colors[i * 4 + 0] = 1;
+                            meshData.colors[i * 4 + 1] = 1;
                             meshData.colors[i * 4 + 2] = 0;
                             // set A (rim width) to 1, which is
                             // default for the normal type otherwise
@@ -503,10 +498,10 @@ void GLTFExportCallback::ProcessMeshAttributes(MeshData& meshData, tinygltf::Mod
     }
 
     // Process tangents if available
-    if (!meshData.tangents.empty())// && meshData.tangents[3] != 0.0f)
+    if (!meshData.tangents.empty() && meshData.tangents[3] != 0.0f)
     {
-        AddAttributeToBuffer(meshData.tangents, model, bufferData, bufferSize, primitive, "TANGENT", TINYGLTF_TYPE_VEC3,//4,
-                             TINYGLTF_COMPONENT_TYPE_FLOAT, /*4*/3 * sizeof(float)); // pre normalized
+        AddAttributeToBuffer(meshData.tangents, model, bufferData, bufferSize, primitive, "TANGENT", TINYGLTF_TYPE_VEC4,
+                             TINYGLTF_COMPONENT_TYPE_FLOAT, 4 * sizeof(float)); // pre normalized
     }
 
     // Process colors if available

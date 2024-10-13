@@ -5,6 +5,9 @@
 
 #ifdef __EMSCRIPTEN__
     #include <emscripten/emscripten.h>
+    #include <gfx/lyr/rio_Renderer.h>
+    #include <gfx/rio_Window.h>
+    #include <task/rio_TaskMgr.h>
 #endif
 
 static rio::InitializeArg initializeArg = {
@@ -19,8 +22,17 @@ static rio::InitializeArg initializeArg = {
 
 
 #ifdef __EMSCRIPTEN__
+rio::Window* window;
 void mainLoop() {
-    rio::EnterMainLoop();
+    // Main loop iteration
+    // Update the task manager
+    rio::TaskMgr::instance()->calc();
+
+    // Render
+    rio::lyr::Renderer::instance()->render();
+
+    // Swap the front and back buffers
+    window->swapBuffers();
 }
 #endif
 
@@ -32,7 +44,9 @@ int main()
         initializeArg.window.invisible = true;
 
 #ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop(mainLoop, 30, 0);
+    // Get window instance
+    window = rio::Window::instance();
+    emscripten_set_main_loop(mainLoop, 0, 1);
 #endif
 
     // Initialize RIO, make window...
@@ -67,6 +81,6 @@ int main()
 
     // Exit RIO
     rio::Exit();
-#endif
+#endif // __EMSCRIPTEN__
     return 0;
 }

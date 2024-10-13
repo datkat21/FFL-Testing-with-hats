@@ -39,7 +39,7 @@ var (
 type RenderRequest struct {
 	Data              [96]byte
 	DataLength        uint16
-	ModelType         uint8
+	ModelFlag         uint8
 	ExportAsGLTF      bool
 	Resolution        uint16
 	TexResolution     int16
@@ -610,6 +610,12 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	*/
+	flattenNose := query.Get("flattenNose") != ""
+
+	modelFlag := (1 << modelType)
+	if flattenNose {
+		modelFlag |= (1 << 3)
+	}
 
 	drawStageModeStr := query.Get("drawStageMode")
 	if drawStageModeStr == "" {
@@ -805,7 +811,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	renderRequest := RenderRequest{
 		Data:            [96]byte{},
 		DataLength:      uint16(len(storeData)),
-		ModelType:       uint8(modelType),
+		ModelFlag:       uint8(modelFlag),
 		ExportAsGLTF:    exportAsGLTF,
 		Resolution:      uint16(width),
 		TexResolution:   int16(texResolution),
@@ -894,6 +900,10 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		http.Error(w, "incomplete response from backend, error is: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if exportAsGLTF {
 		return
 	}
 

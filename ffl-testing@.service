@@ -1,0 +1,19 @@
+[Unit]
+Description=ffl-testing on port %i
+
+Requires=ffl-testing@%i.socket
+After=ffl-testing@%i.socket
+
+[Service]
+
+# change this to wherever you run FFL-Testing
+# NOTE: don't run it as root!!!!!! but i did but you should not
+WorkingDirectory=/root/FFL-Testing
+ExecStart=/root/FFL-Testing/ffl_testing_2_debug64
+#Environment=PORT=%i
+#Environment=SERVER_ONLY=1
+# both of the above are assumed from LISTEN_FDS
+# TODO ADD SANDBOXING???
+
+[Install]
+WantedBy=multi-user.target

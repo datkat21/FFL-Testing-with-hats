@@ -1,4 +1,4 @@
-#version 100
+#version 330 core
 
 #define AGX_FEATURE_ALBEDO_TEXTURE
 /**
@@ -51,18 +51,18 @@ precision highp float;
 
 // ----------------------------------------
 // 頂点シェーダーに入力される attribute 変数
-attribute highp   vec3 aPosition;   //!< 入力:[ 1 : 1 ] 位置情報
+layout( location = 0 ) in highp   vec3 aPosition;   //!< 入力:[ 1 : 1 ] 位置情報
 #if defined(AGX_FEATURE_ALBEDO_TEXTURE) || defined(AGX_FEATURE_BUMP_TEXTURE) || defined(AGX_FEATURE_MASK_TEXTURE) || defined(AGX_FEATURE_ALPHA_TEXTURE)
-attribute mediump vec2 aTexcoord0;  //!< 入力:[ 1 : 5 ] テクスチャー座標
+layout( location = 1 ) in mediump vec2 aTexcoord0;  //!< 入力:[ 1 : 5 ] テクスチャー座標
 #endif
-attribute mediump vec3 aNormal;     //!< 入力:[ 1 : 2 ] 法線ベクトル
-attribute mediump vec4 aBoneIndex;  //!< 入力:[ 1 : 3 ] ボーンのインデックス（最大4つ）
-attribute mediump vec4 aBoneWeight; //!< 入力:[ 1 : 4 ] ボーンの影響度（最大4つ）
+layout( location = 2 ) in mediump vec3 aNormal;     //!< 入力:[ 1 : 2 ] 法線ベクトル
+layout( location = 3 ) in mediump vec4 aBoneIndex;  //!< 入力:[ 1 : 3 ] ボーンのインデックス（最大4つ）
+layout( location = 4 ) in mediump vec4 aBoneWeight; //!< 入力:[ 1 : 4 ] ボーンの影響度（最大4つ）
 #if defined(AGX_FEATURE_VERTEX_COLOR)
-attribute lowp    vec4 aColor;      //!< 入力:[ 1 : 6 ] 頂点カラー
+layout( location = 5 ) in lowp    vec4 aColor;      //!< 入力:[ 1 : 6 ] 頂点カラー
 #endif
 #if defined(AGX_FEATURE_BUMP_TEXTURE)
-attribute mediump vec3 aTangent;    //!< 入力:[ 1 : 7 ] 接線ベクトル
+layout( location = 6 ) in mediump vec3 aTangent;    //!< 入力:[ 1 : 7 ] 接線ベクトル
 #endif
 
 // ----------------------------------------
@@ -86,27 +86,27 @@ uniform mediump float uAlpha;                               //!< 入力:[ 1     
 
 // ----------------------------------------
 // フラグメントシェーダーに渡される varying 変数
-varying lowp    vec4    vModelColor;                            //!< 出力:[ 1 : 1 ] モデルの色
+out lowp    vec4    vModelColor;                            //!< 出力:[ 1 : 1 ] モデルの色
 #if !defined(AGX_FEATURE_BUMP_TEXTURE)
-varying mediump vec3    vNormal;                                //!< 出力:[ 1 : 2 ] モデルの法線
+out mediump vec3    vNormal;                                //!< 出力:[ 1 : 2 ] モデルの法線
 #endif
 #if defined(AGX_FEATURE_ALBEDO_TEXTURE) || defined(AGX_FEATURE_BUMP_TEXTURE) || defined(AGX_FEATURE_MASK_TEXTURE) || defined(AGX_FEATURE_ALPHA_TEXTURE)
-varying mediump vec2    vTexcoord0;                             //!< 出力:[ 1 : 3 ] テクスチャーUV
+out mediump vec2    vTexcoord0;                             //!< 出力:[ 1 : 3 ] テクスチャーUV
 #endif
 // camera
-varying mediump vec3    vEyeVecWorldOrTangent;                  //!< 出力:[ 1 : 4 ] 視線ベクトル
+out mediump vec3    vEyeVecWorldOrTangent;                  //!< 出力:[ 1 : 4 ] 視線ベクトル
 #if !defined(AGX_FEATURE_DISABLE_LIGHT)
 // punctual light
-varying mediump vec3    vPunctualLightDirWorldOrTangent;        //!< 出力:[ 1 : 5 ] ライトの方向
-varying mediump vec3    vPunctualLightHalfVecWorldOrTangent;    //!< 出力:[ 1 : 6 ] カメラとライトのハーフベクトル
+out mediump vec3    vPunctualLightDirWorldOrTangent;        //!< 出力:[ 1 : 5 ] ライトの方向
+out mediump vec3    vPunctualLightHalfVecWorldOrTangent;    //!< 出力:[ 1 : 6 ] カメラとライトのハーフベクトル
 // GI
-varying mediump vec3    vGISpecularLightColor;                  //!< 出力:[ 1 : 7 ] GIフレネルで使用するカラー
+out mediump vec3    vGISpecularLightColor;                  //!< 出力:[ 1 : 7 ] GIフレネルで使用するカラー
 // Lighting Result
-varying mediump vec3    vDiffuseColor;                          //!< 出力:[ 1 : 8 ] ディフューズライティング結果
+out mediump vec3    vDiffuseColor;                          //!< 出力:[ 1 : 8 ] ディフューズライティング結果
 #endif
 // Reflect
 #if defined(AGX_FEATURE_SPHERE_MAP_TEXTURE)
-varying lowp    vec3    vReflectDir;                            //!< 出力:[ 1 : 9 ] 環境マップの反射ベクトル
+out lowp    vec3    vReflectDir;                            //!< 出力:[ 1 : 9 ] 環境マップの反射ベクトル
 #endif
 
 // ------------------------------------------------------------

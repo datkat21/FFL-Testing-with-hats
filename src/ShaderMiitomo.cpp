@@ -148,14 +148,14 @@ const rio::BaseVec3f cHSLightSkyColor = { 0.87843f, 0.83451f, 0.80314f };
 }
 
 ShaderMiitomo::ShaderMiitomo(IShader* mpMaskShader)
+    : mpMaskShader(mpMaskShader)
 #if RIO_IS_CAFE
-    : mAttribute()
+    , mAttribute()
     , mFetchShader()
 #elif RIO_IS_WIN
-    : mVBOHandle()
+    , mVBOHandle()
     , mVAOHandle()
 #endif
-    , mpMaskShader(mpMaskShader)
 
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
@@ -209,7 +209,7 @@ void loadRawR8Image(const char* filePath, int width, int height, GLuint texture)
         return;
     }
 
-    int imageSize = width * height * 1; // 1 channel (R)
+    u32 imageSize = width * height * 1; // 1 channel (R)
 
     if (arg.read_size != imageSize) {
         RIO_LOG("Failed to load the correct size: %s\n", filePath);
@@ -381,7 +381,7 @@ void ShaderMiitomo::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 
 void ShaderMiitomo::setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const
 {
-    if(!mLightEnable) return mpMaskShader->setViewUniform(model_mtx, view_mtx, proj_mtx);
+    if (!mLightEnable) return mpMaskShader->setViewUniform(model_mtx, view_mtx, proj_mtx);
     mShader.setUniform(-view_mtx.m[0][3], -view_mtx.m[1][3], -view_mtx.m[2][3], mVertexUniformLocation[VERTEX_UNIFORM_EYE_PT], u32(-1));
     //mShader.setUniform(0.0f, 3.45f, 60.0f, mVertexUniformLocation[VERTEX_UNIFORM_EYE_PT], u32(-1));
     rio::Matrix34f mv;
@@ -497,11 +497,11 @@ FFLColor multiplyColorIfNeeded(FFLModulateType modulateType, FFLColor color)
         // wrinkles or blush then faceline will go through this
         // though that is only because of an optimization
 
-        // TODO: decide whether to favorite/body color from this????
         modulateType == FFL_MODULATE_TYPE_SHAPE_FACELINE
         || modulateType == FFL_MODULATE_TYPE_SHAPE_FOREHEAD
         || modulateType == FFL_MODULATE_TYPE_SHAPE_NOSE
         || modulateType == FFL_MODULATE_TYPE_SHAPE_GLASS
+        || modulateType == 9 // body, favorite color
     )
         return color;
     // FUN_0056ba10 in libcocos2dcpp.so
@@ -594,7 +594,7 @@ void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
 
 void ShaderMiitomo::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 {
-    if(!light_enable) return mpMaskShader->bindBodyShader(light_enable, pCharInfo);
+    if (!light_enable) return mpMaskShader->bindBodyShader(light_enable, pCharInfo);
     bind(light_enable, pCharInfo);
     //RIO_GL_CALL(glBindVertexArray(vao));
 
@@ -680,6 +680,10 @@ void ShaderMiitomo::draw_(const FFLDrawParam& draw_param)
                     break;
                 }
             }
+            else if (location != -1)
+                // Disable the attribute to avoid using uninitialized data
+                RIO_GL_CALL(glDisableVertexAttribArray(location));
+
         }
 #endif
 

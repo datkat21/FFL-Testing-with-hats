@@ -87,8 +87,8 @@ private:
     rio::BaseVec3f      mScale;
     rio::BaseMtx34f     mMtxSRT;
     IShader*            mpShader;
-    bool                mLightEnable;
     bool                mIsEnableSpecialDraw;
+    bool                mLightEnable;
     bool                mIsInitialized;
     FFLResult           mInitializeCpuResult;
 };

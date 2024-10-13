@@ -43,6 +43,10 @@ ifneq (,$(findstring RIO_GLES, $(DEFS)))
 LIBS += glesv2
 endif
 
+ifneq (,$(findstring USE_SYSTEMD_SOCKET, $(DEFS)))
+LIBS += libsystemd
+endif
+
 # use pkg-config output as LDFLAGS and CFLAGS later on
 PKG_CONFIG_CFLAGS_CMD := $(TOOLCHAIN_PREFIX)pkg-config --cflags $(LIBS)
 $(info pkg-config cflags command: $(PKG_CONFIG_CFLAGS_CMD))
@@ -92,8 +96,8 @@ ifeq (,$(findstring FFL_NO_NINTEXUTILS, $(DEFS)))
 INCLUDES += -IninTexUtils/include
 endif
 
-# Build for debug by default, use C++17
-CXXFLAGS := -g -std=c++17 $(CXXFLAGS) $(INCLUDES) $(PKG_CONFIG_CFLAGS_OUTPUT) $(DEFS)
+# Build for debug by default, use C++17, catch all errors
+CXXFLAGS := -g -std=c++17 -Wall $(CXXFLAGS) $(INCLUDES) $(PKG_CONFIG_CFLAGS_OUTPUT) $(DEFS)
 
 # Source directories
 # glob all files in here for now

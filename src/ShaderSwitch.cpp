@@ -121,9 +121,10 @@ const DrawParamMaterial cGlassMaterial =
     { 0.35f, 1.0f, { 0.0f, 0.0f, 0.0f }, { { 0.09804292f, 0.09804292f, 0.09804292f }, 0.3f, 0.0f, 30.0f }, { { 0.0f, 0.0f, 0.0f }, 1.0f, 0.0f } } // line 8
 ;
 
+
 const DrawParamMaterial cPantsMaterials[2] = {
     { 0.6f, 1.0f, { 0.0f, 0.0f, 0.0f }, { { 0.01960913f, 0.01960913f, 0.01960913f }, 1.0f, 0.02f, 0.7f }, { { 0.0f, 0.0f, 0.0f }, 1.0f, 0.5f } }, // line 12
-    { 0.6f, 1.0f, { 0.0f, 0.0f, 0.0f }, { { 0.01960913f, 0.01960913f, 0.01960913f }, 1.0f, 0.02f, 0.7f }, { { 0.0f, 0.0f, 0.0f }, 1.0f, 0.5f } } // line 13
+    { 0.6f, 1.0f, { 0.0f, 0.0f, 0.1568674f }, { { 0.2352996f, 0.1568674f, 0.0f }, 1.0f, 0.02f, 0.7f }, { { 0.0f, 0.0f, 0.0f }, 1.0f, 0.5f } } // special pants color
 };
 
 const DrawParamMaterial cFacelineMaterials[10] = {
@@ -854,6 +855,10 @@ void ShaderSwitch::draw_(const FFLDrawParam& draw_param)
                     break;
                 }
             }
+            else if (location != -1)
+                // Disable the attribute to avoid using uninitialized data
+                RIO_GL_CALL(glDisableVertexAttribArray(location));
+
         }
 #endif
 

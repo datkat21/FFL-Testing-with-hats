@@ -24,7 +24,7 @@ app = Flask(__name__)
 
 # Define the RenderRequest struct
 class RenderRequest:
-    def __init__(self, data, resolution=1024, tex_resolution=1024, is_head_only=False, expression=0, resource_type=1, mipmap_enable=False, background_color=[1, 1, 1, 0]):
+    def __init__(self, data, resolution=1024, tex_resolution=1024, view_type=0, expression=0, resource_type=1, mipmap_enable=False, background_color=[1, 1, 1, 0]):
         self.data = bytes(data)
         self.data_length = len(data)
         self.resolution = resolution
@@ -39,9 +39,9 @@ class RenderRequest:
         self.verify_crc16 = True
         self.light_enable = True
         self.expression = expression
-        self.resource_type = resource_type
-        self.view_type = (1 if is_head_only else 0)
-        self.shader_type = (1 if resource_type > 1 else 0)
+        self.resource_type = 1
+        self.view_type = view_type  # (1 if is_head_only else 0)
+        self.shader_type = (resource_type % 3 if resource_type > 1 else 0)
         # encode bg color to vec4
         #self.background_color = [component / 255.0 for component in background_color]
         self.background_color = background_color
@@ -55,7 +55,7 @@ class RenderRequest:
             '96sHB?HhBBBBIhhhhhhBBBBBB???bBB',
             self.data,                 # data: 96s
             self.data_length,          # dataLength: H (uint16_t)
-            0,                         # modelType: B (uint8_t)
+            1 << 0,                    # modelType: B (uint8_t)
             self.export_as_gltf,       # exportAsGLTF: ? (bool)
             self.resolution,           # resolution: H (uint16_t)
             self.tex_resolution,       # texResolution: h (int16_t)
@@ -200,7 +200,11 @@ def render_image():
     #if len(store_data) != 96:
     #    return make_response('fflstoredata must be 96 bytes please', 400)
 
-    is_head_only = type_ == 'face_only'
+    view_type = ['face',
+                'face_only',
+                'all_body',
+                'fflmakeicon',
+                'variableiconbody'].index(type_, 0)
 
     mipmap_enable = mipmap_enable == '1'
 
@@ -239,7 +243,7 @@ def render_image():
     except ValueError:
         return make_response('resource type is not a number', 400)
 
-    render_request = RenderRequest(store_data, width, tex_resolution, is_head_only, expression, resource_type, mipmap_enable)
+    render_request = RenderRequest(store_data, width, tex_resolution, view_type, expression, resource_type, mipmap_enable)
 
     # Send the render request and receive buffer and buffer2 data
     try:
