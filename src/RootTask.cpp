@@ -985,7 +985,7 @@ rio::Vector3f calculateUpVector(const rio::Vector3f& radians) {
     return up;
 }
 
-void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
+void RootTask::handleRenderRequest(char* buf) {
     if (mpModel == nullptr) {
         /*const char* errMsg = "mpModel == nullptr";
         send(new_socket, errMsg, strlen(errMsg), 0);
@@ -1092,6 +1092,7 @@ void RootTask::handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx) {
     mCamera.pos() = position;
     mCamera.setUp(upVector);
 
+    rio::Matrix34f view_mtx;
     mCamera.getMatrix(&view_mtx);
 
     rio::Matrix34f model_mtx = rio::Matrix34f::ident;
@@ -1230,7 +1231,17 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
 
 
     //copyAndSendRenderBufferToSocket(renderBuffer, &renderTextureColor, new_socket);
+
+#ifdef ENABLE_BENCHMARK
+    std::chrono::time_point<std::chrono::high_resolution_clock> start, end;
+    start = std::chrono::high_resolution_clock::now();
+#endif
     copyAndSendRenderBufferToSocket(renderBuffer, &renderTextureColor, new_socket, ssaaFactor);
+#ifdef ENABLE_BENCHMARK
+    end = std::chrono::high_resolution_clock::now();
+    long long int duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    RIO_LOG("copyAndSendRenderBufferToSocket: %lld µs\n", duration);
+#endif
 
     // Unbind the render buffer
     renderBuffer.getRenderTargetColor()->invalidateGPUCache();
@@ -1301,6 +1312,10 @@ void RootTask::calc_()
     }
     #endif
 
+
+    if (hasSocketRequest)
+        return handleRenderRequest(buf);
+
     // Distance in the XZ-plane from the center to the camera position
     f32 radius = 600.0f;
     // Define a constant position in the 3D space for the center position of the camera
@@ -1348,10 +1363,6 @@ void RootTask::calc_()
         rio::Window::instance()->clearColor(0.2f, 0.3f, 0.3f, 1.0f);
         rio::Window::instance()->clearDepthStencil();
         //rio::Window::instance()->setSwapInterval(0);  // disable v-sync
-    }
-
-    if (hasSocketRequest) {
-        return handleRenderRequest(buf, view_mtx);
     }
 
     if (mpModel != nullptr) {

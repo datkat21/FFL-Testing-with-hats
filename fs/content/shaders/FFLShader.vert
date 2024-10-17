@@ -40,7 +40,7 @@ void main()
     v_position = u_mv * a_position;
 
     // 法線も変換
-    //v_normal = mat3(inverse(u_mv)) * a_normal;
+    //v_normal = mat3(u_mv) * a_normal;
     v_normal = normalize(u_it * a_normal);
 //#elif defined(FFL_COORDINATE_MODE_NONE)
 //    // 頂点座標を変換
@@ -52,6 +52,7 @@ void main()
 
      // その他の情報も書き出す
     v_texCoord = a_texCoord;
+    //v_tangent = mat3(u_mv) * a_tangent;
     v_tangent = normalize(u_it * a_tangent);
     v_color = a_color;
 }

@@ -332,6 +332,9 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
                         float y = tangent[1] / 127.0f;
                         float z = tangent[2] / 127.0f;
                         float w = tangent[3] / 127.0f; // Usually, w is 1.0 or -1.0
+                        // has to be normalized ourselves
+                        // otherwise we see: Only (u)byte and (u)short accessors can be normalized
+
                         // Calculate magnitude of the tangent vector (x, y, z)
                         float magnitude = sqrtf(x * x + y * y + z * z);
 

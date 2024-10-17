@@ -118,7 +118,7 @@ private:
     void calc_() override;
     void exit_() override;
 
-    void handleRenderRequest(char* buf, rio::BaseMtx34f view_mtx);
+    void handleRenderRequest(char* buf);
 #ifndef NO_GLTF
     void handleGLTFRequest(RenderRequest* renderRequest);
 #endif
