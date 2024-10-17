@@ -101,8 +101,8 @@ ifeq (,$(findstring FFL_NO_NINTEXUTILS, $(DEFS)))
 # then FFL_NO_NINTEXUTILS is NOT defined
 NINTEXUTILS_SRC := $(shell find ninTexUtils/src/ninTexUtils -name '*.c' -o -name '*.cpp')
 endif
-RIO_SRC := $(shell find rio/src -name '*.c' -o -name '*.cpp')
-FFL_SRC := $(shell find ffl/src -name '*.c' -o -name '*.cpp')
+RIO_SRC := $(shell find rio/src -name '*.cpp')
+FFL_SRC := $(shell find ffl/src -name '*.cpp')
 
 SHADER ?= src/Shader.cpp
 # Main source

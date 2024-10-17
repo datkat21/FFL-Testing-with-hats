@@ -34,7 +34,7 @@ https://github.com/user-attachments/assets/cdc358e4-0b1f-4b93-b7fd-f61fa4d215e1
 
     * This also supports OpenGL ES 3.0, for mobile devices or using ANGLE. To build targeting that, define this as an environment variable: ``DEFS="-DRIO_GLES"``
     * To build for Emscripten, use ``make -f Makefile.emscripten -j4``
-      - Make sure FFLResHigh.dat is in the current working directory. After this builds, open the html file.
+      - Make sure FFLResHigh.dat is in the current working directory. After this builds, the html file may not work if you click on it so you may need to run a mini web server and access it there.
 3. Obtain the resource file, FFLResHigh.dat.
     * You can get it from many sources:
         - It can be extracted from a Wii U:
