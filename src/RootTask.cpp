@@ -416,7 +416,7 @@ void RootTask::calc_()
     if (mSocketIsListening &&
         (new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) > 0) {
         // Assuming data directly received is FFLStoreData
-        int read_bytes =
+        unsigned int read_bytes =
             //read(new_socket, &storeData, sizeof(FFLStoreData));
             // NOTE: this will store BOTH charinfo AND storedata so uh
             recv(new_socket, buf,
@@ -426,7 +426,7 @@ void RootTask::calc_()
         if (read_bytes >= sizeof(FFLStoreData)) {
             createModel_(&buf);
         } else {
-            RIO_LOG("got a request of length %d (should be %lu), dropping\n", read_bytes, sizeof(FFLStoreData));
+            RIO_LOG("got a request of length %d (should be %d), dropping\n", read_bytes, static_cast<u32>(sizeof(FFLiCharInfo)));
             closesocket(new_socket);
         }
     } else {

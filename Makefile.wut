@@ -60,7 +60,7 @@ DRC_SPLASH	:=
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------
-CFLAGS	:=	-Wall -Wmissing-include-dirs -Wundef -Wredundant-decls -Wcast-align \
+CFLAGS	:=	-Wall -Wno-missing-include-dirs -Wundef -Wredundant-decls -Wcast-align \
 			-Og -g \
 			-ffunction-sections -fdata-sections \
 			$(MACHDEP)
