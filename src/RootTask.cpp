@@ -409,7 +409,7 @@ void RootTask::createModel_() {
     };
 
     mpModel = new Model();
-    int shaderType = SHADER_TYPE_WIIU;//(mMiiCounter-1) % (SHADER_TYPE_MAX);
+    ShaderType shaderType = SHADER_TYPE_WIIU;//(mMiiCounter-1) % (SHADER_TYPE_MAX);
     if (!mpModel->initialize(arg, *mpShaders[shaderType])) {
         delete mpModel;
         mpModel = nullptr;
@@ -726,7 +726,7 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
     rio::RenderTargetColor renderTargetDownsampleColor;
     renderTargetDownsampleColor.linkTexture2D(*renderTextureDownsampleColor);
     renderBufferDownsample.setRenderTargetColor(&renderTargetDownsampleColor);
-    renderBufferDownsample.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR_DEPTH_STENCIL, {0.0f, 0.0f, 0.0f, 0.0f});
+    renderBufferDownsample.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR_DEPTH_STENCIL, { 0.0f, 0.0f, 0.0f, 0.0f });
     renderBufferDownsample.bind();
     rio::RenderState render_state;
     render_state.setBlendEnable(true);
@@ -879,8 +879,46 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
     RIO_LOG("Wrote %d bytes out to socket.\n", bufferSize);
 }
 
+// scale vec3 for body
+const rio::Vector3f calculateScaleFactors(f32 build, f32 height) {
+    rio::Vector3f scaleFactors;
+    // referenced in anonymous function in nn::mii::detail::VariableIconBodyImpl::CalculateWorldMatrix
+    // also in ffl_app.rpx: FUN_020ec380 (FFLUtility), FUN_020737b8 (mii maker US)
+#ifndef USE_HEIGHT_LIMIT_SCALE_FACTORS
+    // ScaleApply?
+    // 0.47 / 128.0 = 0.003671875
+    scaleFactors.x = (build * (height * 0.003671875f + 0.4f)) / 128.0f +
+                    // 0.23 / 128.0 = 0.001796875
+                    height * 0.001796875f + 0.4f;
+                    // 0.77 / 128.0 = 0.006015625
+    scaleFactors.y = (height * 0.006015625f) + 0.5f;
 
-void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx) {
+    /* the following set is found in ffl_app.rpx (FFLUtility)
+     * Q:/sugar/program/ffl_application/src/mii/body/Scale.cpp
+     * when an input is set to 1 (enum ::mii::body::ScaleMode?)
+     * it may be for limiting scale so that the pants don't show
+     * this may be what is used in wii u mii maker bottom screen icons but otherwise the above factors seem more relevant
+    */
+#else
+    // ScaleLimit?
+
+    // NOTE: even in wii u mii maker this still shows a few
+    // pixels of the pants, but here without proper body scaling
+    // this won't actually let you get away w/o pants
+    f32 heightFactor = height / 128.0f;
+    scaleFactors.y = heightFactor * 0.55 + 0.6;
+    scaleFactors.x = heightFactor * 0.3 + 0.6;
+    scaleFactors.x = ((heightFactor * 0.6 + 0.8) - scaleFactors.x) *
+                        (build / 128.0f) + scaleFactors.x;
+#endif
+
+    // z is always set to x for either set
+    scaleFactors.z = scaleFactors.x;
+
+    return scaleFactors;
+}
+
+void RootTask::drawMiiBodyREAL(const bool light_enable, FFLiCharInfo* charInfo, rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx) {
 
     // SELECT BODY MODEL
     if (charInfo->gender > FFL_GENDER_MAX - 1)
@@ -898,51 +936,18 @@ void RootTask::drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::M
         // BIND SHADER
         //bodyShader.bind();
         mpModel->getShader()->bindBodyShader(light_enable, charInfo);
-        //RIO_GL_CALL(glBindVertexArray(vao));
-
-        //rio::BaseMtx34f view_mtx;
-        /*rio::LookAtCamera camera;
-        camera.pos() = { 0.0f, 130.37f, 415.53f };
-        camera.at() = { 0.0f, 130.37f, 0.0f };
-        camera.setUp({ 0.0f, 1.0f, 0.0f });
-        camera.getMatrix(&view_mtx);
-        */
-
-        rio::Vector3f scaleFactors;
-
-        f32 build = static_cast<f32>(charInfo->build);
-        f32 height = static_cast<f32>(charInfo->height);
-
-        // "calculateScaleFactors" anonymous function referenced in nn::mii::detail::VariableIconBodyImpl::CalculateWorldMatrix
-        scaleFactors.x = (build * (height * 0.003671875f + 0.4f)) / 128.0f +
-                        height * 0.001796875f + 0.4f;//0.4f;
-
-        scaleFactors.y = (height * 0.006015625f) + 0.5f;
-
-        // WII U FACTORS?
-        /*scaleFactors.y = height / 128.0f;
-        scaleFactors.x = scaleFactors.y * 0.3f + 0.6f;
-        scaleFactors.x = ((scaleFactors.y * 0.6f + 0.8f) - scaleFactors.x) * build / 128.0f + scaleFactors.x;
-
-        scaleFactors.y = scaleFactors.y * 0.55f + 0.6f;
-        */
-
-
-        // the below are applied for both sets of factors
-        scaleFactors.z = scaleFactors.x;
-        // Ensure scaleFactors.y is clamped to a maximum of 1.0
-        scaleFactors.y = std::min<float>(scaleFactors.y, 1.0f);
 
 
         static const f32 bodyToHeadOffset = -93.92f;
 
+        rio::Vector3f scaleFactors = calculateScaleFactors(static_cast<f32>(charInfo->build), static_cast<f32>(charInfo->height));
         // make new matrix for body
         rio::Matrix34f modelMtxBody = rio::Matrix34f::ident;//model_mtx;
 
         // apply scale factors before anything else
         modelMtxBody.applyScaleLocal(scaleFactors);
         // apply transformation for body head offset
-        modelMtxBody.applyTranslationLocal({0.0f, bodyToHeadOffset, 0.0f});
+        modelMtxBody.applyTranslationLocal({ 0.0f, bodyToHeadOffset, 0.0f });
         // apply original model matrix (rotation)
         modelMtxBody.setMul(model_mtx, modelMtxBody);
 

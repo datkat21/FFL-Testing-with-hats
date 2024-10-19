@@ -279,6 +279,21 @@ void Shader::initialize()
 
     mSamplerLocation = mShader.getFragmentSamplerLocation("s_texture");
 
+
+    // FFLBodyShader
+    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_PROJ]     = mBodyShader.getVertexUniformLocation("proj");
+    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_VIEW]     = mBodyShader.getVertexUniformLocation("view");
+    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_WORLD]    = mBodyShader.getVertexUniformLocation("world");
+    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_LIGHT_DIR] = mBodyShader.getVertexUniformLocation("lightDir");
+
+    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_BASE]       = mBodyShader.getFragmentUniformLocation("base");
+    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_AMBIENT]    = mBodyShader.getFragmentUniformLocation("ambient");
+    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]    = mBodyShader.getFragmentUniformLocation("diffuse");
+    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SPECULAR]   = mBodyShader.getFragmentUniformLocation("specular");
+    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM]        = mBodyShader.getFragmentUniformLocation("rim");
+    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM_SP_POWER] = mBodyShader.getFragmentUniformLocation("rimSP_power");
+    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SP_POWER]   = mBodyShader.getFragmentUniformLocation("SP_power");
+
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_POSITION]  = mShader.getVertexAttribLocation("a_position");
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD]  = mShader.getVertexAttribLocation("a_texCoord");
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL]    = mShader.getVertexAttribLocation("a_normal");
@@ -396,17 +411,17 @@ void Shader::setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::Bas
     if (!mLightEnableBody)
         return setViewUniform(model_mtx, view_mtx, proj_mtx);
 
-    mBodyShader.setUniform(proj_mtx, mBodyShader.getVertexUniformLocation("proj"), u32(-1));
+    mBodyShader.setUniform(proj_mtx, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_PROJ], u32(-1));
 
     rio::Matrix44f view44;
     view44.fromMatrix34(view_mtx);
 
-    mBodyShader.setUniform(view44, mBodyShader.getVertexUniformLocation("view"), u32(-1));
+    mBodyShader.setUniform(view44, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_VIEW], u32(-1));
 
     rio::Matrix44f model44;
     model44.fromMatrix34(model_mtx);
 
-    mBodyShader.setUniform(model44, mBodyShader.getVertexUniformLocation("world"), u32(-1));
+    mBodyShader.setUniform(model44, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_WORLD], u32(-1));
 }
 
 void Shader::applyAlphaTest(bool enable, rio::Graphics::CompareFunc func, f32 ref) const
@@ -534,20 +549,18 @@ void Shader::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 
     setCulling(FFL_CULL_MODE_BACK);
 
-    mBodyShader.setUniform(favoriteColor.r, favoriteColor.g, favoriteColor.b, u32(-1), mBodyShader.getFragmentUniformLocation("base"));
+    mBodyShader.setUniform(favoriteColor.r, favoriteColor.g, favoriteColor.b, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_BASE]);
 
-    mBodyShader.setUniform(cLightDir, mBodyShader.getVertexUniformLocation("lightDir"), u32(-1));
+    mBodyShader.setUniform(cLightDir, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_LIGHT_DIR], u32(-1));
 
-    mBodyShader.setUniform(3.0f, u32(-1), mBodyShader.getFragmentUniformLocation("SP_power"));
+    mBodyShader.setUniform(3.0f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SP_POWER]);
 
-    mBodyShader.setUniform(0.69804f, 0.69804f, 0.69804f, u32(-1), mBodyShader.getFragmentUniformLocation("ambient"));
-    mBodyShader.setUniform(0.29804f, 0.29804f, 0.29804f, u32(-1), mBodyShader.getFragmentUniformLocation("diffuse"));
-    // NOTE: for pants
-    //mBodyShader.setUniform(0.65098f, 0.65098f, 0.65098f, u32(-1), mBodyShader.getFragmentUniformLocation("diffuse"));
+    mBodyShader.setUniform(0.69804f, 0.69804f, 0.69804f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_AMBIENT]);
+    mBodyShader.setUniform(0.29804f, 0.29804f, 0.29804f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]);
 
-    mBodyShader.setUniform(0.4f, 0.4f, 0.4f, u32(-1), mBodyShader.getFragmentUniformLocation("rim"));
-    mBodyShader.setUniform(2.0f, u32(-1), mBodyShader.getFragmentUniformLocation("rimSP_power"));
-    mBodyShader.setUniform(0.16863f, 0.16863f, 0.16863f, u32(-1), mBodyShader.getFragmentUniformLocation("specular"));
+    mBodyShader.setUniform(0.4f, 0.4f, 0.4f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM]);
+    mBodyShader.setUniform(2.0f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM_SP_POWER]);
+    mBodyShader.setUniform(0.16863f, 0.16863f, 0.16863f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SPECULAR]);
 }
 
 void Shader::draw_(const FFLDrawParam& draw_param)

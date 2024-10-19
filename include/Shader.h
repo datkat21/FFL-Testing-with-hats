@@ -57,7 +57,7 @@ protected:
 protected:
     enum VertexUniform
     {
-        VERTEX_UNIFORM_IT = 0,  // Inverse transpose of MV
+        VERTEX_UNIFORM_IT = 0,  // Inverse transpose / normal matrix
         VERTEX_UNIFORM_MV,
         VERTEX_UNIFORM_PROJ,
         VERTEX_UNIFORM_MAX
@@ -84,11 +84,34 @@ protected:
         PIXEL_UNIFORM_MAX
     };
 
+    enum BodyVertexUniform
+    {
+        BODY_VERTEX_UNIFORM_PROJ = 0,
+        BODY_VERTEX_UNIFORM_VIEW,
+        BODY_VERTEX_UNIFORM_WORLD, // model matrix
+        BODY_VERTEX_UNIFORM_LIGHT_DIR,
+        BODY_VERTEX_UNIFORM_MAX
+    };
+
+    enum BodyPixelUniform
+    {
+        BODY_PIXEL_UNIFORM_BASE = 0,
+        BODY_PIXEL_UNIFORM_AMBIENT,
+        BODY_PIXEL_UNIFORM_DIFFUSE,
+        BODY_PIXEL_UNIFORM_SPECULAR,
+        BODY_PIXEL_UNIFORM_RIM,
+        BODY_PIXEL_UNIFORM_RIM_SP_POWER,
+        BODY_PIXEL_UNIFORM_SP_POWER,
+        BODY_PIXEL_UNIFORM_MAX
+    };
+
     rio::Shader             mShader;
     rio::Shader             mBodyShader;
     s32                     mVertexUniformLocation[VERTEX_UNIFORM_MAX];
     s32                     mPixelUniformLocation[PIXEL_UNIFORM_MAX];
     s32                     mSamplerLocation;
+    s32                     mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_MAX];
+    s32                     mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_MAX];
     s32                     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_MAX];
 #if RIO_IS_CAFE
     GX2AttribStream         mAttribute[FFL_ATTRIBUTE_BUFFER_TYPE_MAX];
