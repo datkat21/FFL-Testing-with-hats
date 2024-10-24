@@ -1,3 +1,4 @@
+#include "nn/ffl/FFLDrawParam.h"
 #include "nn/ffl/FFLModulateParam.h"
 #include <Shader.h>
 
@@ -136,7 +137,9 @@ struct FFLiDefaultShaderMaterial
     s32 specularMode;
 };
 
-const int cMaterialParamSize = 9;
+const int cMaterialParamSize = 11;
+#define MATERIAL_PARAM_BODY 9
+#define MATERIAL_PARAM_PANTS 10
 const FFLiDefaultShaderMaterial cMaterialParam[cMaterialParamSize] = {
     { // ShapeFaceline
         { 0.85f, 0.75f, 0.75f, 1.0f }, // ambient
@@ -171,7 +174,11 @@ const FFLiDefaultShaderMaterial cMaterialParam[cMaterialParamSize] = {
         { 0.70f, 0.70f, 0.70f, 1.0f }, // diffuse
         { 0.35f, 0.35f, 0.35f, 1.0f }, // specular
         10.0f, // specularPower
+#ifdef USE_SPECULAR_BLINN_TEST
+        0
+#else
         1 // specularMode
+#endif
     },
     { // ShapeCap
         { 0.75f, 0.75f, 0.75f, 1.0f }, // ambient
@@ -200,6 +207,22 @@ const FFLiDefaultShaderMaterial cMaterialParam[cMaterialParamSize] = {
         { 0.0f, 0.0f, 0.0f, 1.0f }, // specular
         40.0f, // specularPower
         1 // specularMode
+    },
+    // HACK: THESE COLLIDE!!!
+    // but it's with textures which have no lighting
+    { // body
+        { 0.95622f, 0.95622f, 0.95622f, 1.0f }, // 0.69804
+        { 0.496733f, 0.496733f, 0.496733f, 1.0f }, // 0.29804
+        { 0.2409f, 0.2409f, 0.2409f, 1.0f }, // 0.16863
+        3.0f, // specularPower
+        0 // specularMode
+    },
+    { // pants
+        { 0.95622f, 0.95622f, 0.95622f, 1.0f }, // 0.69804
+        { 1.084967f, 1.084967f, 1.084967f, 1.0f }, // 0.65098
+        { 0.2409f, 0.2409f, 0.2409f, 1.0f }, // 0.16863
+        3.0f, // specularPower
+        0 // specularMode
     }
 };
 
@@ -212,6 +235,8 @@ const rio::BaseVec3f cLightDir = { -0.4531539381f, 0.4226179123f, 0.7848858833f 
 //const rio::BaseVec3f cLightDir = { -0.455f, 0.348f, 0.5f };
 
 const FFLColor cRimColor = { 0.3f, 0.3f, 0.3f, 1.0f };
+const FFLColor cRimColorBody = { 0.4f, 0.4f, 0.4f, 1.0f };
+
 const f32 cRimPower = 2.0f;
 
 }
@@ -533,6 +558,26 @@ void Shader::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 {
     // FAVORITE COLOR
     const FFLColor favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
+
+#ifdef DEFAULT_SHADER_FOR_BODY
+    mLightEnableBody = false;
+    bind(light_enable, pCharInfo);
+    const FFLModulateParam modulateParam = {
+        FFL_MODULATE_MODE_0,
+        FFL_MODULATE_TYPE_SHAPE_FOREHEAD, // doesn't even matter
+        &favoriteColor,
+        nullptr, // no color G
+        nullptr, // no color B
+        nullptr  // no texture
+    };
+    setModulate_(modulateParam);
+    setMaterial_(static_cast<FFLModulateType>(MATERIAL_PARAM_BODY));
+    mShader.setUniform(getColorUniform(cRimColorBody), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
+    static const u8 color[4] = { 255, 255, 0, 255 };
+    RIO_GL_CALL(glVertexAttrib4Nubv(mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR], color));
+
+    return;
+#endif
 
     mLightEnableBody = light_enable; // read by setViewUniformBody
     if (!light_enable) {
