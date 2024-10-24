@@ -697,9 +697,9 @@ void ShaderMiitomo::draw_(const FFLDrawParam& draw_param)
 }
 
 
-void ShaderMiitomo::drawCallback_(void* p_obj, const FFLDrawParam& draw_param)
+void ShaderMiitomo::drawCallback_(void* p_obj, const FFLDrawParam* draw_param)
 {
-    static_cast<ShaderMiitomo*>(p_obj)->draw_(draw_param);
+    static_cast<ShaderMiitomo*>(p_obj)->draw_(*draw_param);
 }
 
 void ShaderMiitomo::setMatrix_(const rio::BaseMtx44f& matrix)
@@ -707,7 +707,7 @@ void ShaderMiitomo::setMatrix_(const rio::BaseMtx44f& matrix)
     mShader.setUniform(matrix, mVertexUniformLocation[VERTEX_UNIFORM_MVP], u32(-1));
 }
 
-void ShaderMiitomo::setMatrixCallback_(void* p_obj, const rio::BaseMtx44f& matrix)
+void ShaderMiitomo::setMatrixCallback_(void* p_obj, const rio::BaseMtx44f* matrix)
 {
-    static_cast<ShaderMiitomo*>(p_obj)->setMatrix_(matrix);
+    static_cast<ShaderMiitomo*>(p_obj)->setMatrix_(*matrix);
 }

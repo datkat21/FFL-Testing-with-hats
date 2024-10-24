@@ -386,12 +386,19 @@ void Shader::bind(bool light_enable, FFLiCharInfo* pCharInfo)
     mShader.setUniform(cRimPower, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_POWER]);
 }
 
+#ifdef FFL_USE_ADJUST_MTX
+rio::Matrix34f g_MV;
+#endif
+
 void Shader::setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const
 {
     mShader.setUniform(proj_mtx, mVertexUniformLocation[VERTEX_UNIFORM_PROJ], u32(-1));
 
     rio::Matrix34f mv;
     mv.setMul(static_cast<const rio::Matrix34f&>(view_mtx), static_cast<const rio::Matrix34f&>(model_mtx));
+#ifdef FFL_USE_ADJUST_MTX
+    g_MV = mv;
+#endif
     rio::Matrix44f mv44;
     mv44.fromMatrix34(mv);
     mShader.setUniform(mv44, mVertexUniformLocation[VERTEX_UNIFORM_MV], u32(-1));
@@ -579,6 +586,35 @@ void Shader::draw_(const FFLDrawParam& draw_param)
         mShader.setUniform(materialSpecularMode, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_SPECULAR_MODE]);
     }
 
+#ifdef FFL_USE_ADJUST_MTX
+    if (draw_param.primitiveParam.pAdjustMatrix != nullptr)
+    {
+        rio::Matrix34f mv;
+        mv.setMul(g_MV, *draw_param.primitiveParam.pAdjustMatrix);
+        rio::Matrix44f mv44;
+        mv44.fromMatrix34(mv);
+        mShader.setUniform(mv44, mVertexUniformLocation[VERTEX_UNIFORM_MV], u32(-1));
+
+/*
+        rio::Matrix34f it34 = mv;
+        it34.setInverseTranspose(mv);
+        gramSchmidtOrthonormalizeMtx34(&it34);
+        rio::BaseMtx33f it {
+            it34.m[0][0], it34.m[1][0], it34.m[2][0],
+            it34.m[0][1], it34.m[1][1], it34.m[2][1],
+            it34.m[0][2], it34.m[1][2], it34.m[2][2]
+        };
+        mShader.setUniformColumnMajor(it, mVertexUniformLocation[VERTEX_UNIFORM_IT], u32(-1));
+*/
+    }
+/* NOTE:
+ * this should work for the most part for shapes but...
+ * having to multiply on every frame isn't ideal at all
+ * u_it is broken rn and g_MV global is unacceptable
+ * recommend making it a uniform so the shader can factor it into the pre-existing mv, as well as removing u_it
+ */
+#endif
+
     if (draw_param.primitiveParam.pIndexBuffer != nullptr)
     {
 #if RIO_IS_CAFE
@@ -651,9 +687,9 @@ void Shader::draw_(const FFLDrawParam& draw_param)
 }
 
 
-void Shader::drawCallback_(void* p_obj, const FFLDrawParam& draw_param)
+void Shader::drawCallback_(void* p_obj, const FFLDrawParam* draw_param)
 {
-    static_cast<Shader*>(p_obj)->draw_(draw_param);
+    static_cast<Shader*>(p_obj)->draw_(*draw_param);
 }
 
 void Shader::setMatrix_(const rio::BaseMtx44f& matrix)
@@ -669,7 +705,7 @@ void Shader::setMatrix_(const rio::BaseMtx44f& matrix)
     mShader.setUniformColumnMajor(ident33, mVertexUniformLocation[VERTEX_UNIFORM_IT], u32(-1));
 }
 
-void Shader::setMatrixCallback_(void* p_obj, const rio::BaseMtx44f& matrix)
+void Shader::setMatrixCallback_(void* p_obj, const rio::BaseMtx44f* matrix)
 {
-    static_cast<Shader*>(p_obj)->setMatrix_(matrix);
+    static_cast<Shader*>(p_obj)->setMatrix_(*matrix);
 }

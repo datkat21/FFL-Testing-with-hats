@@ -696,19 +696,19 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
 
         case FFL_MODULATE_TYPE_SHAPE_HAIR:
             // HACK: ver3 hair color 0 maps to common color 8
-            if (!isCommonColorMarked(mpCharInfo->parts.hairColor) && mpCharInfo->parts.hairColor == 0)
+            if (mpCharInfo->parts.hairColor == 0)
                 commonColor = 8;
             else
-                commonColor = unmarkCommonColor(mpCharInfo->parts.hairColor);
+                commonColor = mpCharInfo->parts.hairColor & FFLI_NN_MII_COMMON_COLOR_MASK;
             drawParamMaterial = cHairMaterials[commonColor];
             //RIO_LOG("hair color: %d, specular factor B: %f\n", commonColor, drawParamMaterial.specular.factorB);
             break;
         case FFL_MODULATE_TYPE_SHAPE_BEARD:
             // HACK: same as above
-            if (!isCommonColorMarked(mpCharInfo->parts.beardColor) && mpCharInfo->parts.beardColor == 0)
+            if (mpCharInfo->parts.beardColor == 0)
                 commonColor = 8;
             else
-                commonColor = unmarkCommonColor(mpCharInfo->parts.beardColor);
+                commonColor = mpCharInfo->parts.beardColor & FFLI_NN_MII_COMMON_COLOR_MASK;
             drawParamMaterial = cBeardMaterials[commonColor];
             break;
         default:
@@ -872,9 +872,9 @@ void ShaderSwitch::draw_(const FFLDrawParam& draw_param)
 }
 
 
-void ShaderSwitch::drawCallback_(void* p_obj, const FFLDrawParam& draw_param)
+void ShaderSwitch::drawCallback_(void* p_obj, const FFLDrawParam* draw_param)
 {
-    static_cast<ShaderSwitch*>(p_obj)->draw_(draw_param);
+    static_cast<ShaderSwitch*>(p_obj)->draw_(*draw_param);
 }
 
 void ShaderSwitch::setMatrix_(const rio::BaseMtx44f& matrix)
@@ -883,7 +883,7 @@ void ShaderSwitch::setMatrix_(const rio::BaseMtx44f& matrix)
     mShader.setUniformColumnMajor(rio::Matrix44f::ident, mVertexUniformLocation[VERTEX_UNIFORM_MV], u32(-1));
 }
 
-void ShaderSwitch::setMatrixCallback_(void* p_obj, const rio::BaseMtx44f& matrix)
+void ShaderSwitch::setMatrixCallback_(void* p_obj, const rio::BaseMtx44f* matrix)
 {
-    static_cast<ShaderSwitch*>(p_obj)->setMatrix_(matrix);
+    static_cast<ShaderSwitch*>(p_obj)->setMatrix_(*matrix);
 }

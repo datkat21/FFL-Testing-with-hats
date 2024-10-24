@@ -1,5 +1,6 @@
-#include "nn/ffl/FFLBirthPlatform.h"
 #include <nn/ffl.h>
+#include <nn/ffl/FFLBirthPlatform.h>
+#include <nn/ffl/detail/FFLiCharInfo.h>
 
 #include <misc/rio_MemUtil.h>
 
@@ -19,17 +20,17 @@ void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src) {
     dest->parts.faceLine = src->faceline_wrinkle;
     dest->parts.faceMakeup = src->faceline_make;
     dest->parts.hairType = src->hair_type;
-    dest->parts.hairColor = markCommonColor(src->hair_color);
+    dest->parts.hairColor = src->hair_color | FFLI_NN_MII_COMMON_COLOR_ENABLE_MASK;
     dest->parts.hairDir = src->hair_flip;
     dest->parts.eyeType = src->eye_type;
-    dest->parts.eyeColor = markCommonColor(src->eye_color);
+    dest->parts.eyeColor = src->eye_color | FFLI_NN_MII_COMMON_COLOR_ENABLE_MASK;
     dest->parts.eyeScale = src->eye_scale;
     dest->parts.eyeScaleY = src->eye_aspect;
     dest->parts.eyeRotate = src->eye_rotate;
     dest->parts.eyeSpacingX = src->eye_x;
     dest->parts.eyePositionY = src->eye_y;
     dest->parts.eyebrowType = src->eyebrow_type;
-    dest->parts.eyebrowColor = markCommonColor(src->eyebrow_color);
+    dest->parts.eyebrowColor = src->eyebrow_color | FFLI_NN_MII_COMMON_COLOR_ENABLE_MASK;
     dest->parts.eyebrowScale = src->eyebrow_scale;
     dest->parts.eyebrowScaleY = src->eyebrow_aspect;
     dest->parts.eyebrowRotate = src->eyebrow_rotate;
@@ -39,13 +40,13 @@ void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src) {
     dest->parts.noseScale = src->nose_scale;
     dest->parts.nosePositionY = src->nose_y;
     dest->parts.mouthType = src->mouth_type;
-    dest->parts.mouthColor = markCommonColor(src->mouth_color);
+    dest->parts.mouthColor = src->mouth_color | FFLI_NN_MII_COMMON_COLOR_ENABLE_MASK;
     dest->parts.mouthScale = src->mouth_scale;
     dest->parts.mouthScaleY = src->mouth_aspect;
     dest->parts.mouthPositionY = src->mouth_y;
     dest->parts.mustacheType = src->mustache_type;
     dest->parts.beardType = src->beard_type;
-    dest->parts.beardColor = markCommonColor(src->beard_color);
+    dest->parts.beardColor = src->beard_color | FFLI_NN_MII_COMMON_COLOR_ENABLE_MASK;
     dest->parts.mustacheScale = src->mustache_scale;
     dest->parts.mustachePositionY = src->mustache_y;
 
@@ -54,7 +55,7 @@ void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src) {
     //dest->parts.glassType = ToVer3GlassTypeTable[src->glass_type];
     // NOTE: glass type mapping has been moved to FFLiResourceLoader.cpp
 
-    dest->parts.glassColor = markCommonColor(src->glass_color);
+    dest->parts.glassColor = src->glass_color | FFLI_NN_MII_COMMON_COLOR_ENABLE_MASK;
     dest->parts.glassScale = src->glass_scale;
     dest->parts.glassPositionY = src->glass_y;
 

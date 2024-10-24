@@ -53,10 +53,10 @@ private:
     void setMaterial_(const FFLModulateType modulateType);
 
     void draw_(const FFLDrawParam& draw_param);
-    static void drawCallback_(void* p_obj, const FFLDrawParam& draw_param);
+    static void drawCallback_(void* p_obj, const FFLDrawParam* draw_param);
 
     void setMatrix_(const rio::BaseMtx44f& matrix);
-    static void setMatrixCallback_(void* p_obj, const rio::BaseMtx44f& matrix);
+    static void setMatrixCallback_(void* p_obj, const rio::BaseMtx44f* matrix);
 
 private:
     enum VertexUniform

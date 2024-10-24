@@ -1,4 +1,6 @@
 #include <nn/ffl.h>
+#include <nn/ffl/FFLiCharModel.h>
+
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -104,7 +106,7 @@ private:
      * @param pObj Pointer to the GLTFExportCallback instance.
      * @param matrix The transformation matrix to set.
      */
-    static void SetMatrixFunc(void* pObj, const rio::BaseMtx44f& matrix);
+    static void SetMatrixFunc(void* pObj, const rio::BaseMtx44f* matrix);
 
     /**
      * @brief Static callback to handle drawing commands.
@@ -112,7 +114,7 @@ private:
      * @param pObj Pointer to the GLTFExportCallback instance.
      * @param drawParam The drawing parameters containing mesh and rendering information.
      */
-    static void DrawFunc(void* pObj, const FFLDrawParam& drawParam);
+    static void DrawFunc(void* pObj, const FFLDrawParam* drawParam);
 
     /**
      * @brief Internal method to export the collected model data to a GLTF file or stream.

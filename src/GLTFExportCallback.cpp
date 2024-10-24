@@ -24,18 +24,18 @@ GLTFExportCallback::GLTFExportCallback()
 // Static function implementations
 void GLTFExportCallback::ApplyAlphaTestFunc(void* pObj, bool enable, rio::Graphics::CompareFunc func, float ref)
 {
-    // Ignored as per instruction
+    // Ignored
 }
 
-void GLTFExportCallback::SetMatrixFunc(void* pObj, const rio::BaseMtx44f& matrix)
+void GLTFExportCallback::SetMatrixFunc(void* pObj, const rio::BaseMtx44f* matrix)
 {
-    // Ignored as per instruction
+    // Only used when drawing faceline/mask textures
 }
 
-void GLTFExportCallback::DrawFunc(void* pObj, const FFLDrawParam& drawParam)
+void GLTFExportCallback::DrawFunc(void* pObj, const FFLDrawParam* drawParam)
 {
     GLTFExportCallback* self = static_cast<GLTFExportCallback*>(pObj);
-    self->Draw(drawParam);
+    self->Draw(*drawParam);
 }
 
 FFLShaderCallback GLTFExportCallback::GetShaderCallback()
@@ -1085,13 +1085,13 @@ void GLTFExportCallback::IncludeCharacterModelInfo(tinygltf::Model& model)
         FFLGetPartsTransform(&partsTransform, mpCharModel);
 
         tinygltf::Value::Object transformObj;
-        transformObj["hatTranslate"] = FFLVec3ToGltfValue(partsTransform._0);
-        transformObj["headFrontRotate"] = FFLVec3ToGltfValue(partsTransform._c);
-        transformObj["headFrontTranslate"] = FFLVec3ToGltfValue(partsTransform._18);
-        transformObj["headSideRotate"] = FFLVec3ToGltfValue(partsTransform._24);
-        transformObj["headSideTranslate"] = FFLVec3ToGltfValue(partsTransform._30);
-        transformObj["headTopRotate"] = FFLVec3ToGltfValue(partsTransform._3c);
-        transformObj["headTopTranslate"] = FFLVec3ToGltfValue(partsTransform._48);
+        transformObj["hatTranslate"] = FFLVec3ToGltfValue(partsTransform.hatTranslate);
+        transformObj["headFrontRotate"] = FFLVec3ToGltfValue(partsTransform.headFrontRotate);
+        transformObj["headFrontTranslate"] = FFLVec3ToGltfValue(partsTransform.headFrontTranslate);
+        transformObj["headSideRotate"] = FFLVec3ToGltfValue(partsTransform.headSideRotate);
+        transformObj["headSideTranslate"] = FFLVec3ToGltfValue(partsTransform.headSideTranslate);
+        transformObj["headTopRotate"] = FFLVec3ToGltfValue(partsTransform.headTopRotate);
+        transformObj["headTopTranslate"] = FFLVec3ToGltfValue(partsTransform.headTopTranslate);
 
         // Include body build and height, u32 cast to s32
         tinygltf::Value buildValue = tinygltf::Value(*reinterpret_cast<s32*>(&pCharInfo->build));

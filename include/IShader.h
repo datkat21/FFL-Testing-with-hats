@@ -2,6 +2,7 @@
 
 #include <gpu/rio_Shader.h>
 #include <nn/ffl.h>
+#include <nn/ffl/FFLiCharModel.h>
 
 class IShader
 {
