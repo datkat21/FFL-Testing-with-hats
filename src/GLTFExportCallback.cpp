@@ -1,3 +1,5 @@
+#ifndef NO_GLTF
+
 #include "GLTFExportCallback.h"
 #include "nn/ffl/FFLDrawParam.h"
 #include <cstring>
@@ -1149,3 +1151,5 @@ bool GLTFExportCallback::WriteModelToFileOrStream(const tinygltf::Model& model, 
     }
     return true;
 }
+
+#endif // NO_GLTF

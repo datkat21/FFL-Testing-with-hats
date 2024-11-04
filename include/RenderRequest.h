@@ -77,6 +77,7 @@ struct RenderRequest {
     bool     verifyCRC16;
     bool     lightEnable;
     int8_t   clothesColor;   // favorite color, -1 for default
+    uint8_t  pantsColor;     // corresponds to PantsColor
 
     uint8_t  instanceCount;  // TODO
     uint8_t  instanceRotationMode;

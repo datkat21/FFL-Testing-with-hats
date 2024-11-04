@@ -167,7 +167,7 @@ ShaderMiitomo::ShaderMiitomo(IShader* mpMaskShader)
 }
 
 // names not intentional
-const int cMaterialParamSize = 10;
+const int cMaterialParamSize = 11;
 rio::Texture2D* sLUTSpecTextures[cMaterialParamSize];
 rio::Texture2D* sLUTFresTextures[cMaterialParamSize];
 // 9 for each draw type
@@ -195,7 +195,7 @@ ShaderMiitomo::~ShaderMiitomo()
         delete sLUTFresTextures[i];
 }
 
-void loadRawR8Image(const char* filePath, int width, int height, GLuint texture) {
+void loadRawR8Image(std::string filePath, int width, int height, GLuint texture) {
     // Use rio::FileDeviceMgr to load the file
     rio::FileDevice::LoadArg arg;
     arg.path = std::string("miitomo_shader_lut/") + filePath;
@@ -205,14 +205,14 @@ void loadRawR8Image(const char* filePath, int width, int height, GLuint texture)
     u8* data = rio::FileDeviceMgr::instance()->tryLoad(arg);
 
     if (data == nullptr) {
-        RIO_LOG("NativeFileDevice failed to load when trying to load LUT for ShaderMiitomo: %s\n", filePath);
+        RIO_LOG("NativeFileDevice failed to load when trying to load LUT for ShaderMiitomo: %s\n", filePath.c_str());
         return;
     }
 
     u32 imageSize = width * height * 1; // 1 channel (R)
 
     if (arg.read_size != imageSize) {
-        RIO_LOG("Failed to load the correct size: %s\n", filePath);
+        RIO_LOG("Failed to load the correct size: %s\n", filePath.c_str());
         return;
     }
 
@@ -273,20 +273,18 @@ void ShaderMiitomo::initialize()
 
     // swizzle RRR1
     const u32 compMap = 0x00000005;
-    char lutFresFileName[] = "miitomo_lut_fres_r8_0";
+    const std::string lutFresFileNamePrefix = "miitomo_lut_fres_r8_";
     for (u32 i = 0; i < cMaterialParamSize; i++) {
         sLUTFresTextures[i] = new rio::Texture2D(rio::TEXTURE_FORMAT_R8_UNORM, 512, 1, 1);
-        loadRawR8Image(lutFresFileName, 512, 1, sLUTFresTextures[i]->getNativeTextureHandle());
+        loadRawR8Image(lutFresFileNamePrefix + std::to_string(i), 512, 1, sLUTFresTextures[i]->getNativeTextureHandle());
         rio::Texture2DUtil::setSwizzle(sLUTFresTextures[i]->getNativeTextureHandle(), compMap);
-        lutFresFileName[sizeof(lutFresFileName)-2]++; // iterate last character
     }
 
-    char lutSpecFileName[] = "miitomo_lut_spec_r8_0";
+    const std::string lutSpecFileNamePrefix = "miitomo_lut_spec_r8_";
     for (u32 i = 0; i < cMaterialParamSize; i++) {
         sLUTSpecTextures[i] = new rio::Texture2D(rio::TEXTURE_FORMAT_R8_UNORM, 512, 1, 1);
-        loadRawR8Image(lutSpecFileName, 512, 1, sLUTSpecTextures[i]->getNativeTextureHandle());
+        loadRawR8Image(lutSpecFileNamePrefix + std::to_string(i), 512, 1, sLUTSpecTextures[i]->getNativeTextureHandle());
         rio::Texture2DUtil::setSwizzle(sLUTSpecTextures[i]->getNativeTextureHandle(), compMap);
-        lutSpecFileName[sizeof(lutSpecFileName)-2]++; // iterate last character
     }
 
 #if RIO_IS_CAFE
@@ -337,8 +335,7 @@ void ShaderMiitomo::initialize()
 #endif
 
     mSampler.setWrap(rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR);
-    mSampler.setLOD(-1000.0f, 1000.0f, 0.0f);
-    mSampler.setFilter(rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_MIP_FILTER_MODE_LINEAR, rio::TEX_ANISO_1_TO_1);
+    mSampler.setFilter(rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_MIP_FILTER_MODE_NONE, rio::TEX_ANISO_1_TO_1);
 
     mCallback.pObj = this;
     mCallback.pApplyAlphaTestFunc = &ShaderMiitomo::applyAlphaTestCallback_;
@@ -356,7 +353,10 @@ void ShaderMiitomo::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 {
     // ASSUME this is drawing mask/faceline texture in which case the LUT shader cannot be used for that
     mLightEnable = light_enable;
-    if (!light_enable) {
+    mIsUsingMaskShader = false;
+    if (!light_enable)
+    {
+        mIsUsingMaskShader = true;
         return mpMaskShader->bind(light_enable, pCharInfo);
     }
 
@@ -381,7 +381,8 @@ void ShaderMiitomo::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 
 void ShaderMiitomo::setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const
 {
-    if (!mLightEnable) return mpMaskShader->setViewUniform(model_mtx, view_mtx, proj_mtx);
+    if (mIsUsingMaskShader)
+        return mpMaskShader->setViewUniform(model_mtx, view_mtx, proj_mtx);
     mShader.setUniform(-view_mtx.m[0][3], -view_mtx.m[1][3], -view_mtx.m[2][3], mVertexUniformLocation[VERTEX_UNIFORM_EYE_PT], u32(-1));
     //mShader.setUniform(0.0f, 3.45f, 60.0f, mVertexUniformLocation[VERTEX_UNIFORM_EYE_PT], u32(-1));
     rio::Matrix34f mv;
@@ -501,7 +502,7 @@ FFLColor multiplyColorIfNeeded(FFLModulateType modulateType, FFLColor color)
         || modulateType == FFL_MODULATE_TYPE_SHAPE_FOREHEAD
         || modulateType == FFL_MODULATE_TYPE_SHAPE_NOSE
         || modulateType == FFL_MODULATE_TYPE_SHAPE_GLASS
-        || modulateType == 9 // body, favorite color
+        //|| modulateType == 9 // body, favorite color
     )
         return color;
     // FUN_0056ba10 in libcocos2dcpp.so
@@ -594,7 +595,11 @@ void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
 
 void ShaderMiitomo::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 {
-    if (!light_enable) return mpMaskShader->bindBodyShader(light_enable, pCharInfo);
+    if (!light_enable)
+    {
+        mIsUsingMaskShader = true;
+        return mpMaskShader->bindBodyShader(light_enable, pCharInfo);
+    }
     bind(light_enable, pCharInfo);
     //RIO_GL_CALL(glBindVertexArray(vao));
 
@@ -610,6 +615,26 @@ void ShaderMiitomo::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
         // CUSTOM MODULATE TYPE FOR setModulate
         modulateType,
         &favoriteColor,
+        nullptr, // no color G
+        nullptr, // no color B
+        nullptr  // no texture
+    };
+    setModulate_(modulateParam);
+    setMaterial_(modulateType);
+}
+
+void ShaderMiitomo::setBodyShaderPantsMaterial(PantsColor pantsColor)
+{
+    if (mIsUsingMaskShader)
+        return mpMaskShader->setBodyShaderPantsMaterial(pantsColor);
+    const FFLColor& color = cPantsColors[pantsColor];
+
+    const FFLModulateType modulateType = static_cast<FFLModulateType>(10);
+    const FFLModulateParam modulateParam = {
+        FFL_MODULATE_MODE_0,
+        // CUSTOM MODULATE TYPE FOR setModulate
+        modulateType,
+        &color,
         nullptr, // no color G
         nullptr, // no color B
         nullptr  // no texture

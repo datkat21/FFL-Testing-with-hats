@@ -314,13 +314,15 @@ void RootTask::prepare_()
 
     }
 
-    #if RIO_IS_WIN
+#if RIO_IS_WIN
     fillStoreDataArray_();
     setupSocket_();
+#ifndef RIO_NO_GLFW_CALLS
     // Set window aspect ratio, so that when resizing it will not change
     GLFWwindow* glfwWindow = rio::Window::instance()->getNativeWindow().getGLFWwindow();
     glfwSetWindowAspectRatio(glfwWindow, window->getWidth(), window->getHeight());
-    #endif
+#endif // RIO_NO_GLFW_CALLS
+#endif // RIO_IS_WIN
 
     mMiiCounter = 0;
     createModel_();
@@ -328,10 +330,14 @@ void RootTask::prepare_()
     // load (just male for now) body model
     // the male and female bodies are like identical
     // from the torso up (only perspective we use)
+#ifdef NEW_MODELS
+    char key[] = "mii_static_bodyn0";
+#else
     char key[] = "mii_static_body0";
+#endif
     for (u32 i = 0; i < FFL_GENDER_MAX; i++)
     {
-        RIO_LOG("loading model: %s\n", key);
+        RIO_LOG("loading body model: %s\n", key);
         //bodyResModels[i] = rio::mdl::res::ModelCacher::instance()->loadModel(key, key); // "body0", "body1" per gender
         const rio::mdl::res::Model* resModel = rio::mdl::res::ModelCacher::instance()->loadModel(key, key);
         key[sizeof(key)-2]++; // iterate last character
@@ -339,8 +345,6 @@ void RootTask::prepare_()
 
         mpBodyModels[i] = new rio::mdl::Model(resModel);
     }
-    //RIO_ASSERT(loadBodyGLTF(&gltfBodyModel, bodyGltfMaleFilename));
-    //bodyShader.load("FFLBodyShader");
 
     mInitialized = true;
 }
@@ -886,7 +890,7 @@ const rio::Vector3f calculateScaleFactors(f32 build, f32 height) {
     // also in ffl_app.rpx: FUN_020ec380 (FFLUtility), FUN_020737b8 (mii maker US)
 #ifndef USE_HEIGHT_LIMIT_SCALE_FACTORS
     // ScaleApply?
-    // 0.47 / 128.0 = 0.003671875
+                    // 0.47 / 128.0 = 0.003671875
     scaleFactors.x = (build * (height * 0.003671875f + 0.4f)) / 128.0f +
                     // 0.23 / 128.0 = 0.001796875
                     height * 0.001796875f + 0.4f;
@@ -918,7 +922,18 @@ const rio::Vector3f calculateScaleFactors(f32 build, f32 height) {
     return scaleFactors;
 }
 
-void RootTask::drawMiiBodyREAL(const bool light_enable, FFLiCharInfo* charInfo, rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx) {
+static const f32 cBodyScaleFactor =
+#ifdef NEW_MODELS
+                                    7.0f;
+#else
+                                    8.715f; // thought it was 7.0?
+#endif
+static const f32 cBodyHeadYTranslation = (6.6766f // skl_root
+                                        + 4.1f); // head
+static const rio::Vector3f cBodyHeadRotation = { (0.002f + -0.005f), 0.000005f, -0.001f }; // MiiBodyMiddle "head" rotation
+
+void RootTask::drawMiiBodyREAL(const bool light_enable, FFLiCharInfo* charInfo, PantsColor pantsColor,
+    rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx, const rio::Vector3f scaleFactors) {
 
     // SELECT BODY MODEL
     if (charInfo->gender > FFL_GENDER_MAX - 1)
@@ -934,26 +949,22 @@ void RootTask::drawMiiBodyREAL(const bool light_enable, FFLiCharInfo* charInfo, 
         const rio::mdl::Mesh& mesh = meshes[i];
 
         // BIND SHADER
-        //bodyShader.bind();
-        mpModel->getShader()->bindBodyShader(light_enable, charInfo);
+        IShader* pShader = mpModel->getShader();
+        pShader->bindBodyShader(light_enable, charInfo);
+#ifdef NEW_MODELS
+        if ((i % 2) == 1) // is it the second mesh (pants)?
+            pShader->setBodyShaderPantsMaterial(pantsColor);
+#endif
 
-
-        static const f32 bodyToHeadOffset = -93.92f;
-
-        rio::Vector3f scaleFactors = calculateScaleFactors(static_cast<f32>(charInfo->build), static_cast<f32>(charInfo->height));
         // make new matrix for body
         rio::Matrix34f modelMtxBody = rio::Matrix34f::ident;//model_mtx;
 
         // apply scale factors before anything else
         modelMtxBody.applyScaleLocal(scaleFactors);
-        // apply transformation for body head offset
-        modelMtxBody.applyTranslationLocal({ 0.0f, bodyToHeadOffset, 0.0f });
         // apply original model matrix (rotation)
         modelMtxBody.setMul(model_mtx, modelMtxBody);
 
         mpModel->getShader()->setViewUniformBody(modelMtxBody, view_mtx, proj_mtx);
-
-        // finally, the uniforms are all set
 
         rio::RenderState render_state;
         render_state.setCullingMode(rio::Graphics::CULLING_MODE_BACK);
@@ -1026,11 +1037,21 @@ void RootTask::handleRenderRequest(char* buf) {
         closesocket(new_socket);
         return;
     }
+    FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
+
+    // use charinfo for build and height
+    FFLiCharInfo* pCharInfo = &pCharModel->charInfo;
+
     // switch between two projection matrxies
     rio::BaseMtx44f *projMtx;
+    bool isCameraPosAbsolute = false; // if it should not move the camera to the head
+    bool willDrawBody = true; // and if should move camera
     switch (renderRequest->viewType) {
-        case VIEW_TYPE_FACE:
         case VIEW_TYPE_FACE_ONLY:
+            willDrawBody = false;
+            [[fallthrough]]; // goal is actually same view as face
+                             // both cdn-mii 2.0.0 and 1.0.0 do this
+        case VIEW_TYPE_FACE:
         {
             // if it has body then use the matrix we just defined
             projMtx = mProjMtxIconBody;
@@ -1046,7 +1067,7 @@ void RootTask::handleRenderRequest(char* buf) {
             // FFLMakeIconWithBody view uses 37.05f, 415.53f
             // below values are extracted from wii u mii maker
             mCamera.pos() = { 0.0f, 33.016785f, 411.181793f };
-            mCamera.at() = { 0.0f, 33.016785f, 0.0f };
+            mCamera.at() = { 0.0f, 34.3f, 0.0f };//33.016785f, 0.0f };
             mCamera.setUp({ 0.0f, 1.0f, 0.0f });
             break;
         }
@@ -1073,6 +1094,7 @@ void RootTask::handleRenderRequest(char* buf) {
             // default, face only (FFLMakeIcon)
             // use default if request is head only
             projMtx = &mProjMtx;
+            willDrawBody = false;
 
             mCamera.at() = { 0.0f, 34.5f, 0.0f };
             mCamera.setUp({ 0.0f, 1.0f, 0.0f });
@@ -1090,23 +1112,52 @@ void RootTask::handleRenderRequest(char* buf) {
     const rio::Vector3f cameraRotate = convertVec3iToRadians3f(renderRequest->cameraRotate);
     const rio::Vector3f modelRotate = convertVec3iToRadians3f(renderRequest->modelRotate);
 
+    rio::Vector3f scaleFactors;
+
     rio::Vector3f position = calculateCameraOrbitPosition(radius, cameraRotate);
     position.y += cameraPosInitial.y;
     const rio::Vector3f upVector = calculateUpVector(cameraRotate);
+
+    f32 headYTranslateFinal;
+
+    if (willDrawBody) {
+        scaleFactors = calculateScaleFactors(static_cast<f32>(pCharInfo->build), static_cast<f32>(pCharInfo->height));
+        headYTranslateFinal = cBodyHeadYTranslation * scaleFactors.y * cBodyScaleFactor;
+
+        position.y += headYTranslateFinal;
+
+        if (!isCameraPosAbsolute)
+            mCamera.at() = {
+                mCamera.at().x,
+                mCamera.at().y + headYTranslateFinal,
+                mCamera.at().z
+            };
+    }
 
     mCamera.pos() = position;
     mCamera.setUp(upVector);
 
     rio::Matrix34f view_mtx;
-    mCamera.getMatrix(&view_mtx);
 
     rio::Matrix34f model_mtx = rio::Matrix34f::ident;
-    //rio::Matrix34f rotationMtx;
-    model_mtx.makeR(modelRotate); // NOTE: makes the model matrix, the rotation matrix directly
 
-    //model_mtx.setMul(rio::Matrix34f::ident, rotationMtx);
+
+    rio::Matrix34f rotationMtx;
+    rotationMtx.makeR(modelRotate);
+    // apply rotation
+    model_mtx.setMul(rio::Matrix34f::ident, rotationMtx);
+
+    if (willDrawBody) {
+        rio::Matrix34f bodyHeadMatrix;
+        // apply head rotation, and translation
+        bodyHeadMatrix.makeRT(cBodyHeadRotation, { 0.0f, headYTranslateFinal, 0.0f });
+        // translate head to its location on the body
+        model_mtx.setMul(model_mtx, bodyHeadMatrix);
+    }
 
     mpModel->setMtxRT(model_mtx);
+
+    mCamera.getMatrix(&view_mtx);
 
     #ifdef RIO_NO_CLIP_CONTROL
         // render upside down so glReadPixels is right side up
@@ -1205,9 +1256,7 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
     RIO_LOG("drawOpa rendered to the buffer.\n");
 
     // draw body?
-    if (renderRequest->viewType != VIEW_TYPE_FACE_ONLY
-        && renderRequest->viewType != VIEW_TYPE_FACE_ONLY_FFLMAKEICON
-    )
+    if (willDrawBody)
     {
         FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
 
@@ -1221,7 +1270,9 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
         }
 
         //drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);
-        drawMiiBodyREAL(mpModel->getLightEnable(), &pCharModel->charInfo, model_mtx, view_mtx, *projMtx);
+        PantsColor pantsColor = static_cast<PantsColor>(renderRequest->pantsColor % PANTS_COLOR_MAX);
+        drawMiiBodyREAL(mpModel->getLightEnable(), &pCharModel->charInfo, pantsColor,
+            rotationMtx, view_mtx, *projMtx, scaleFactors);
         // restore original favorite color tho
         pCharModel->charInfo.favoriteColor = originalFavoriteColor;
     }
@@ -1321,40 +1372,43 @@ void RootTask::calc_()
     if (hasSocketRequest)
         return handleRenderRequest(buf);
 
+    if (!mpServerOnly) {
+        rio::Window::instance()->clearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        rio::Window::instance()->clearDepthStencil();
+        //rio::Window::instance()->setSwapInterval(0);  // disable v-sync
+    }
+
+    if (mpModel == nullptr)
+        return;
+
     // Distance in the XZ-plane from the center to the camera position
-    f32 radius = 600.0f;
+    f32 radius = 700.0f;
     // Define a constant position in the 3D space for the center position of the camera
-    static const rio::Vector3f CENTER_POS = { 0.0f, 34.5f, radius };
-    static const rio::Vector3f target = { 0.0f, 34.5f, 0.0f };
-    mCamera.at() = target;
-    static const rio::Vector3f cameraUp = { 0.0f, 1.0f, 0.0f };
-    mCamera.setUp(cameraUp);
+    static const rio::Vector3f CENTER_POS = { 0.0f, 90.0f, radius };
+    mCamera.at() = { 0.0f, 80.0f, 0.0f };
+    mCamera.setUp({ 0.0f, 1.0f, 0.0f });
     // Move the camera around the target clockwise
     // Define the radius of the orbit in the XZ-plane (distance from the target)
     rio::Matrix34f model_mtx = rio::Matrix34f::ident;
-    if (!mpNoSpin && !mpServerOnly && !hasSocketRequest && mpModel != nullptr) {
-        radius += 380;
-        /*mCamera.pos().set(
-            // Set the camera's position using the sin and cos functions to move it in a circle around the target
-            std::sin(mCounter) * radius,
-            CENTER_POS.y * std::sin(mCounter) * 7.5 - 30,
-            // Add a minus sign to the cosine to spin CCW (same as SpinMii)
-            std::cos(mCounter) * radius
-        );
-        */mCamera.pos() = { CENTER_POS.x, CENTER_POS.y, radius };
+    /*
+    mCamera.pos().set(
+        // Set the camera's position using the sin and cos functions to move it in a circle around the target
+        std::sin(mCounter) * radius,
+        CENTER_POS.y * std::sin(mCounter) * 7.5 - 30,
+        // Add a minus sign to the cosine to spin CCW
+        std::cos(mCounter) * radius
+    );
+    */
+    mCamera.pos() = { CENTER_POS.x, CENTER_POS.y, radius };
 
-        model_mtx.makeR({
-            0.0f,
-            mCounter,
-            0.0f
-        });
+    model_mtx.makeR({
+        0.0f,
+        mCounter,
+        0.0f
+    });
 
-        mpModel->setMtxRT(model_mtx);
+    mpModel->setMtxRT(model_mtx);
 
-        mCamera.at() = { target.x, target.y - 30, target.z };
-    } else {
-        mCamera.pos() = CENTER_POS;
-    }
     // Increment the counter to gradually change the camera's position over time
     if (!mpServerOnly) {
         mCounter += 1.f / 60;
@@ -1364,17 +1418,26 @@ void RootTask::calc_()
     rio::BaseMtx34f view_mtx;
     mCamera.getMatrix(&view_mtx);
 
-    if (!mpServerOnly) {
-        rio::Window::instance()->clearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        rio::Window::instance()->clearDepthStencil();
-        //rio::Window::instance()->setSwapInterval(0);  // disable v-sync
-    }
+    FFLiCharInfo* pCharInfo = &reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel())->charInfo;
+    const rio::Vector3f scaleFactors = calculateScaleFactors(static_cast<f32>(pCharInfo->build), static_cast<f32>(pCharInfo->height));
 
-    if (mpModel != nullptr) {
-        mpModel->drawOpa(view_mtx, mProjMtx);
-        drawMiiBodyREAL(mpModel->getLightEnable(), &reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel())->charInfo, model_mtx, view_mtx, mProjMtx);
-        mpModel->drawXlu(view_mtx, mProjMtx);
-    }
+    rio::Matrix34f bodyHeadMatrix;
+    // apply head rotation, and translation
+    bodyHeadMatrix.makeRT(cBodyHeadRotation, { 0.0f,
+        cBodyHeadYTranslation * scaleFactors.y * cBodyScaleFactor,
+    0.0f });
+
+    rio::Matrix34f rotationMtx = model_mtx;
+
+    //model_mtx.setMul(rio::Matrix34f::ident, rotationMtx);
+    model_mtx.setMul(model_mtx, bodyHeadMatrix);
+
+    mpModel->setMtxRT(model_mtx);
+
+    mpModel->drawOpa(view_mtx, *mProjMtxIconBody);
+
+    drawMiiBodyREAL(mpModel->getLightEnable(), pCharInfo, PANTS_COLOR_GRAY, rotationMtx, view_mtx, *mProjMtxIconBody, scaleFactors);
+    mpModel->drawXlu(view_mtx, *mProjMtxIconBody);
 }
 
 #ifndef NO_GLTF

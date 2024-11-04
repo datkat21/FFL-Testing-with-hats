@@ -24,7 +24,7 @@ app = Flask(__name__)
 
 # Define the RenderRequest struct
 class RenderRequest:
-    def __init__(self, data, resolution=1024, tex_resolution=1024, view_type=0, expression=0, resource_type=1, mipmap_enable=False, background_color=[1, 1, 1, 0]):
+    def __init__(self, data, resolution=1024, tex_resolution=1024, view_type=0, expression=0, resource_type=1, mipmap_enable=False, background_color=[255, 255, 255, 0]):
         self.data = bytes(data)
         self.data_length = len(data)
         self.resolution = resolution
@@ -39,7 +39,7 @@ class RenderRequest:
         self.verify_crc16 = True
         self.light_enable = True
         self.expression = expression
-        self.resource_type = 1
+        self.resource_type = resource_type % 2
         self.view_type = view_type  # (1 if is_head_only else 0)
         self.shader_type = (resource_type % 3 if resource_type > 1 else 0)
         # encode bg color to vec4
@@ -48,11 +48,12 @@ class RenderRequest:
         self.camera_rotate = [0, 0, 0]
         self.model_rotate = [0, 0, 0]
         self.clothes_color = -1
+        self.pants_color = 1  # red
         self.export_as_gltf = False
 
     def pack(self):
         return struct.pack(
-            '96sHB?HhBBBBIhhhhhhBBBBBB???bBB',
+            '96sHB?HhBBBBIhhhhhhBBBBBB???bBBB3x',
             self.data,                 # data: 96s
             self.data_length,          # dataLength: H (uint16_t)
             1 << 0,                    # modelType: B (uint8_t)
@@ -80,6 +81,7 @@ class RenderRequest:
             self.verify_crc16,         # verifyCRC16: ? (bool)
             self.light_enable,         # lightEnable: ? (bool)
             self.clothes_color,        # clothesColor: b (int8_t)
+            self.pants_color,          # pantsColor: B (uint8_t)
             0,                         # instanceCount: B (uint8_t)
             0                          # instanceRotationMode: B (uint8_t)
         )

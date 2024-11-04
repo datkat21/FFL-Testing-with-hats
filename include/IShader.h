@@ -4,6 +4,8 @@
 #include <nn/ffl.h>
 #include <nn/ffl/FFLiCharModel.h>
 
+#include <PantsColor.h>
+
 class IShader
 {
 public:
@@ -12,6 +14,7 @@ public:
     virtual void initialize() = 0;
     virtual void bind(bool light_enable, FFLiCharInfo* charInfo) = 0;
     virtual void bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo) = 0;
+    virtual void setBodyShaderPantsMaterial(PantsColor pantsColor) = 0;
     virtual void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const = 0;
     virtual void setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const = 0;
     virtual void applyAlphaTest(bool enable, rio::Graphics::CompareFunc func, f32 ref) const = 0;

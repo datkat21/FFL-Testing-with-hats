@@ -137,9 +137,9 @@ struct FFLiDefaultShaderMaterial
     s32 specularMode;
 };
 
-const int cMaterialParamSize = 11;
-#define MATERIAL_PARAM_BODY 9
-#define MATERIAL_PARAM_PANTS 10
+const int cMaterialParamSize = FFL_MODULATE_TYPE_SHAPE_MAX + 2;
+#define MATERIAL_PARAM_BODY FFL_MODULATE_TYPE_SHAPE_MAX
+#define MATERIAL_PARAM_PANTS FFL_MODULATE_TYPE_SHAPE_MAX + 1
 const FFLiDefaultShaderMaterial cMaterialParam[cMaterialParamSize] = {
     { // ShapeFaceline
         { 0.85f, 0.75f, 0.75f, 1.0f }, // ambient
@@ -248,6 +248,9 @@ Shader::Shader()
 #elif RIO_IS_WIN
     : mVBOHandle()
     , mVAOHandle()
+#endif
+#ifndef DEFAULT_SHADER_FOR_BODY
+    , mIsBodyUsingDefaultShader(false)
 #endif
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
@@ -373,8 +376,10 @@ void Shader::initialize()
 #endif
 
     mSampler.setWrap(rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR);
-    mSampler.setLOD(-1000.0f, 1000.0f, 0.0f);
-    mSampler.setFilter(rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_MIP_FILTER_MODE_NONE, rio::TEX_ANISO_1_TO_1);
+    //mSampler.setFilter(rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_MIP_FILTER_MODE_NONE, rio::TEX_ANISO_1_TO_1);
+    // NOTE: miitomo does not use mipmapping which is why above is done
+    mSampler.setFilter(rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_MIP_FILTER_MODE_LINEAR, rio::TEX_ANISO_1_TO_1);
+
 
     mCallback.pObj = this;
     mCallback.pApplyAlphaTestFunc = &Shader::applyAlphaTestCallback_;
@@ -440,9 +445,12 @@ void Shader::setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx
 }
 
 void Shader::setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const {
-    if (!mLightEnableBody)
+#ifndef DEFAULT_SHADER_FOR_BODY
+    if (mIsBodyUsingDefaultShader)
+#endif
         return setViewUniform(model_mtx, view_mtx, proj_mtx);
-
+#ifndef DEFAULT_SHADER_FOR_BODY
+    // otherwise use body shader
     mBodyShader.setUniform(proj_mtx, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_PROJ], u32(-1));
 
     rio::Matrix44f view44;
@@ -454,6 +462,7 @@ void Shader::setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::Bas
     model44.fromMatrix34(model_mtx);
 
     mBodyShader.setUniform(model44, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_WORLD], u32(-1));
+#endif
 }
 
 void Shader::applyAlphaTest(bool enable, rio::Graphics::CompareFunc func, f32 ref) const
@@ -556,64 +565,95 @@ void Shader::setMaterial_(const FFLModulateType modulateType)
 
 void Shader::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 {
+#ifndef DEFAULT_SHADER_FOR_BODY
+    mIsBodyUsingDefaultShader = false; // read by setViewUniformBody
+#endif
+
+    setCulling(FFL_CULL_MODE_BACK);
+
     // FAVORITE COLOR
     const FFLColor favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
 
+    // always use default shader for no light enable
+    if (!light_enable)
+    {
+#ifndef DEFAULT_SHADER_FOR_BODY
+        mIsBodyUsingDefaultShader = true; // read by setViewUniformBody
+#endif
+        // don't feel like implementing light_enable in the shader itself so i will just do this
+        bind(light_enable, pCharInfo);
+        setBodyMaterialDefaultShader_(favoriteColor, false);
+        return;
+    }
+
+
 #ifdef DEFAULT_SHADER_FOR_BODY
-    mLightEnableBody = false;
     bind(light_enable, pCharInfo);
+    setBodyMaterialDefaultShader_(favoriteColor, false);
+#else
+    mBodyShader.bind();
+
+    setBodyMaterialBodyShader_(favoriteColor, false);
+#endif
+}
+
+void Shader::setBodyShaderPantsMaterial(PantsColor pantsColor)
+{
+    const FFLColor& color = cPantsColors[pantsColor];
+#ifdef DEFAULT_SHADER_FOR_BODY
+    setBodyMaterialDefaultShader_(color, true);
+#else
+    setBodyMaterialBodyShader_(color, true);
+#endif
+}
+
+void Shader::setBodyMaterialDefaultShader_(const FFLColor& pColor, bool usePantsMaterial)
+{
+    FFLModulateType modulateType;
+    if (usePantsMaterial)
+        modulateType = static_cast<FFLModulateType>(MATERIAL_PARAM_PANTS);
+    else
+        modulateType = static_cast<FFLModulateType>(MATERIAL_PARAM_BODY);
     const FFLModulateParam modulateParam = {
         FFL_MODULATE_MODE_0,
-        FFL_MODULATE_TYPE_SHAPE_FOREHEAD, // doesn't even matter
-        &favoriteColor,
+        modulateType,
+        &pColor,
         nullptr, // no color G
         nullptr, // no color B
         nullptr  // no texture
     };
     setModulate_(modulateParam);
-    setMaterial_(static_cast<FFLModulateType>(MATERIAL_PARAM_BODY));
+    setMaterial_(modulateParam.type);
+    // body uses different rim color
     mShader.setUniform(getColorUniform(cRimColorBody), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
+    // found that color attribute needs to be set? idk if this works very friendly?
+#if RIO_IS_WIN
     static const u8 color[4] = { 255, 255, 0, 255 };
     RIO_GL_CALL(glVertexAttrib4Nubv(mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR], color));
-
-    return;
 #endif
+}
 
-    mLightEnableBody = light_enable; // read by setViewUniformBody
-    if (!light_enable) {
-        // don't feel like implementing light_enable in the shader itself so i will just do this
-        bind(light_enable, pCharInfo);
-        const FFLModulateParam modulateParam = {
-            FFL_MODULATE_MODE_0,
-            FFL_MODULATE_TYPE_SHAPE_FOREHEAD, // doesn't even matter
-            &favoriteColor,
-            nullptr, // no color G
-            nullptr, // no color B
-            nullptr  // no texture
-        };
-        setModulate_(modulateParam);
-        return;
-    }
-
-    mBodyShader.bind();
-
-    // set body uniforms
-
-    setCulling(FFL_CULL_MODE_BACK);
-
-    mBodyShader.setUniform(favoriteColor.r, favoriteColor.g, favoriteColor.b, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_BASE]);
-
+#ifndef DEFAULT_SHADER_FOR_BODY
+void Shader::setBodyMaterialBodyShader_(const FFLColor& pColor, bool usePantsMaterial)
+{
     mBodyShader.setUniform(cLightDir, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_LIGHT_DIR], u32(-1));
+
+
+    mBodyShader.setUniform(pColor.r, pColor.g, pColor.b, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_BASE]);
 
     mBodyShader.setUniform(3.0f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SP_POWER]);
 
     mBodyShader.setUniform(0.69804f, 0.69804f, 0.69804f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_AMBIENT]);
-    mBodyShader.setUniform(0.29804f, 0.29804f, 0.29804f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]);
+    if (usePantsMaterial)
+        mBodyShader.setUniform(0.65098f, 0.65098f, 0.65098f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]);
+    else
+        mBodyShader.setUniform(0.29804f, 0.29804f, 0.29804f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]);
 
-    mBodyShader.setUniform(0.4f, 0.4f, 0.4f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM]);
+    mBodyShader.setUniform(cRimColorBody.r, cRimColorBody.b, cRimColorBody.b, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM]);
     mBodyShader.setUniform(2.0f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM_SP_POWER]);
     mBodyShader.setUniform(0.16863f, 0.16863f, 0.16863f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SPECULAR]);
 }
+#endif
 
 void Shader::draw_(const FFLDrawParam& draw_param)
 {
@@ -716,6 +756,10 @@ void Shader::draw_(const FFLDrawParam& draw_param)
                     break;
                 }
             }
+/*
+            else if (location != -1 && type == FFL_ATTRIBUTE_BUFFER_TYPE_COLOR)
+                RIO_GL_CALL(glVertexAttrib4Nubv(location, static_cast<u8*>(ptr)));
+*/
             else if (location != -1)
                 // Disable the attribute to avoid using uninitialized data
                 RIO_GL_CALL(glDisableVertexAttribArray(location));

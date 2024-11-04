@@ -19,6 +19,7 @@ public:
     void bind(bool light_enable, FFLiCharInfo* charInfo) override;
 
     void bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo) override;
+    void setBodyShaderPantsMaterial(PantsColor pantsColor) override;
 
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
     void setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
@@ -47,6 +48,11 @@ protected:
     void setModulate_(const FFLModulateParam& modulateParam);
 
     void setMaterial_(const FFLModulateType modulateType);
+
+    void setBodyMaterialDefaultShader_(const FFLColor& pColor, bool usePantsMaterial);
+#ifndef DEFAULT_SHADER_FOR_BODY
+    void setBodyMaterialBodyShader_(const FFLColor& pColor, bool usePantsMaterial);
+#endif
 
     void draw_(const FFLDrawParam& draw_param);
     static void drawCallback_(void* p_obj, const FFLDrawParam* draw_param);
@@ -123,5 +129,7 @@ protected:
     FFLShaderCallback       mCallback;
     rio::TextureSampler2D   mSampler;
     FFLiCharInfo*           mpCharInfo;
-    bool                    mLightEnableBody; // only used for body
+#ifndef DEFAULT_SHADER_FOR_BODY
+    bool                    mIsBodyUsingDefaultShader;
+#endif
 };

@@ -37,30 +37,31 @@ var (
 
 // RenderRequest is the equivalent struct in Go for handling the render request data.
 type RenderRequest struct {
-	Data              [96]byte
-	DataLength        uint16
-	ModelFlag         uint8
-	ExportAsGLTF      bool
-	Resolution        uint16
-	TexResolution     int16
-	ViewType          uint8
-	ResourceType      uint8
-	ShaderType        uint8
-	Expression        uint8
-	ExpressionFlag    uint32   // used if there are multiple
-	CameraRotate      [3]int16
-	ModelRotate       [3]int16
-	BackgroundColor   [4]uint8
+	Data                 [96]byte
+	DataLength           uint16
+	ModelFlag            uint8
+	ExportAsGLTF         bool
+	Resolution           uint16
+	TexResolution        int16
+	ViewType             uint8
+	ResourceType         uint8
+	ShaderType           uint8
+	Expression           uint8
+	ExpressionFlag       uint32  // used if there are multiple
+	CameraRotate         [3]int16
+	ModelRotate          [3]int16
+	BackgroundColor      [4]uint8
 
-	AAMethod          uint8    // UNUSED
-	DrawStageMode     uint8
-	VerifyCharInfo    bool
-	VerifyCRC16       bool
-	LightEnable       bool
-	ClothesColor      int8     // default: -1
-	InstanceCount     uint8    // UNUSED
-	InstanceRotationMode uint8 // UNUSED
-	//_                  [1]byte // padding for alignment
+	AAMethod             uint8   // UNUSED
+	DrawStageMode        uint8
+	VerifyCharInfo       bool
+	VerifyCRC16          bool
+	LightEnable          bool
+	ClothesColor         int8    // default: -1
+	PantsColor           uint8
+	InstanceCount        uint8   // UNUSED
+	InstanceRotationMode uint8   // UNUSED
+	_                    [3]byte // padding for alignment
 	//SetLightDirection bool
 	//LightDirection    [3]int32
 }
@@ -499,6 +500,10 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if clothesColorStr == "" {
 		clothesColorStr = "-1"
 	}
+	pantsColorStr := query.Get("pantsColor")
+	if pantsColorStr == "" {
+		pantsColorStr = "red"
+	}
 
 
 	exportAsGLTF := strings.HasSuffix(r.URL.Path, ".glb")
@@ -690,6 +695,11 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		clothesColor = getClothesColorInt(clothesColorStr)
 	}
+	var pantsColor int
+	pantsColor, err = strconv.Atoi(pantsColorStr)
+	if err != nil {
+		pantsColor = getPantsColorInt(pantsColorStr)
+	}
 
 	// Parsing and validating width
 	width, err := strconv.Atoi(widthStr)
@@ -826,11 +836,12 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		/*InstanceCount:   uint8(instanceCount),
 		InstanceRotationModeIsCamera: false,
 		*/
-		DrawStageMode:   uint8(drawStageMode),
-		VerifyCharInfo:  verifyCharInfo,
-		VerifyCRC16:     verifyCRC16,
-		LightEnable:     lightEnable,
-		ClothesColor:    int8(clothesColor),
+		DrawStageMode:  uint8(drawStageMode),
+		VerifyCharInfo: verifyCharInfo,
+		VerifyCRC16:    verifyCRC16,
+		LightEnable:    lightEnable,
+		ClothesColor:   int8(clothesColor),
+		PantsColor:     uint8(pantsColor),
 	}
 
 	// Enabling mipmap if specified
@@ -1002,6 +1013,13 @@ var clothesColorMap = map[string]int{
 	"black":       11,
 }
 
+var pantsColorMap = map[string]int{
+	"gray": 0,
+	"red":  1,
+	"blue": 2,
+	"gold": 3,
+}
+
 func getExpressionInt(input string) int {
 	input = strings.ToLower(input)
 	if expression, exists := expressionMap[input]; exists {
@@ -1010,6 +1028,16 @@ func getExpressionInt(input string) int {
 	// NOTE: mii studio rejects requests if the string doesn't match ..
 	// .. perhaps we should do the same
 	return FFL_EXPRESSION_NORMAL
+}
+
+func getPantsColorInt(input string) int {
+	input = strings.ToLower(input)
+	if colorIdx, exists := pantsColorMap[input]; exists {
+		return colorIdx
+	}
+	// NOTE: mii studio rejects requests if the string doesn't match ..
+	// .. perhaps we should do the same
+	return 0
 }
 
 func getClothesColorInt(input string) int {

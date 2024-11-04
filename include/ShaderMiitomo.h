@@ -21,6 +21,7 @@ public:
     void bind(bool light_enable, FFLiCharInfo* charInfo) override;
 
     void bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo) override;
+    void setBodyShaderPantsMaterial(PantsColor pantsColor) override;
 
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
     void setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override {
@@ -110,4 +111,5 @@ private:
     bool                    mLightEnable;
     rio::TextureSampler2D   mLUTSpecSampler;
     rio::TextureSampler2D   mLUTFresSampler;
+    bool                    mIsUsingMaskShader;
 };

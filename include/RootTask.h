@@ -67,7 +67,7 @@ private:
 #endif
 
     // NOTE: bc of the amount of arguments, consider putting this in mpModel
-    void drawMiiBodyREAL(bool light_enable, FFLiCharInfo* charInfo, rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx);
+    void drawMiiBodyREAL(const bool light_enable, FFLiCharInfo* charInfo, PantsColor pantsColor, rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx, const rio::Vector3f scaleFactors);
 
 private:
     bool                mInitialized;
