@@ -17,7 +17,6 @@
 
 #include <gfx/mdl/res/rio_ModelCacher.h>
 
-#include <nn/ffl/FFLiSwapEndian.h>
 #include <nn/ffl/detail/FFLiCrc.h>
 
 #include <string>
@@ -187,7 +186,7 @@ void RootTask::prepare_()
     mInitialized = false;
 
     FFLInitDesc init_desc;
-    init_desc.fontRegion = FFL_FONT_REGION_0;
+    init_desc.fontRegion = FFL_FONT_REGION_JP_US_EU;
     init_desc._c = false;
     init_desc._10 = true;
 
@@ -477,11 +476,8 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest
             [[fallthrough]];
         case INPUT_TYPE_RFL_CHARDATA:
         {
-            // it is NOT FFLiMiiDataCore, it may be RFL tho
-            // cast to FFLiMiIDataCoreRFL to check create id
-            FFLiMiiDataCoreRFL& charDataRFLData = reinterpret_cast<FFLiMiiDataCoreRFL&>(buf->data);
             FFLiMiiDataCoreRFL charDataRFL;
-            rio::MemUtil::copy(&charDataRFL, &charDataRFLData, sizeof(FFLiMiiDataCoreRFL));
+            rio::MemUtil::copy(&charDataRFL, buf->data, sizeof(FFLiMiiDataCoreRFL));
             // look at create id to run FFLiIsNTRMiiID
             // NOTE: FFLiMiiDataCoreRFL2CharInfo is SUPPOSED to check
             // whether it is an NTR mii id or not and store
@@ -489,44 +485,10 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest
             // HOWEVER, it clears out the create ID and runs the compare anyway
             // the create id is actually not the same size either
 
-
-            // NOTE: NOT WORKING ATM
-            /*FFLCreateID* createIDRFL = reinterpret_cast<FFLCreateID*>(charDataRFL.m_CreatorID);
-
-            // test for if it is NTR data
-            bool isNTR = FFLiIsNTRMiiID(createIDRFL);
-            RIO_LOG("IS NTR??? %i\n", isNTR);
-    */
             // NOTE: NFLCharData for DS can be little endian tho!!!!!!
-
 #if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
-            // swap endian for rfl
-            static const FFLiSwapEndianDesc SWAP_ENDIAN_DESC_RFL[] = {
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 1 },  // m_Flag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 10 }, // m_Name
-                { FFLI_SWAP_ENDIAN_TYPE_U8,  1 },  // m_Height
-                { FFLI_SWAP_ENDIAN_TYPE_U8,  1 },  // m_Build
-                { FFLI_SWAP_ENDIAN_TYPE_U8,  4 },  // m_CreatorID
-                { FFLI_SWAP_ENDIAN_TYPE_U8,  4 },  // m_SystemID
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 1 },  // m_FaceFlag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 1 },  // m_HairFlag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 2 },  // m_EyebrowFlag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 2 },  // m_EyeFlag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 1 },  // m_NoseFlag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 1 },  // m_MouthFlag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 1 },  // m_GlassFlag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 1 },  // m_BeardFlag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 1 },  // m_MoleFlag
-                { FFLI_SWAP_ENDIAN_TYPE_U16, 10 } // creator name
-            };
-            FFLiSwapEndianGroup(&charDataRFL, SWAP_ENDIAN_DESC_RFL, sizeof(SWAP_ENDIAN_DESC_RFL) / sizeof(FFLiSwapEndianDesc));
-#endif
-            /*if (pCharInfo->birthPlatform != FFL_BIRTH_PLATFORM_NTR) {
-                // flip endian
-            }
-            isNTR = FFLiIsNTRMiiID(createIDRFL);
-            RIO_LOG("IS NTR (2)??? %i\n", isNTR);
-            */
+            charDataRFL.SwapEndian();
+#endif // __BYTE_ORDER__
 
             FFLiMiiDataCoreRFL2CharInfo(pCharInfo,
                 charDataRFL,
@@ -565,12 +527,19 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest
                 return FFL_RESULT_FILE_INVALID;
             [[fallthrough]];
         case INPUT_TYPE_FFL_MIIDATACORE:
-            // TODO: SWAP ENDIAN ON WII U OR HANDLE BOTH KINDS
-            FFLiMiiDataCore2CharInfo(pCharInfo,
-                reinterpret_cast<FFLiMiiDataCore&>(buf->data),
+        {
+            FFLiMiiDataCore miiDataCore;
+            rio::MemUtil::copy(&miiDataCore, buf->data, sizeof(FFLiMiiDataCore));
+            // NOTE: FFLiMiiDataOfficial from CFL/FFL databases
+            // are both in big endian, not sure how to detect that
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+            miiDataCore.SwapEndian();
+#endif // __BYTE_ORDER__
+            FFLiMiiDataCore2CharInfo(pCharInfo, miiDataCore,
             // const u16* pCreatorName, bool resetBirthday
             NULL, false);
             break;
+        }
         default: // unknown
             return FFL_RESULT_ERROR;
             break;
@@ -1258,15 +1227,13 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
     // draw body?
     if (willDrawBody)
     {
-        FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
-
-        s32 originalFavoriteColor = pCharModel->charInfo.favoriteColor;
+        FFLFavoriteColor originalFavoriteColor = pCharModel->charInfo.favoriteColor;
         if (renderRequest->clothesColor >= 0
             // verify favorite color is in range here bc it is NOT verified in drawMiiBodyREAL
             && renderRequest->clothesColor < FFL_FAVORITE_COLOR_MAX
         ) {
             // change favorite color after drawing opa
-            pCharModel->charInfo.favoriteColor = renderRequest->clothesColor;
+            pCharModel->charInfo.favoriteColor = static_cast<FFLFavoriteColor>(renderRequest->clothesColor);
         }
 
         //drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);

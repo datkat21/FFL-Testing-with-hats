@@ -44,7 +44,6 @@ FFLShaderCallback GLTFExportCallback::GetShaderCallback()
 {
     FFLShaderCallback callback;
     callback.pObj = this;
-    callback.facelineColorIsTransparent = false;
 
     callback.pApplyAlphaTestFunc = &GLTFExportCallback::ApplyAlphaTestFunc;
     callback.pDrawFunc = &GLTFExportCallback::DrawFunc;
@@ -228,16 +227,16 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
         // Handle modulate modes
         switch (meshData.modulateMode)
         {
-        case 0: // FFL_MODULATE_MODE_CONSTANT
+        case FFL_MODULATE_MODE_CONSTANT:
             break;
-        case 1: // FFL_MODULATE_MODE_TEXTURE_DIRECT
+        case FFL_MODULATE_MODE_TEXTURE_DIRECT:
 
-        // 2 is ONLY used when mask texture
-        // which this is not handling.
+        // FFL_MODULATE_MODE_RGB_LAYERED (2) is ONLY
+        // used when drawing mask, leaving it unused
 
-        case 3: // FFL_MODULATE_MODE_ALPHA
-        case 4: // FFL_MODULATE_MODE_LUMINANCE_ALPHA
-        case 5: // FFL_MODULATE_MODE_ALPHA_OPA
+        case FFL_MODULATE_MODE_ALPHA:
+        case FFL_MODULATE_MODE_LUMINANCE_ALPHA:
+        case FFL_MODULATE_MODE_ALPHA_OPA:
             meshData.texture = const_cast<rio::Texture2D*>(drawParam.modulateParam.pTexture2D);
             break;
         default:

@@ -14,7 +14,7 @@ INCLUDES := -Irio/include -Iffl/include -Iinclude $(INCLUDES)
 # FFL_NO_FS: just means that, on top of no db, we will open and provide the resource file ourselves
 
 # TODO: neeeed a good way to set debug and release!!!
-DEFS := -DRIO_DEBUG -DRIO_NO_CONTROLLERS_WIN -DFFL_NO_FS -DFFL_NO_DATABASE_FILE -DFFL_NO_MIDDLE_DB -DFFL_NO_DATABASE_RANDOM -DFFL_NO_DRAW_MASK_TWICE $(DEFS)
+DEFS := -DRIO_DEBUG -DRIO_NO_CONTROLLERS_WIN -DFFL_NO_FS -DFFL_NO_DATABASE_FILE -DFFL_NO_MIDDLE_DB -DFFL_NO_DATABASE_RANDOM -DFFL_NO_DRAW_MASK_ALPHA_VALUES $(DEFS)
 
 # Binary name which you can change if you want
 EXEC := ffl_testing_2_debug64

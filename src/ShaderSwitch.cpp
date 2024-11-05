@@ -529,9 +529,10 @@ void ShaderSwitch::initialize()
 void ShaderSwitch::setShaderCallback_()
 {
     FFLSetShaderCallback(&mCallback);
-    // HACK: have to set this AFTER FFLSetShaderCallback (initializes it to false)
+    // have to set this AFTER FFLSetShaderCallback (initializes it to false)
     // this sets the faceline color alpha to 0, which is needed by this shader
-    mCallback.facelineColorIsTransparent = true;
+    //mCallback.facelineColorIsTransparent = true;
+    // read where drawType uniform is set, this is not needed anymore
 }
 
 void ShaderSwitch::bind(bool light_enable, FFLiCharInfo* pCharInfo)
@@ -622,8 +623,8 @@ void ShaderSwitch::setConstColor_(u32 ps_loc, const FFLColor& color)
 void ShaderSwitch::setModulateMode_(FFLModulateMode mode)
 {
     // GLASS AND CAP MODULATE TYPES ARE REVERSED ON SWITCH SHADER
-    if (mode == FFL_MODULATE_MODE_4) mode = FFL_MODULATE_MODE_5;
-    else if (mode == FFL_MODULATE_MODE_5) mode = FFL_MODULATE_MODE_4;
+    if (mode == FFL_MODULATE_MODE_LUMINANCE_ALPHA) mode = FFL_MODULATE_MODE_ALPHA_OPA;
+    else if (mode == FFL_MODULATE_MODE_ALPHA_OPA) mode = FFL_MODULATE_MODE_LUMINANCE_ALPHA;
     mShader.setUniform(s32(mode), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MODULATE_TYPE]);
 }
 
@@ -640,13 +641,13 @@ void ShaderSwitch::setModulate_(const FFLModulateParam& modulateParam)
 
     switch (modulateParam.mode)
     {
-    case FFL_MODULATE_MODE_0:
-    case FFL_MODULATE_MODE_3:
-    case FFL_MODULATE_MODE_4:
-    case FFL_MODULATE_MODE_5:
+    case FFL_MODULATE_MODE_CONSTANT:
+    case FFL_MODULATE_MODE_ALPHA:
+    case FFL_MODULATE_MODE_LUMINANCE_ALPHA:
+    case FFL_MODULATE_MODE_ALPHA_OPA:
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST_COLOR1], *modulateParam.pColorR);
         break;
-    case FFL_MODULATE_MODE_2:
+    case FFL_MODULATE_MODE_RGB_LAYERED:
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST_COLOR1], *modulateParam.pColorR);
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST_COLOR2], *modulateParam.pColorG);
         mShader.setUniform(modulateParam.pColorB->r, modulateParam.pColorB->g, modulateParam.pColorB->b, 0.0f, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_CONST_COLOR3]);
@@ -752,12 +753,18 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
         case FFL_MODULATE_TYPE_SHAPE_HAIR:
             drawType = DRAW_TYPE_HAIR;
             break;
-        case FFL_MODULATE_TYPE_SHAPE_FACELINE:
+        // NOTE: the shader will take alpha into account if
+        // you set draw type uniform to this, and the faceline
+        // texture would need to be drawn with alpha, however
+        // ffl does not do this by default and as of writing
+        // i have removed the hack to do this and it seems fine
+        /*case FFL_MODULATE_TYPE_SHAPE_FACELINE:
             if (modulateParam.pTexture2D)
             {
                 drawType = DRAW_TYPE_FACELINE;
                 break;
             }
+        */
         default:
             drawType = DRAW_TYPE_NORMAL;
             break;
@@ -775,7 +782,7 @@ void ShaderSwitch::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 
     const FFLModulateType modulateType = static_cast<FFLModulateType>(20);
     const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_0,
+        FFL_MODULATE_MODE_CONSTANT,
         // CUSTOM MODULATE TYPE FOR BODY
         modulateType,
         &favoriteColor,
@@ -806,7 +813,7 @@ void ShaderSwitch::setBodyShaderPantsMaterial(PantsColor pantsColor)
 
     const FFLModulateType modulateType = static_cast<FFLModulateType>(21 + pantsIndex); // pants is 21 and 22
     const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_0,
+        FFL_MODULATE_MODE_CONSTANT,
         // CUSTOM MODULATE TYPE FOR BODY
         modulateType,
         &color,

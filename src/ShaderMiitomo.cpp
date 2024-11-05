@@ -537,13 +537,13 @@ void ShaderMiitomo::setModulate_(const FFLModulateParam& modulateParam)
 
     switch (modulateParam.mode)
     {
-    case FFL_MODULATE_MODE_0:
-    case FFL_MODULATE_MODE_3:
-    case FFL_MODULATE_MODE_4:
-    case FFL_MODULATE_MODE_5:
+    case FFL_MODULATE_MODE_CONSTANT:
+    case FFL_MODULATE_MODE_ALPHA:
+    case FFL_MODULATE_MODE_LUMINANCE_ALPHA:
+    case FFL_MODULATE_MODE_ALPHA_OPA:
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST1], multiplyColorIfNeeded(modulateParam.type, *modulateParam.pColorR));
         break;
-    case FFL_MODULATE_MODE_2:
+    case FFL_MODULATE_MODE_RGB_LAYERED:
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST1],
                        multiplyColorIfNeeded(modulateParam.type, *modulateParam.pColorR));
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST2],
@@ -611,7 +611,7 @@ void ShaderMiitomo::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 
     const FFLModulateType modulateType = static_cast<FFLModulateType>(9);
     const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_0,
+        FFL_MODULATE_MODE_CONSTANT,
         // CUSTOM MODULATE TYPE FOR setModulate
         modulateType,
         &favoriteColor,
@@ -631,7 +631,7 @@ void ShaderMiitomo::setBodyShaderPantsMaterial(PantsColor pantsColor)
 
     const FFLModulateType modulateType = static_cast<FFLModulateType>(10);
     const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_0,
+        FFL_MODULATE_MODE_CONSTANT,
         // CUSTOM MODULATE TYPE FOR setModulate
         modulateType,
         &color,

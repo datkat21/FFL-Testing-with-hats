@@ -534,13 +534,13 @@ void Shader::setModulate_(const FFLModulateParam& modulateParam)
 
     switch (modulateParam.mode)
     {
-    case FFL_MODULATE_MODE_0:
-    case FFL_MODULATE_MODE_3:
-    case FFL_MODULATE_MODE_4:
-    case FFL_MODULATE_MODE_5:
+    case FFL_MODULATE_MODE_CONSTANT:
+    case FFL_MODULATE_MODE_ALPHA:
+    case FFL_MODULATE_MODE_LUMINANCE_ALPHA:
+    case FFL_MODULATE_MODE_ALPHA_OPA:
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST1], *modulateParam.pColorR);
         break;
-    case FFL_MODULATE_MODE_2:
+    case FFL_MODULATE_MODE_RGB_LAYERED:
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST1], *modulateParam.pColorR);
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST2], *modulateParam.pColorG);
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST3], *modulateParam.pColorB);
@@ -615,7 +615,7 @@ void Shader::setBodyMaterialDefaultShader_(const FFLColor& pColor, bool usePants
     else
         modulateType = static_cast<FFLModulateType>(MATERIAL_PARAM_BODY);
     const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_0,
+        FFL_MODULATE_MODE_CONSTANT,
         modulateType,
         &pColor,
         nullptr, // no color G

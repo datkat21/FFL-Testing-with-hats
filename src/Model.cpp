@@ -148,16 +148,23 @@ void Model::drawXluNormal_()
     render_state.applyDepthAndStencilTest();
     mpShader->applyAlphaTestEnable();
 
-    // "interpolated alpha blending"
     render_state.setBlendEnable(true);
     render_state.setBlendEquation(rio::Graphics::BLEND_FUNC_ADD);
     render_state.setBlendFactorSrcRGB(rio::Graphics::BLEND_MODE_SRC_ALPHA);
     render_state.setBlendFactorDstRGB(rio::Graphics::BLEND_MODE_ONE_MINUS_SRC_ALPHA);
+    render_state.setBlendConstantColor({ 0.0f, 0.0f, 0.0f, 0.0f });
 
+    // "interpolated alpha blending" from nn::mii
+    /*
     render_state.setBlendEquationAlpha(rio::Graphics::BLEND_FUNC_MAX);
     render_state.setBlendFactorSrcAlpha(rio::Graphics::BLEND_MODE_ONE);
     render_state.setBlendFactorDstAlpha(rio::Graphics::BLEND_MODE_ONE);
-    render_state.setBlendConstantColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+    */
+    // settings for AFL and also FFL in cemu (closer)
+    render_state.setBlendEquationAlpha(rio::Graphics::BLEND_FUNC_ADD);
+    render_state.setBlendFactorSrcAlpha(rio::Graphics::BLEND_MODE_SRC_ALPHA);
+    render_state.setBlendFactorDstAlpha(rio::Graphics::BLEND_MODE_ONE);
+
     render_state.apply();
 
     FFLDrawXlu(mpCharModel);
