@@ -1,5 +1,4 @@
-#include "gpu/rio_Texture.h"
-#include "math/rio_Matrix.h"
+#include "gfx/rio_Camera.h"
 #include "nn/ffl/FFLGender.h"
 #include <nn/ffl/FFLResourceType.h>
 #include <nn/ffl/detail/FFLiCharInfo.h>
@@ -25,7 +24,7 @@
 RootTask::RootTask()
     : ITask("FFL Testing")
     , mInitialized(false)
-    // disables occasionally drawing mii and makes non blocking
+    // disables occasionally drawing mii and enables blocking
     , mpServerOnly(getenv("SERVER_ONLY"))
     , mpNoSpin(getenv("NO_SPIN"))
 {
@@ -112,13 +111,13 @@ void RootTask::setupSocket_()
     }
 #endif
 
-    #ifdef _WIN32
+#ifdef _WIN32
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
         perror("WSAStartup failed");
         exit(EXIT_FAILURE);
     }
-    #endif // ifdef _WIN32
+#endif // _WIN32
 
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
@@ -329,7 +328,7 @@ void RootTask::prepare_()
     // load (just male for now) body model
     // the male and female bodies are like identical
     // from the torso up (only perspective we use)
-#ifdef NEW_MODELS
+#ifndef USE_OLD_MODELS
     char key[] = "mii_static_bodyn0";
 #else
     char key[] = "mii_static_body0";
@@ -358,11 +357,11 @@ void RootTask::createModel_() {
     FFLCharModelSource modelSource;
 
     // default model source if there is no socket
-    #if RIO_IS_CAFE
+#if RIO_IS_CAFE
         // use mii maker database on wii u
         modelSource.dataSource = FFL_DATA_SOURCE_OFFICIAL;
         // NOTE: will only use first 6 miis from mii maker database
-    #else
+#else
     FFLiCharInfo charInfo;
     if (!mStoreDataArray.empty()) {
         // Use the custom Mii data array
@@ -389,12 +388,12 @@ void RootTask::createModel_() {
         modelSource.dataSource = FFL_DATA_SOURCE_DEFAULT;
         // guest miis are defined in FFLiDatabaseDefault.cpp
         // fetched from m_MiiDataOfficial, derived from the static array MII_DATA_CORE_RFL
-    #endif
+#endif
         modelSource.index = mMiiCounter;
         modelSource.pBuffer = NULL;
-    #if !RIO_IS_CAFE
+#if !RIO_IS_CAFE
     }
-    #endif
+#endif
 
     // limit current counter by the amount
     // of max miis (6 for default/guest miis)
@@ -674,14 +673,24 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
     const u32 height = texture->getHeight();
 #endif
     // Read the rendered data into a buffer and save it to a file
-    u32 bufferSize = rio::Texture2DUtil::calcImageSize(texture->getTextureFormat(), width, height);
+    const rio::TextureFormat textureFormat = texture->getTextureFormat();
+    u32 bufferSize = rio::Texture2DUtil::calcImageSize(textureFormat, width, height);
 
-
-
-
-
-
-
+    const u8 bitsPerPixel = rio::TextureFormatUtil::getPixelByteSize(textureFormat) * 8;
+#define TGA_HEADER_SIZE 18
+    // create tga header for this texture
+    u8 header[TGA_HEADER_SIZE]; // tga header size = 0x12
+    // set all fields to 0 initially including unused ones
+    rio::MemUtil::set(&header, 0, TGA_HEADER_SIZE);
+    header[ 2] = 2;                    // imageType, 2 = uncomp_true_color
+    header[12] = width & 0xff;         // width MSB
+    header[13] = (width >> 8) & 0xff;  // width LSB
+    header[14] = height & 0xff;        // height MSB
+    header[15] = (height >> 8) & 0xff; // height LSB
+    header[16] = bitsPerPixel;
+    header[17] = 32; // 32 = Flag that sets the image origin to the top left
+                     // nnas standard tgas set this to 8 to be upside down
+    // tga header will be written to socket at the same time pixels are reads
 
 
 
@@ -830,6 +839,7 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
     if (readBuffer) {
         // Process the data in readBuffer
         RIO_LOG("Rendered data read successfully from the buffer.\n");
+        send(new_socket, reinterpret_cast<char*>(&header), TGA_HEADER_SIZE, 0); // send tga header
         send(new_socket, reinterpret_cast<char*>(readBuffer), bufferSize, 0);
         RIO_GL_CALL(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
     } else {
@@ -845,6 +855,7 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
     //rio::MemUtil::set(readBuffer, 0xFF, bufferSize);
     // NOTE: UNTESTED
     renderBuffer.read(0, readBuffer, renderBuffer.getSize().x, renderBuffer.getSize().y, nativeFormat);
+    send(new_socket, reinterpret_cast<char*>(&header), TGA_HEADER_SIZE, 0); // send tga header
     send(new_socket, reinterpret_cast<char*>(readBuffer), bufferSize, 0);
     delete[] readBuffer;
 #endif
@@ -892,7 +903,7 @@ const rio::Vector3f calculateScaleFactors(f32 build, f32 height) {
 }
 
 static const f32 cBodyScaleFactor =
-#ifdef NEW_MODELS
+#ifndef USE_OLD_MODELS
                                     7.0f;
 #else
                                     8.715f; // thought it was 7.0?
@@ -901,14 +912,19 @@ static const f32 cBodyHeadYTranslation = (6.6766f // skl_root
                                         + 4.1f); // head
 static const rio::Vector3f cBodyHeadRotation = { (0.002f + -0.005f), 0.000005f, -0.001f }; // MiiBodyMiddle "head" rotation
 
-void RootTask::drawMiiBodyREAL(const bool light_enable, FFLiCharInfo* charInfo, PantsColor pantsColor,
-    rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx, const rio::Vector3f scaleFactors) {
+// draws mii body based on charinfo's build/height
+// shader sets favorite and pants color
+void RootTask::drawMiiBody(Model* pModel, PantsColor pantsColor,
+    rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx,
+    rio::BaseMtx44f& proj_mtx, const rio::Vector3f scaleFactors) {
+
+    const bool lightEnable = pModel->getLightEnable();
+    FFLiCharInfo* pCharInfo = pModel->getCharInfo();
 
     // SELECT BODY MODEL
-    if (charInfo->gender > FFL_GENDER_MAX - 1)
-        return;
+    RIO_ASSERT(pCharInfo->gender < FFL_GENDER_MAX);
 
-    const rio::mdl::Model* model = mpBodyModels[charInfo->gender];
+    const rio::mdl::Model* model = mpBodyModels[pCharInfo->gender];
 
     const rio::mdl::Mesh* const meshes = model->meshes();
 
@@ -918,9 +934,9 @@ void RootTask::drawMiiBodyREAL(const bool light_enable, FFLiCharInfo* charInfo, 
         const rio::mdl::Mesh& mesh = meshes[i];
 
         // BIND SHADER
-        IShader* pShader = mpModel->getShader();
-        pShader->bindBodyShader(light_enable, charInfo);
-#ifdef NEW_MODELS
+        IShader* pShader = pModel->getShader();
+        pShader->bindBodyShader(lightEnable, pCharInfo);
+#ifndef USE_OLD_MODELS
         if ((i % 2) == 1) // is it the second mesh (pants)?
             pShader->setBodyShaderPantsMaterial(pantsColor);
 #endif
@@ -933,14 +949,101 @@ void RootTask::drawMiiBodyREAL(const bool light_enable, FFLiCharInfo* charInfo, 
         // apply original model matrix (rotation)
         modelMtxBody.setMul(model_mtx, modelMtxBody);
 
-        mpModel->getShader()->setViewUniformBody(modelMtxBody, view_mtx, proj_mtx);
+        pShader->setViewUniformBody(modelMtxBody, view_mtx, proj_mtx);
 
         rio::RenderState render_state;
         render_state.setCullingMode(rio::Graphics::CULLING_MODE_BACK);
         render_state.applyCullingAndPolygonModeAndPolygonOffset();
         mesh.draw();
     }
-    //bodyShader.unload();
+}
+
+// configures camera, proj mtx, uses height from charinfo...
+// ... to handle the view type appropriately
+void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo) {
+    switch (viewType) {
+        case VIEW_TYPE_FACE_ONLY:
+            *willDrawBody = false;
+            [[fallthrough]]; // goal is actually same view as face
+                             // both cdn-mii 2.0.0 and 1.0.0 do this
+        case VIEW_TYPE_FACE:
+        {
+            // if it has body then use the matrix we just defined
+            *projMtx = *mProjMtxIconBody;
+
+            //RIO_LOG("x = %i, y = %i, z = %i\n", renderRequest->cameraRotate.x, renderRequest->cameraRotate.y, renderRequest->cameraRotate.z);
+            /*
+            rio::Vec3f fCameraPosition = {
+                fmod(static_cast<f32>(renderRequest->cameraRotate.x), 360),
+                fmod(static_cast<f32>(renderRequest->cameraRotate.y), 360),
+                fmod(static_cast<f32>(renderRequest->cameraRotate.z), 360),
+            };*/
+
+            // FFLMakeIconWithBody view uses 37.05f, 415.53f
+            // below values are extracted from wii u mii maker
+            pCamera->pos() = { 0.0f, 33.016785f, 411.181793f };
+            pCamera->at() = { 0.0f, 34.3f, 0.0f };//33.016785f, 0.0f };
+            pCamera->setUp({ 0.0f, 1.0f, 0.0f });
+            break;
+        }
+        case VIEW_TYPE_NNMII_VARIABLEICONBODY_VIEW:
+        {
+            *projMtx = *mProjMtxIconBody;
+            // nn::mii::VariableIconBody::StoreCameraMatrix values
+            pCamera->pos() = { 0.0f, 37.0f, 380.0f };
+            pCamera->at() = { 0.0f, 37.0f, 0.0f };
+            pCamera->setUp({ 0.0f, 1.0f, 0.0f });
+            break;
+        }
+        case VIEW_TYPE_ALL_BODY:
+        {
+            *projMtx = *mProjMtxIconBody;
+            *isCameraPosAbsolute = true;
+            // made to be closer to mii studio looking value but still not actually accurate
+            //pCamera->pos() = { 0.0f, 50.0f, 805.0f };
+            //pCamera->at() = { 0.0f, 98.0f, 0.0f };
+            // initial values:
+            pCamera->pos() = { 0.0f, 9.0f, 900.0f };
+            pCamera->at() = { 0.0f, 105.0f, 0.0f };
+
+            pCamera->setUp({ 0.0f, 1.0f, 0.0f });
+            break;
+        }
+        case VIEW_TYPE_ALL_BODY_SUGAR: // like mii maker/nnid
+        {
+            static const float aspect = 3.0f / 4.0f;
+            *aspectHeightFactor = 1.0f / aspect;
+            //projMtx = *mProjMtxIconBody;
+            static const rio::PerspectiveProjection projAllBodyAspect(
+                10.0f,//10.0f,
+                1000.0f,
+                rio::Mathf::deg2rad(15.0f),
+                aspect
+            );
+            static const rio::BaseMtx44f projMtxAllBodyAspect = rio::BaseMtx44f(projAllBodyAspect.getMatrix());
+            *projMtx = projMtxAllBodyAspect;
+
+            *isCameraPosAbsolute = true;
+
+            pCamera->pos() = { 0.0f, 9.0f, 900.0f };
+            pCamera->at() = { 0.0f, 105.0f, 0.0f };
+            pCamera->setUp({ 0.0f, 1.0f, 0.0f });
+            break;
+        }
+        default:
+        {
+            // default, face only (FFLMakeIcon)
+            // use default if request is head only
+            *projMtx = mProjMtx;
+            *willDrawBody = false;
+
+            pCamera->at() = { 0.0f, 34.5f, 0.0f };
+            pCamera->setUp({ 0.0f, 1.0f, 0.0f });
+
+            pCamera->pos() = { 0.0f, 34.5f, 600.0f };
+            break;
+        }
+    }
 }
 
 // Convert degrees to radians
@@ -982,7 +1085,7 @@ void RootTask::handleRenderRequest(char* buf) {
     // hopefully renderrequest is proper
     RenderRequest* renderRequest = reinterpret_cast<RenderRequest*>(buf);
 
-    if (renderRequest->exportAsGLTF) {
+    if (renderRequest->responseFormat == RESPONSE_FORMAT_GLTF_MODEL) {
 #ifndef NO_GLTF
         handleGLTFRequest(renderRequest);
 #endif
@@ -993,6 +1096,13 @@ void RootTask::handleRenderRequest(char* buf) {
     // mask ONLY - which was already initialized, so nothing else needs to happen
     if (renderRequest->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY) {
         FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
+        /* NOTE: Official FFL has the following methods:
+         * FFLiGetCharInfoFromCharModel
+         * FFLiGetFaceTextureFromCharModel
+         * FFLiGetMaskTextureFromCharModel
+         * If those were added to the decompilation
+         * they would negate the need to do this.
+         */
 
         // select mask texture for current expression
         const FFLiRenderTexture* pRenderTexture = pCharModel->maskTextures.pRenderTextures[pCharModel->expression];
@@ -1006,73 +1116,20 @@ void RootTask::handleRenderRequest(char* buf) {
         closesocket(new_socket);
         return;
     }
-    FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
 
     // use charinfo for build and height
-    FFLiCharInfo* pCharInfo = &pCharModel->charInfo;
+    FFLiCharInfo* pCharInfo = mpModel->getCharInfo();
 
     // switch between two projection matrxies
-    rio::BaseMtx44f *projMtx;
+    rio::BaseMtx44f projMtx;
+    float aspectHeightFactor = 1.0f;
     bool isCameraPosAbsolute = false; // if it should not move the camera to the head
     bool willDrawBody = true; // and if should move camera
-    switch (renderRequest->viewType) {
-        case VIEW_TYPE_FACE_ONLY:
-            willDrawBody = false;
-            [[fallthrough]]; // goal is actually same view as face
-                             // both cdn-mii 2.0.0 and 1.0.0 do this
-        case VIEW_TYPE_FACE:
-        {
-            // if it has body then use the matrix we just defined
-            projMtx = mProjMtxIconBody;
 
-            //RIO_LOG("x = %i, y = %i, z = %i\n", renderRequest->cameraRotate.x, renderRequest->cameraRotate.y, renderRequest->cameraRotate.z);
-            /*
-            rio::Vec3f fCameraPosition = {
-                fmod(static_cast<f32>(renderRequest->cameraRotate.x), 360),
-                fmod(static_cast<f32>(renderRequest->cameraRotate.y), 360),
-                fmod(static_cast<f32>(renderRequest->cameraRotate.z), 360),
-            };*/
-
-            // FFLMakeIconWithBody view uses 37.05f, 415.53f
-            // below values are extracted from wii u mii maker
-            mCamera.pos() = { 0.0f, 33.016785f, 411.181793f };
-            mCamera.at() = { 0.0f, 34.3f, 0.0f };//33.016785f, 0.0f };
-            mCamera.setUp({ 0.0f, 1.0f, 0.0f });
-            break;
-        }
-        case VIEW_TYPE_NNMII_VARIABLEICONBODY_VIEW:
-        {
-            projMtx = mProjMtxIconBody;
-            // nn::mii::VariableIconBody::StoreCameraMatrix values
-            mCamera.pos() = { 0.0f, 37.0f, 380.0f };
-            mCamera.at() = { 0.0f, 37.0f, 0.0f };
-            mCamera.setUp({ 0.0f, 1.0f, 0.0f });
-            break;
-        }
-        case VIEW_TYPE_ALL_BODY:
-        {
-            projMtx = mProjMtxIconBody;
-            // NOTE: NOTE: TODO: NOT ACCURATE TO ANYTHING JUST GUESSING
-            mCamera.pos() = { 0.0f, 9.0f, 900.0f };
-            mCamera.at() = { 0.0f, 6.0f, 0.0f };
-            mCamera.setUp({ 0.0f, 1.0f, 0.0f });
-            break;
-        }
-        default:
-        {
-            // default, face only (FFLMakeIcon)
-            // use default if request is head only
-            projMtx = &mProjMtx;
-            willDrawBody = false;
-
-            mCamera.at() = { 0.0f, 34.5f, 0.0f };
-            mCamera.setUp({ 0.0f, 1.0f, 0.0f });
-
-            mCamera.pos() = { 0.0f, 34.5f, 600.0f };
-            break;
-        }
-    }
-
+    const ViewType viewType = static_cast<ViewType>(renderRequest->viewType);
+    setViewTypeParams(viewType, &mCamera,
+                      &projMtx,&aspectHeightFactor,
+                      &isCameraPosAbsolute, &willDrawBody, pCharInfo);
 
     // Update camera position
     const rio::Vector3f cameraPosInitial = mCamera.pos();
@@ -1148,14 +1205,25 @@ void RootTask::handleRenderRequest(char* buf) {
 #else
     1;
 #endif
-    int width = static_cast<int>(renderRequest->resolution) * ssaaFactor;
-    int height = static_cast<int>(renderRequest->resolution) * ssaaFactor;
+    const int iResolution = static_cast<int>(renderRequest->resolution);
+    const int width = iResolution * ssaaFactor;
+    // TODO: may need to round to nearest multiple of twwooooo????
+    const int height = (iResolution * aspectHeightFactor) * ssaaFactor;
 
     renderBuffer.setSize(width, height);
     RIO_LOG("Render buffer created with size: %dx%d\n", renderBuffer.getSize().x, renderBuffer.getSize().y);
 
     //rio::Window::instance()->getNativeWindow()->getColorBufferTextureFormat();
-    rio::Texture2D renderTextureColor(rio::TEXTURE_FORMAT_R8_G8_B8_A8_UNORM, renderBuffer.getSize().x, renderBuffer.getSize().y, 1);
+    rio::TextureFormat textureFormat = rio::TEXTURE_FORMAT_R8_G8_B8_A8_UNORM;
+#if RIO_IS_WIN && defined(TRY_BGRA_RENDERBUFFER_FORMAT)
+    // ig this works on opengl and is the teeniest tiniest bit more efficient
+    // however golang does not support this and png, jpeg, webp aren't using this anyway so
+    textureFormat = rio::TEXTURE_FORMAT_B8_G8_R8_A8_UNORM;
+#elif RIO_IS_WIN
+    if (renderRequest->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y)
+        textureFormat = rio::TEXTURE_FORMAT_B8_G8_R8_A8_UNORM;
+#endif
+    rio::Texture2D renderTextureColor(textureFormat, renderBuffer.getSize().x, renderBuffer.getSize().y, 1);
     rio::RenderTargetColor renderTargetColor;
     renderTargetColor.linkTexture2D(renderTextureColor);
     renderBuffer.setRenderTargetColor(&renderTargetColor);
@@ -1166,25 +1234,7 @@ void RootTask::handleRenderRequest(char* buf) {
 
     renderBuffer.setRenderTargetDepth(&renderTargetDepth);
 
-/*
-// Create multisampled framebuffer for head rendering
-GLuint msaaFBO, msaaColorRBO, msaaDepthRBO;
-GLsizei samples = 4; // You can adjust this value
 
-RIO_GL_CALL(glGenFramebuffers(1, &msaaFBO));
-RIO_GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, msaaFBO));
-
-RIO_GL_CALL(glGenRenderbuffers(1, &msaaColorRBO));,
-RIO_GL_CALL(glBindRenderbuffer(GL_RENDERBUFFER, msaaColorRBO));
-RIO_GL_CALL(glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, renderBuffer.getSize().x, renderBuffer.getSize().y));
-RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, msaaColorRBO));
-
-RIO_GL_CALL(glGenRenderbuffers(1, &msaaDepthRBO));
-RIO_GL_CALL(glBindRenderbuffer(GL_RENDERBUFFER, msaaDepthRBO));
-RIO_GL_CALL(glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH_COMPONENT32F, renderBuffer.getSize().x, renderBuffer.getSize().y));
-RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, msaaDepthRBO));
-
-*/
     //const rio::Color4f clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
     // NOTE: this calls glViewport
     // make background color float from RGBA bytes
@@ -1198,16 +1248,7 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
 
     // Bind the render buffer
     renderBuffer.bind();
-/*        RIO_GL_CALL(glViewport(0, 0, renderRequest->resolution, renderRequest->resolution));
 
-    // Bind MSAA framebuffer
-    //RIO_GL_CALL(glViewport(0, 0, renderRequest->resolution, renderRequest->resolution));
-    glBindFramebuffer(GL_FRAMEBUFFER, msaaFBO);
-
-    // Clear the buffer
-    glClearColor(renderRequest->backgroundColor.r, renderRequest->backgroundColor.g, renderRequest->backgroundColor.b, renderRequest->backgroundColor.a);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-*/
     RIO_LOG("Render buffer bound.\n");
 
     //if (gl_FragCoord.z > 0.98593) discard;
@@ -1221,27 +1262,27 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
 
     // Render the first frame to the buffer
     if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_OPA_ONLY)
-        mpModel->drawOpa(view_mtx, *projMtx);
+        mpModel->drawOpa(view_mtx, projMtx);
     RIO_LOG("drawOpa rendered to the buffer.\n");
 
     // draw body?
     if (willDrawBody)
     {
-        FFLFavoriteColor originalFavoriteColor = pCharModel->charInfo.favoriteColor;
+        FFLFavoriteColor originalFavoriteColor = pCharInfo->favoriteColor;
         if (renderRequest->clothesColor >= 0
             // verify favorite color is in range here bc it is NOT verified in drawMiiBodyREAL
             && renderRequest->clothesColor < FFL_FAVORITE_COLOR_MAX
         ) {
             // change favorite color after drawing opa
-            pCharModel->charInfo.favoriteColor = static_cast<FFLFavoriteColor>(renderRequest->clothesColor);
+            pCharInfo->favoriteColor = static_cast<FFLFavoriteColor>(renderRequest->clothesColor);
         }
 
         //drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);
         PantsColor pantsColor = static_cast<PantsColor>(renderRequest->pantsColor % PANTS_COLOR_MAX);
-        drawMiiBodyREAL(mpModel->getLightEnable(), &pCharModel->charInfo, pantsColor,
-            rotationMtx, view_mtx, *projMtx, scaleFactors);
+        drawMiiBody(mpModel, pantsColor, rotationMtx,
+                    view_mtx, projMtx, scaleFactors);
         // restore original favorite color tho
-        pCharModel->charInfo.favoriteColor = originalFavoriteColor;
+        pCharInfo->favoriteColor = originalFavoriteColor;
     }
 
     renderBuffer.bind();
@@ -1249,7 +1290,7 @@ RIO_GL_CALL(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RE
     // draw xlu mask only after body is drawn
     // in case there are elements of the mask that go in the body region
     if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_XLU_ONLY)
-        mpModel->drawXlu(view_mtx, *projMtx);
+        mpModel->drawXlu(view_mtx, projMtx);
     RIO_LOG("drawXlu rendered to the buffer.\n");
 
 
@@ -1298,7 +1339,7 @@ void RootTask::calc_()
     if (!mInitialized)
         return;
 
-    #if RIO_IS_WIN
+#if RIO_IS_WIN
     char buf[RENDERREQUEST_SIZE];
 
     bool hasSocketRequest = false;
@@ -1325,15 +1366,15 @@ void RootTask::calc_()
     } else {
         // otherwise just fall through and use default
         // when mii is directly in front of the camera
-    #endif // RIO_IS_WIN
+#endif // RIO_IS_WIN
         if (!mpServerOnly && mCounter >= rio::Mathf::pi2())
         {
             delete mpModel;
             createModel_();
         }
-    #if RIO_IS_WIN
+#if RIO_IS_WIN
     }
-    #endif
+#endif
 
 
     if (hasSocketRequest)
@@ -1403,7 +1444,8 @@ void RootTask::calc_()
 
     mpModel->drawOpa(view_mtx, *mProjMtxIconBody);
 
-    drawMiiBodyREAL(mpModel->getLightEnable(), pCharInfo, PANTS_COLOR_GRAY, rotationMtx, view_mtx, *mProjMtxIconBody, scaleFactors);
+    drawMiiBody(mpModel, PANTS_COLOR_GRAY, rotationMtx,
+                view_mtx,* mProjMtxIconBody, scaleFactors);
     mpModel->drawXlu(view_mtx, *mProjMtxIconBody);
 }
 

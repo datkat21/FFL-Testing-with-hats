@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/base64"
@@ -21,8 +22,8 @@ import (
 	// ApproxBiLinear for CPU SSAA
 	"golang.org/x/image/draw"
 
-	"image/color"
 	"errors"
+	"image/color"
 	"syscall"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -40,7 +41,7 @@ type RenderRequest struct {
 	Data                 [96]byte
 	DataLength           uint16
 	ModelFlag            uint8
-	ExportAsGLTF         bool
+	ResponseFormat       uint8   // rgba, gltf, tga
 	Resolution           uint16
 	TexResolution        int16
 	ViewType             uint8
@@ -66,24 +67,54 @@ type RenderRequest struct {
 	//LightDirection    [3]int32
 }
 
-var viewTypes = map[string]int {
+// TGAHeader is put in front of render responses.
+// It indicates the width, height, and BPP of the render.
+// Note that while TGAs are supposed to represent BGRA...
+// ... currently the server outputs RGBA. But this could
+// be changed in the future to directly output compliant
+// TGA if needed. Otherwise most of this is still unused
+type TGAHeader struct {
+	IDLength        uint8 // unused (0)
+	ColorMapType    uint8 // always 0 for no color map
+	ImageType       uint8 // image_type_enum, 2 = uncomp_true_color
+	ColorMapOrigin  int16 // unused
+	ColorMapLength  int16 // unused (0)
+	ColorMapDepth   uint8 // unused
+	OriginX         int16 // unused (0)
+	OriginY         int16 // unused (0)
+	Width           int16 // Width of the image in pixels
+	Height          int16 // Height of the image in pixels
+	BitsPerPixel    uint8 // Number of bits per pixel
+	ImageDescriptor uint8 // ???
+}
+
+// GLBHeader represents a binary glTF header and it
+// is used to return the size of a glTF before it is fully read.
+type GLBHeader struct {
+	Magic   uint32 // we do not actually care about these
+	Version uint32
+	Length  uint32
+}
+
+var viewTypes = map[string]int{
 	"face":             0,
 	"face_only":        1,
 	"all_body":         2,
 	"fflmakeicon":      3,
 	"variableiconbody": 4,
+	"all_body_sugar":   5,
 }
 
-var modelTypes = map[string]int {
+var modelTypes = map[string]int{
 	"normal":    0,
 	"hat":       1,
 	"face_only": 2,
 }
 
-var drawStageModes = map[string]int {
-	"all":      0,
-	"opa_only": 1,
-	"xlu_only": 2,
+var drawStageModes = map[string]int{
+	"all":       0,
+	"opa_only":  1,
+	"xlu_only":  2,
 	"mask_only": 3,
 }
 
@@ -93,39 +124,85 @@ func isConnectionRefused(err error) bool {
 		errors.Is(err, syscall.Errno(10061))
 }
 
-func sayHello(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotFound)
-	fmt.Fprintln(w, "you are probably looking for /miis/image.png")
-}
-
 func main() {
 	// Command-line arguments
-	host := flag.String("host", "0.0.0.0", "Host for the web server")
-	port := flag.Int("port", 5000, "Port for the web server")
-	mysqlConnStr := flag.String("mysql", "", "MySQL connection string")
-	upstreamAddr := flag.String("upstream", "localhost:12346", "Upstream TCP server address")
+	var host, unixSocket, certFile, keyFile, assetsDir, mysqlConnStr, upstreamAddr string
+	flag.StringVar(&host, "host", ":5000", "hostname to listen to http on, OR https if you specify cert and key")
+	flag.StringVar(&unixSocket, "unix-socket", "", "unix socket to listen on, overrides host")
+	flag.StringVar(&certFile, "cert", "", "TLS certificate file")
+	flag.StringVar(&keyFile, "key", "", "TLS key file")
+
+	flag.StringVar(&assetsDir, "assets-dir", "", "If you set this, files from here will be served at root.")
+
+	flag.StringVar(&mysqlConnStr, "mysql", "", "MySQL connection string for NNID fetch")
+	flag.StringVar(&upstreamAddr, "upstream", "localhost:12346", "Upstream TCP server address")
 	flag.BoolVar(&useXForwardedFor, "use-x-forwarded-for", false, "Use X-Forwarded-For header for client IP")
 
 	flag.Parse()
 
-	if *mysqlConnStr != "" {
+	if mysqlConnStr != "" {
 		var err error
-		db, err = sql.Open("mysql", *mysqlConnStr)
+		db, err = sql.Open("mysql", mysqlConnStr)
 		if err != nil {
 			log.Fatalf("Failed to connect to MySQL: %v", err)
 		}
 		mysqlAvailable = true
 	}
 
-	upstreamTCP = *upstreamAddr
+	upstreamTCP = upstreamAddr
 
-	http.HandleFunc("/", sayHello)
-	http.HandleFunc("/miis/image.png", renderImage)
+	imagePngEndpoint := "/miis/image.png"
+
+	if assetsDir != "" {
+		http.Handle("/", http.FileServer(http.Dir(assetsDir)))
+	} else {
+		// handler that just tells you where the real endpoint is
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintln(w, "you are probably looking for "+imagePngEndpoint)
+		})
+	}
+
+	http.HandleFunc(imagePngEndpoint, renderImage)
 	http.HandleFunc("/miis/image.glb", renderImage)
+	http.HandleFunc("/miis/image.tga", renderImage)
 
-	address := fmt.Sprintf("%s:%d", *host, *port)
-	fmt.Printf("Starting server at %s\n", address)
-	log.Fatal(http.ListenAndServe(address, logRequest(http.DefaultServeMux)))
+	var err error
+
+	var udsListener *net.Listener
+	if unixSocket != "" {
+		os.Remove(unixSocket)
+		var udsListenerNew net.Listener
+		udsListenerNew, err = net.Listen("unix", unixSocket)
+		if err != nil {
+			log.Fatalln("cannot listen on unix socket:", err)
+		}
+		udsListener = &udsListenerNew
+		defer (*udsListener).Close()
+		os.Chmod(unixSocket, 0666)
+		log.Println("listening on unix socket path:", unixSocket)
+	} else {
+		log.Println("now listening on", host)
+	}
+
+	if certFile != "" && keyFile != "" {
+		if udsListener != nil {
+			// listen on unix socket
+			err = http.ServeTLS(*udsListener, nil, certFile, keyFile)
+		} else {
+			err = http.ListenAndServeTLS(host, certFile, keyFile, nil)
+		}
+	} else {
+		// no handler because we defined HandleFunc
+		if udsListener != nil {
+			// listen on unix socket
+			err = http.Serve(*udsListener, nil)
+		} else {
+			err = http.ListenAndServe(host, nil)
+		}
+	}
+	// this will only be reached when either function returns
+	log.Fatalln(err)
 }
 
 // BEGIN ACCESS LOG SECTION
@@ -334,8 +411,6 @@ func normalizeNnid(nnid string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(nnid, "-", ""), "_", ""), ".", ""))
 }
 
-
-
 // decodeBase64 decodes a Base64 string, handling both standard and URL-safe Base64.
 func decodeBase64(s string) ([]byte, error) {
 	// Normalize URL-safe Base64 by replacing '-' with '+' and '_' with '/'
@@ -363,94 +438,85 @@ func isHex(s string) bool {
 // is always read out to the api response
 const socketErrorPrefix = "ERROR: "
 
-// sendRenderRequest sends the render request to the render server and receives the buffer data
-func sendRenderRequest(request RenderRequest) ([]byte, error) {
+// sendRenderRequest sends the render request to the render server
+// It returns the first KB and a reader for the data.
+func sendRenderRequest(request RenderRequest) ([]byte, io.Reader, error) {
+	// Serialize the RenderRequest struct
 	var buffer bytes.Buffer
-	// Writing the struct to the buffer
 	err := binary.Write(&buffer, binary.LittleEndian, request)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// Connecting to the render server
+	// Connect to the render server
 	conn, err := net.Dial("tcp", upstreamTCP)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	defer conn.Close()
 
-	// Sending the request
+	// Send the render request
 	_, err = conn.Write(buffer.Bytes())
 	if err != nil {
-		return nil, err
+		conn.Close()
+		return nil, nil, err
 	}
 
-	// Calculating the expected buffer size
-	// NOTE: since request.Resolution is a uint16, it
-	// needs to be converted before multiplying it
-	// or else it will not exceed 65535 which will not work
-	bufferSize := int(request.Resolution) * int(request.Resolution) * 4
-	receivedData := make([]byte, bufferSize)
-	_, err = io.ReadFull(conn, receivedData)
-	if err != nil {
-		return receivedData, err
-	}
-
-	return receivedData, nil
-}
-
-// streamRenderRequest streams the render request to the render server and directly writes the TCP response to the http writer
-func streamRenderRequest(w http.ResponseWriter, request RenderRequest, outFileName string) ([]byte, error) {
-	// Create a buffer to serialize the request
-	var buffer bytes.Buffer
-
-	// Writing the struct to the buffer
-	err := binary.Write(&buffer, binary.LittleEndian, request)
-	if err != nil {
-		return nil, err
-	}
-
-	// Connect to the render server via TCP
-	conn, err := net.Dial("tcp", upstreamTCP)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	// Send the request over the TCP connection
-	_, err = conn.Write(buffer.Bytes())
-	if err != nil {
-		return nil, err
-	}
-
-	// Buffer the first KB of the response (initialBufferSize)
+	// Buffer the first KB of the response
+	// The caller will use this to parse a header or error
 	initialBuffer := make([]byte, 1024)
-	n, err := io.ReadFull(conn, initialBuffer)
+	_, err = io.ReadFull(conn, initialBuffer)
 	if err != nil {
-		/*if err == io.EOF {
-			return fmt.Errorf("connection closed prematurely after reading %d bytes", n)
-		}*/
-		return initialBuffer, err
+		conn.Close()
+		return initialBuffer, nil, err
 	}
 
-	// now set header
-	w.Header().Add("Content-Disposition", "attachment; filename=" + outFileName)
-
-	// Write the buffered data to the HTTP response
-	_, err = w.Write(initialBuffer[:n])
-	if err != nil {
-		return initialBuffer, err
-	}
-
-	// Stream the rest of the data directly to the HTTP response without buffering
-	_, err = io.Copy(w, conn)
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, nil
+	return initialBuffer, conn, nil
 }
 
+// handleRenderRequestError sends a response for an error from the renderer backend.
+func handleRenderRequestError(w http.ResponseWriter, bufferData []byte, err error) {
+	/*
+		isIncompleteData := err.Error() == "EOF"
+		var opError *net.OpError
+		var syscallError *os.SyscallError
+		if errors.As(err, &opError) && errors.As(err, &syscallError) {
+			if syscallError.Err == syscall.ECONNRESET ||
+				// WSAECONNREFUSED on windows
+				syscallError.Err == syscall.Errno(10061) {
+					isIncompleteData = true
+				}
+		}
+	*/
+	// Handling incomplete data response
+	if err.Error() == "EOF" ||
+		err.Error() == "unexpected EOF" || // from io.ReadFull
+		errors.Is(err, syscall.ECONNRESET) {
+		// if it begins with the prefix
+		responseStr := string(bufferData)
+		// Find the first occurrence of the null character (0 byte)
+		if nullIndex := strings.Index(responseStr, string(byte(0))); nullIndex != -1 {
+			// If the null character exists, slice the string until that point
+			responseStr = responseStr[:nullIndex]
+		}
+		if strings.HasPrefix(responseStr, socketErrorPrefix) {
+			// in this case, respond with that error
+			http.Error(w, "renderer returned "+responseStr, http.StatusInternalServerError)
+			return
+		}
+
+		http.Error(w, `incomplete data from backend :( render probably failed for one of the following reasons:
+* FFLInitCharModelCPUStep failed: internal error or use of out-of-bounds parts
+* FFLiVerifyCharInfoWithReason failed: mii data/CharInfo is invalid`, http.StatusInternalServerError)
+		return
+		// handle connection refused/backend down
+	} else if isConnectionRefused(err) {
+		msg := "OH NO!!! the site is up, but the renderer backend is down..."
+		msg += "\nerror detail: " + err.Error()
+		http.Error(w, msg, http.StatusInternalServerError)
+		return
+	}
+	http.Error(w, "incomplete response from backend, error is: "+err.Error(), http.StatusInternalServerError)
+}
 
 // ssaaFactor controls the resolution and scale multiplier.
 //const ssaaFactor = 2
@@ -505,8 +571,12 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		pantsColorStr = "red"
 	}
 
-
-	exportAsGLTF := strings.HasSuffix(r.URL.Path, ".glb")
+	var responseFormat uint8 = 0
+	if strings.HasSuffix(r.URL.Path, ".glb") {
+		responseFormat = 1 // output is gltf
+	} else if strings.HasSuffix(r.URL.Path, ".tga") {
+		responseFormat = 2 // flips Y, emits BGRA
+	}
 
 	var storeData []byte
 	var err error
@@ -609,11 +679,11 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	/*
-	modelType, err := strconv.Atoi(modelTypeStr)
-	if err != nil || modelType > 2 {
-		http.Error(w, "modelType must be 0-2", http.StatusBadRequest)
-		return
-	}
+		modelType, err := strconv.Atoi(modelTypeStr)
+		if err != nil || modelType > 2 {
+			http.Error(w, "modelType must be 0-2", http.StatusBadRequest)
+			return
+		}
 	*/
 	flattenNose := query.Get("flattenNose") != ""
 
@@ -632,8 +702,8 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// NOTE: WHAT SHOULD BOOLS LOOK LIKE...???
-	mipmapEnable := query.Get("mipmapEnable") != "" // is present?
-	lightEnable := query.Get("lightEnable") != "0" // 0 = no lighting
+	mipmapEnable := query.Get("mipmapEnable") != ""      // is present?
+	lightEnable := query.Get("lightEnable") != "0"       // 0 = no lighting
 	verifyCharInfo := query.Get("verifyCharInfo") != "0" // verify default
 
 	// Parsing and validating resource type
@@ -672,7 +742,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	var expressionFlag uint32 = 0
 	// check for multiple expressions
 	// (only applies for glTF!!!!!!!)
-	if exportAsGLTF && query.Has("expression") && len(query["expression"]) > 1 {
+	if responseFormat == 1 && query.Has("expression") && len(query["expression"]) > 1 {
 		expressions := query["expression"]
 
 		// Multiple expressions provided, compose the expression flag
@@ -707,10 +777,12 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "width = resolution, int, no limit on this lmao,", http.StatusBadRequest)
 		return
 	}
-	if width > 4096 {
-		http.Error(w, "ok bro i set the limit to 4K", http.StatusBadRequest)
-		return
-	}
+	/*
+		if width > 4096 {
+			http.Error(w, "ok bro i set the limit to 4K", http.StatusBadRequest)
+			return
+		}
+	*/
 
 	// Parsing and validating texture resolution
 	texResolution, err := strconv.Atoi(texResolutionStr)
@@ -720,17 +792,18 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// NOTE: excessive high texture resolutions crash (assert fail) the renderer
-	if texResolution > 6000 {
-		http.Error(w, "you cannot make texture resolution this high it will make your balls explode", http.StatusBadRequest)
-		return
-	}
+	/*
+		if texResolution > 6000 {
+			http.Error(w, "you cannot make texture resolution this high it will make your balls explode", http.StatusBadRequest)
+			return
+		}
+	*/
 
 	ssaaFactor, err := strconv.Atoi(ssaaFactorStr)
 	if err != nil || ssaaFactor > 2 {
 		http.Error(w, "scale must be a number less than 2", http.StatusBadRequest)
 		return
 	}
-
 
 	cameraRotateVec3i := [3]int16{0, 0, 0}
 
@@ -806,7 +879,6 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 	bgColor4u8 := [4]uint8{bgColor.R, bgColor.G, bgColor.B, bgColor.A}
 
-
 	/*shaderType := 0
 	if resourceType > 1 {
 		shaderType = 1
@@ -822,7 +894,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		Data:            [96]byte{},
 		DataLength:      uint16(len(storeData)),
 		ModelFlag:       uint8(modelFlag),
-		ExportAsGLTF:    exportAsGLTF,
+		ResponseFormat:  responseFormat,
 		Resolution:      uint16(width),
 		TexResolution:   int16(texResolution),
 		ViewType:        uint8(viewType),
@@ -846,18 +918,37 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 	// Enabling mipmap if specified
 	if mipmapEnable {
-		renderRequest.TexResolution *= -1
+		renderRequest.TexResolution *= -1 // negative value means mipmap enabled
 	}
 
 	// Copying store data into the request data buffer
 	copy(renderRequest.Data[:], storeData)
 
-	requestResolutionX := int(renderRequest.Resolution)
-	requestResolutionY := int(renderRequest.Resolution)
 
 	var bufferData []byte
-	// Sending the render request and receiving buffer data
-	if exportAsGLTF {
+	var reader io.Reader
+	// Send the render request and receive the initial buffer and reader
+	bufferData, reader, err = sendRenderRequest(renderRequest)
+	if err != nil {
+		handleRenderRequestError(w, bufferData, err)
+		return
+	}
+	fullReader := bufio.NewReader(io.MultiReader(bytes.NewReader(bufferData), reader)) // use bufio to allow discard
+
+	header := w.Header()
+	if responseFormat == 1 { // gltf
+		// Read size from GLB header
+		var glbHeader GLBHeader
+		if err := binary.Read(bytes.NewReader(bufferData), binary.LittleEndian, &glbHeader); err != nil {
+			http.Error(w, "failed to parse glb header from backend for some reason: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// all we care about is the length
+		glbSize := strconv.Itoa(int(glbHeader.Length))
+		// set content-length from it
+		header.Set("Content-Length", glbSize)
+
+		// now set filename
 		filename := time.Now().Format("2006-01-02_15-04-05-")
 		if nnid != "" {
 			filename += nnid
@@ -865,71 +956,50 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 			filename += "mii-data"
 		}
 		filename += ".glb"
-		bufferData, err = streamRenderRequest(w, renderRequest, filename)
+		header.Add("Content-Disposition", "attachment; filename="+filename)
+
+		// Stream the data directly to the HTTP response without buffering
+		_, err = io.Copy(w, fullReader)
+		if err != nil {
+			handleRenderRequestError(w, bufferData, err)
+			return
+		}
+
+		return // done copying the gltf response
 	} else {
-		bufferData, err = sendRenderRequest(renderRequest)
 	}
-	if err != nil {
-		/*
-		isIncompleteData := err.Error() == "EOF"
-		var opError *net.OpError
-		var syscallError *os.SyscallError
-		if errors.As(err, &opError) && errors.As(err, &syscallError) {
-			if syscallError.Err == syscall.ECONNRESET ||
-				// WSAECONNREFUSED on windows
-				syscallError.Err == syscall.Errno(10061) {
-					isIncompleteData = true
-				}
-		}
-		*/
-		// Handling incomplete data response
-		if err.Error() == "EOF" ||
-		err.Error() == "unexpected EOF" || // from io.ReadFull
-		errors.Is(err, syscall.ECONNRESET) {
-			// if it begins with the prefix
-			responseStr := string(bufferData)
-			// Find the first occurrence of the null character (0 byte)
-			if nullIndex := strings.Index(responseStr, string(byte(0))); nullIndex != -1 {
-				// If the null character exists, slice the string until that point
-				responseStr = responseStr[:nullIndex]
-			}
-			if strings.HasPrefix(responseStr, socketErrorPrefix) {
-				// in this case, respond with that error
-				http.Error(w, "renderer returned " + responseStr, http.StatusInternalServerError)
-				return
-			}
 
-			http.Error(w, `incomplete data from backend :( render probably failed for one of the following reasons:
-* FFLInitCharModelCPUStep failed: internal error or use of out-of-bounds parts
-* FFLiVerifyCharInfoWithReason failed: mii data/CharInfo is invalid`, http.StatusInternalServerError)
-			return
-		// handle connection refused/backend down
-		} else if isConnectionRefused(err) {
-			msg := "OH NO!!! the site is up, but the renderer backend is down..."
-			msg += "\nerror detail: " + err.Error()
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
-		http.Error(w, "incomplete response from backend, error is: "+err.Error(), http.StatusInternalServerError)
+	// If no error, interpret initial buffer as TGA header
+	var tgaHeader TGAHeader
+	if err := binary.Read(bytes.NewReader(bufferData), binary.LittleEndian, &tgaHeader); err != nil {
+		http.Error(w, "failed to parse tga header from backend for some reason: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fullReader.Discard(18) // tga header length, move past the tga reader
+
+	bytesPerPixel := int(tgaHeader.BitsPerPixel) / 8
+	imageDataSize := int(tgaHeader.Width) * int(tgaHeader.Height) * bytesPerPixel
+
+	imageData := make([]byte, imageDataSize)
+	if _, err := io.ReadFull(fullReader, imageData); err != nil {
+		handleRenderRequestError(w, bufferData, err)
 		return
 	}
 
-	if exportAsGLTF {
-		return
-	}
-
-	// Creating an image directly using the buffer
+	// Create an image directly using the read data
 	img := &image.NRGBA{
-		Pix:    bufferData,
-		Stride: requestResolutionX * 4,
-		Rect:   image.Rect(0, 0, requestResolutionX, requestResolutionY),
+		Pix:    imageData,
+		// NOTE: ig this assumes it could be not rgba
+		// but we are... composing rgba
+		Stride: int(tgaHeader.Width) * bytesPerPixel,
+		Rect:   image.Rect(0, 0, int(tgaHeader.Width), int(tgaHeader.Height)),
 	}
 
 	if ssaaFactor != 1 {
 		// Scale down image by the ssaaFactor
-		requestResolutionX /= ssaaFactor
-		requestResolutionY /= ssaaFactor
-		scaledImg := image.NewNRGBA(image.Rect(0, 0, requestResolutionX, requestResolutionY))
+		width := int(tgaHeader.Width) / ssaaFactor
+		height := int(tgaHeader.Height) / ssaaFactor
+		scaledImg := image.NewNRGBA(image.Rect(0, 0, width, height))
 		// Use draw.ApproxBiLinear method
 		// TODO: try better scaling but this is already pretty fast
 		draw.ApproxBiLinear.Scale(scaledImg, scaledImg.Bounds(), img, img.Bounds(), draw.Over, nil)
@@ -937,8 +1007,36 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		img = scaledImg
 	}
 
+	if responseFormat == 2 { // tga
+		// change tga header to reflect img
+		tgaHeader.Width = int16(img.Rect.Dx())
+		tgaHeader.Height = int16(img.Rect.Dy())
+		tgaHeader.BitsPerPixel = 32 // NRGBA
+
+		// size is deterministic so set it
+		imageDataSize := int(img.Rect.Dx()) * int(img.Rect.Dy()) * 4 // NRGBA
+		size := imageDataSize + 18 // tga header size
+		header.Set("Content-Length", strconv.Itoa(size))
+		header.Set("Content-Type", "image/tga")
+
+		if err := binary.Write(w, binary.LittleEndian, &tgaHeader); err != nil {
+			http.Error(w, "failed to write out tga header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		pixReader := bytes.NewReader(img.Pix)
+		_, err = io.Copy(w, pixReader)
+		if err != nil {
+			http.Error(w, "failed to write out tga data: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		return // done copying the tga response
+	}
+	// otherwise encode as png
+
 	// Sending the image as a PNG response
-	w.Header().Set("Content-Type", "image/png")
+	header.Set("Content-Type", "image/png")
 	png.Encode(w, img)
 }
 

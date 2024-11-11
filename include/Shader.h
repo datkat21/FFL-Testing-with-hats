@@ -8,6 +8,12 @@
 #include <gx2/shaders.h>
 #endif // RIO_IS_CAFE
 
+enum FFLiDefaultShaderSpecularMode
+{
+    FFL_SPECULAR_MODE_BLINN = 0,
+    FFL_SPECULAR_MODE_ANISO = 1
+};
+
 class Shader : public IShader
 {
 public:
@@ -23,6 +29,11 @@ public:
 
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
     void setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
+
+    void setSpecularMode(const FFLiDefaultShaderSpecularMode specularMode)
+    {
+        mSpecularMode = specularMode;
+    }
 
     void applyAlphaTestEnable() const override
     {
@@ -129,6 +140,7 @@ protected:
     FFLShaderCallback       mCallback;
     rio::TextureSampler2D   mSampler;
     FFLiCharInfo*           mpCharInfo;
+    FFLiDefaultShaderSpecularMode mSpecularMode;
 #ifndef DEFAULT_SHADER_FOR_BODY
     bool                    mIsBodyUsingDefaultShader;
 #endif

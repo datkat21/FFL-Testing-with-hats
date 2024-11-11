@@ -134,7 +134,7 @@ struct FFLiDefaultShaderMaterial
     FFLColor diffuse;
     FFLColor specular;
     f32 specularPower;
-    s32 specularMode;
+    FFLiDefaultShaderSpecularMode specularMode;
 };
 
 const int cMaterialParamSize = FFL_MODULATE_TYPE_SHAPE_MAX + 2;
@@ -146,67 +146,63 @@ const FFLiDefaultShaderMaterial cMaterialParam[cMaterialParamSize] = {
         { 0.75f, 0.75f, 0.75f, 1.0f }, // diffuse
         { 0.30f, 0.30f, 0.30f, 1.0f }, // specular
         1.2f, // specularPower
-        0 // specularMode
+        FFL_SPECULAR_MODE_BLINN // specularMode
     },
     { // ShapeBeard
         { 1.0f, 1.0f, 1.0f, 1.0f }, // ambient
         { 0.7f, 0.7f, 0.7f, 1.0f }, // diffuse
         { 0.0f, 0.0f, 0.0f, 1.0f }, // specular
         40.0f, // specularPower
-        1 // specularMode
+        FFL_SPECULAR_MODE_BLINN // specularMode
     },
     { // ShapeNose
         { 0.90f, 0.85f, 0.85f, 1.0f }, // ambient
         { 0.75f, 0.75f, 0.75f, 1.0f }, // diffuse
         { 0.22f, 0.22f, 0.22f, 1.0f }, // specular
         1.5f, // specularPower
-        0 // specularMode
+        FFL_SPECULAR_MODE_BLINN // specularMode
     },
     { // ShapeForehead
         { 0.85f, 0.75f, 0.75f, 1.0f }, // ambient
         { 0.75f, 0.75f, 0.75f, 1.0f }, // diffuse
         { 0.30f, 0.30f, 0.30f, 1.0f }, // specular
         1.2f, // specularPower
-        0 // specularMode
+        FFL_SPECULAR_MODE_BLINN // specularMode
     },
     { // ShapeHair
         { 1.00f, 1.00f, 1.00f, 1.0f }, // ambient
         { 0.70f, 0.70f, 0.70f, 1.0f }, // diffuse
         { 0.35f, 0.35f, 0.35f, 1.0f }, // specular
         10.0f, // specularPower
-#ifdef USE_SPECULAR_BLINN_TEST
-        0
-#else
-        1 // specularMode
-#endif
+        FFL_SPECULAR_MODE_ANISO // specularMode
     },
     { // ShapeCap
         { 0.75f, 0.75f, 0.75f, 1.0f }, // ambient
         { 0.72f, 0.72f, 0.72f, 1.0f }, // diffuse
         { 0.30f, 0.30f, 0.30f, 1.0f }, // specular
         1.5f, // specularPower
-        0 // specularMode
+        FFL_SPECULAR_MODE_BLINN // specularMode
     },
     { // ShapeMask
         { 1.0f, 1.0f, 1.0f, 1.0f }, // ambient
         { 0.7f, 0.7f, 0.7f, 1.0f }, // diffuse
         { 0.0f, 0.0f, 0.0f, 1.0f }, // specular
         40.0f, // specularPower
-        1 // specularMode
+        FFL_SPECULAR_MODE_ANISO // specularMode
     },
     { // ShapeNoseline
         { 1.0f, 1.0f, 1.0f, 1.0f }, // ambient
         { 0.7f, 0.7f, 0.7f, 1.0f }, // diffuse
         { 0.0f, 0.0f, 0.0f, 1.0f }, // specular
         40.0f, // specularPower
-        1 // specularMode
+        FFL_SPECULAR_MODE_ANISO // specularMode
     },
     { // ShapeGlass
         { 1.0f, 1.0f, 1.0f, 1.0f }, // ambient
         { 0.7f, 0.7f, 0.7f, 1.0f }, // diffuse
         { 0.0f, 0.0f, 0.0f, 1.0f }, // specular
         40.0f, // specularPower
-        1 // specularMode
+        FFL_SPECULAR_MODE_ANISO // specularMode
     },
     // HACK: THESE COLLIDE!!!
     // but it's with textures which have no lighting
@@ -215,14 +211,14 @@ const FFLiDefaultShaderMaterial cMaterialParam[cMaterialParamSize] = {
         { 0.496733f, 0.496733f, 0.496733f, 1.0f }, // 0.29804
         { 0.2409f, 0.2409f, 0.2409f, 1.0f }, // 0.16863
         3.0f, // specularPower
-        0 // specularMode
+        FFL_SPECULAR_MODE_BLINN // specularMode
     },
     { // pants
         { 0.95622f, 0.95622f, 0.95622f, 1.0f }, // 0.69804
         { 1.084967f, 1.084967f, 1.084967f, 1.0f }, // 0.65098
         { 0.2409f, 0.2409f, 0.2409f, 1.0f }, // 0.16863
         3.0f, // specularPower
-        0 // specularMode
+        FFL_SPECULAR_MODE_BLINN // specularMode
     }
 };
 
@@ -249,6 +245,7 @@ Shader::Shader()
     : mVBOHandle()
     , mVAOHandle()
 #endif
+    , mSpecularMode(FFL_SPECULAR_MODE_ANISO)
 #ifndef DEFAULT_SHADER_FOR_BODY
     , mIsBodyUsingDefaultShader(false)
 #endif
@@ -664,10 +661,15 @@ void Shader::draw_(const FFLDrawParam& draw_param)
 
     // moved from setMaterial_ to here, set material specular mode
     if (modulateType < cMaterialParamSize) {
-        s32 materialSpecularMode = cMaterialParam[modulateType].specularMode;
-        // if there's no tangent then set specular mode to 0
+        // blinn as default...
+        FFLiDefaultShaderSpecularMode materialSpecularMode = FFL_SPECULAR_MODE_BLINN;
+        if (mSpecularMode != FFL_SPECULAR_MODE_BLINN) // if the default is not blinn,
+            materialSpecularMode = cMaterialParam[modulateType].specularMode; // set it
+
+        // if there's no tangent then leave it as blinn
         if (draw_param.attributeBufferParam.attributeBuffers[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT].ptr == nullptr)
-            materialSpecularMode = 0;
+            materialSpecularMode = FFL_SPECULAR_MODE_BLINN;
+
         mShader.setUniform(materialSpecularMode, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_SPECULAR_MODE]);
     }
 

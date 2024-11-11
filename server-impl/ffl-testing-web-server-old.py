@@ -20,6 +20,56 @@ except ImportError as e:
     print(e)
     MYSQL_AVAILABLE = False
 
+
+TGA_HEADER_SIZE = 18
+
+class TGAHeader:
+    def __init__(self, id_length, color_map_type, image_type,
+                 color_map_origin, color_map_length, color_map_depth,
+                 origin_x, origin_y, width, height, bits_per_pixel, image_descriptor):
+        self.id_length = id_length
+        self.color_map_type = color_map_type
+        self.image_type = image_type
+        self.color_map_origin = color_map_origin
+        self.color_map_length = color_map_length
+        self.color_map_depth = color_map_depth
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+        self.width = width
+        self.height = height
+        self.bits_per_pixel = bits_per_pixel
+        self.image_descriptor = image_descriptor
+
+    @classmethod
+    def from_buffer(cls, buffer):
+        # TGA header is 18 bytes
+        header_format = '<BBBHHBHHHHBB'  # Little-endian, 3 unsigned chars, 2 shorts, unsigned char, 4 shorts, 2 unsigned chars
+        unpacked = struct.unpack_from(header_format, buffer, offset=0)
+
+        # Map unpacked values to class properties
+        return cls(
+            id_length=unpacked[0],
+            color_map_type=unpacked[1],
+            image_type=unpacked[2],
+            color_map_origin=unpacked[3],
+            color_map_length=unpacked[4],
+            color_map_depth=unpacked[5],
+            origin_x=unpacked[6],
+            origin_y=unpacked[7],
+            width=unpacked[8],
+            height=unpacked[9],
+            bits_per_pixel=unpacked[10],
+            image_descriptor=unpacked[11]
+        )
+
+    def __repr__(self):
+        return (f"<TGAHeader(id_length={self.id_length}, color_map_type={self.color_map_type}, "
+                f"image_type={self.image_type}, color_map_origin={self.color_map_origin}, "
+                f"color_map_length={self.color_map_length}, color_map_depth={self.color_map_depth}, "
+                f"origin_x={self.origin_x}, origin_y={self.origin_y}, width={self.width}, "
+                f"height={self.height}, bits_per_pixel={self.bits_per_pixel}, "
+                f"image_descriptor={self.image_descriptor})>")
+
 app = Flask(__name__)
 
 # Define the RenderRequest struct
@@ -86,10 +136,7 @@ class RenderRequest:
             0                          # instanceRotationMode: B (uint8_t)
         )
 
-
-def load_rgba_buffer(buffer_data, width, height):
-    return [struct.unpack_from('4B', buffer_data, offset=i * 4) for i in range(width * height)]
-
+"""
 def send_render_request(request, host='localhost', port=12346):
     packed_request = request.pack()
 
@@ -115,6 +162,22 @@ def send_render_request(request, host='localhost', port=12346):
     buffer_data = received_data[:buffer_size]
 
     return buffer_data
+"""
+def send_render_request(request, host='localhost', port=12346, initial_chunk_size=1024):
+    packed_request = request.pack()
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((host, port))
+    s.sendall(packed_request)
+
+    # Step 1: Receive the initial chunk (e.g., first 1K bytes)
+    initial_chunk = s.recv(initial_chunk_size)
+    if not initial_chunk:
+        return None
+
+    # Step 2: Parse header in the caller, then calculate the full expected buffer size
+    # Assuming the caller will call this function again to stream the rest based on header info
+    return initial_chunk, s  # Returning the initial chunk and the socket for streaming
 
 def normalize_nnid(nnid):
     return nnid.lower().translate(str.maketrans('', '', '-_.'))
@@ -247,9 +310,32 @@ def render_image():
 
     render_request = RenderRequest(store_data, width, tex_resolution, view_type, expression, resource_type, mipmap_enable)
 
-    # Send the render request and receive buffer and buffer2 data
+    buffer_data = bytearray()
+    width = width
+    height = width
     try:
-        buffer_data = send_render_request(render_request)
+        # Send the initial request and receive the TGA header + socket
+        initial_chunk, s = send_render_request(render_request, initial_chunk_size=TGA_HEADER_SIZE)
+
+        # Step 1: Parse TGA header to find image dimensions
+        tga_header = TGAHeader.from_buffer(initial_chunk)
+        # Validate bits per pixel
+        if tga_header.bits_per_pixel != 32:
+            raise ValueError("Unsupported bits per pixel, expected 32 for RGBA.")
+
+        # Calculate total buffer size from parsed width and height
+        total_buffer_size = tga_header.width * tga_header.height * 4
+        width = tga_header.width
+        height = tga_header.height
+
+        # Step 2: Read remaining data based on calculated buffer size
+        while len(buffer_data) < total_buffer_size:
+            packet = s.recv(total_buffer_size - len(buffer_data))
+            if not packet:
+                break
+            buffer_data.extend(packet)
+
+        s.close()
     except ConnectionRefusedError:
         return make_response('upstream tcp server is down :(', 502)
 
@@ -281,9 +367,19 @@ now, PickupCharInfo calls:
 </details>
 ''', 500)
 
-    blended_buffer = load_rgba_buffer(buffer_data, width, width)
-    result_image_pil = Image.new('RGBA', (width, width))
-    result_image_pil.putdata(blended_buffer)
+
+    """
+    image_buffer = [struct.unpack_from('4B', buffer_data, offset=i * 4) for i in range(width * height)]
+    """
+    # Extract the image buffer
+    image_buffer = [
+        struct.unpack_from('4B', buffer_data, offset=(i * 4))
+        for i in range(width * height)
+    ]
+
+    # Create the PIL image
+    result_image_pil = Image.new('RGBA', (width, height))
+    result_image_pil.putdata(image_buffer)
 
     img_io = io.BytesIO()
     if FPNGE_AVAILABLE:

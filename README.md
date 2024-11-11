@@ -1,13 +1,16 @@
 # Running the renderer server
 Why is this in the FFL-Testing repo under another branch? This server is built off of the FFL-Testing sample by Abood (or in other words, hackily patched from it).
-1. Follow the instructions included below, which are also in master, in order
-    * I don't think the server portion will work at all on a Wii U, so don't try.
-    * Get to the point where it shows you spinny Miis.
-2. Run either the Python or the Go server.
+
+I keep telling myself that, after a rewrite, it can be moved into its own repo, so bare with me...
+
+1. Follow the instructions included below, which are also in master.
+    * I don't think the server portion will work on a Wii U due to use of hardcoded OpenGL calls here, so don't try.
+    * Get to the point where it shows you spinny Mii heads.
+    * ... But if you are running on a VPS/headless system, see step 4.
+2. The service requires two parts: the renderer, which is in ffl_testing_2_debug64, and the web server. You'll need to run either the Python or the Go web server.
     * Python
-        - Needs Flask
+        - Needs Flask, also note that it's more limited in features and performance
         - Run `server-impl/ffl-testing-web-server-old.py`
-        - (Note that the Python server is limited in features and performance)
     * Go
         - Inside `server-impl` just `go run .` or run the Go file
 3. Make sure FFL-Testing is running and listening, and try a request like this to the server: http://localhost:5000/miis/image.png?data=005057676b565c6278819697bbc3cecad3e6edf301080a122e303a381c235f4a52595c4e51494f585c5f667d848b96&width=512
@@ -15,15 +18,33 @@ Why is this in the FFL-Testing repo under another branch? This server is built o
     - If you are hosting this, **always use the SERVER_ONLY=1 environment variable when running.**
         * Hides the window, doesn't swap buffers, and pauses when idle.
     - If you are running this on a VPS, build with **OSMesa support** so that you don't have to run an X11 server.
-        * Build and also apply optimizations: ``CXXFLAGS="-O3 -march=native" DEFS="-DRIO_USE_OSMESA" make``
-        * Note that OSMesa does **NOT support hardware acceleration**, and should only be used if you don't have a GPU! If you do, you'll need to constantly run Xvfb or something.
+        * Build and also apply optimizations: `CXXFLAGS="-O3 -march=native" DEFS="-DRIO_USE_OSMESA" make`
+        * Note that OSMesa does **NOT support hardware rendering**, and should only be used if you don't have a GPU! If you do, you'll need to constantly run Xvfb or something.
+
+<details>
+<summary>
+5. Advanced: If you want to "scale" this... (longer, so read more)
+</summary>
 
 
-**Please be aware of the limitations to this in production - probably won't scale well.**
-    * TBD: Improved accuracy (proper body rendering), server rewrite, multi-threading, all-in-one renderer and HTTP server in the same binary.
+* .. My only solution is to run multiple processes right now.
+	- This actually needs my nwf-mii-cemu-toy, ffl-renderer-proto-integrate branch.
+	- Clone it like so: `git clone -b ffl-renderer-proto-integrate https://github.com/ariankordi/nwf-mii-cemu-toy`, build and run.
+* I recommend setting this up as a systemd _socket activated, instanced service._
+	- This means you can run it like so: `systemctl start ffl-testing@31100` - where 31100 is the port number, which you can change, and also enable the service to start it at boot.
+	- **You will need to rebuild, once again**, with `USE_SYSTEMD_SOCKET` as a def.
+		* If you're following along on your VPS, it's this: `CXXFLAGS="-O3 -march=native" DEFS="-DRIO_USE_OSMESA -DUSE_SYSTEMD_SOCKET" make`
+	- Edit `ffl-testing@.service`. Adjust the `WorkingDirectory`, `ExecStart` (program path), and potentially user.
+	- Copy the systemd units in this repo: `sudo cp ffl-testing@.service ffl-testing@.socket /etc/systemd/system/`
+</details>
 
 
-Note: For the frontend on mii-unsecure.ariankordi.net, I am using [nwf-mii-cemu-toy, ffl-renderer-proto-integrate branch](https://github.com/ariankordi/nwf-mii-cemu-toy/tree/ffl-renderer-proto-integrate) as the HTTP server for now, where I've more or less copied the Go server. It supports load balancing to multiple instances of this server.
+_Please be aware of the limitations to this in production - probably won't scale well._
+    * TBD: Improved accuracy (accurate per-bone body scaling), server rewrite, multi-threading, all-in-one renderer and HTTP server in the same binary.
+
+
+**Note:** For the frontend on mii-unsecure.ariankordi.net, I am using [nwf-mii-cemu-toy, ffl-renderer-proto-integrate branch](https://github.com/ariankordi/nwf-mii-cemu-toy/tree/ffl-renderer-proto-integrate) as the HTTP server for now, where I've more or less copied the Go server. It supports load balancing to multiple instances of this server.
+**That is where my client-side HTML, JS, and ***NNID fetch API*** and more are hosted, so if you want to rehost any of that, PLEASE see that repo's readme!**
 
 # FFL-Testing
 Sample using [the FFL decomp](https://github.com/aboood40091/ffl) and [RIO framework](https://github.com/aboood40091/rio), all originally written by [AboodXD](https://github.com/aboood40091), to render Miis on PC and Wii U via WUT.
@@ -61,13 +82,17 @@ https://github.com/user-attachments/assets/cdc358e4-0b1f-4b93-b7fd-f61fa4d215e1
     * To build for Emscripten, use ``make -f Makefile.emscripten -j4``
       - Make sure FFLResHigh.dat is in the current working directory. After this builds, open the html file.
 3. Obtain the resource file, FFLResHigh.dat.
+    * This contains the meshes and textures needed to render Mii characters and is absolutely required to get anywhere with this.
     * You can get it from many sources:
-        - It can be extracted from a Wii U:
+        - It can be extracted from a Wii U using an FTP program:
             - `sys/title/0005001b/10056000/content/FFLResHigh.dat`
-        - You can extract it from a Miitomo install (_it's not in the APK/IPA_), or download it from archive.org:
+        - You can extract it from a Miitomo install (_it's not in the APK/IPA_):
+            - In cache (`Library/Application Support/cache` on iOS), here: `res/asset/model/character/mii/AFLResHigh_2_3.dat`
+        - It can also be downloaded from archive.org:
             * https://web.archive.org/web/20180502054513/http://download-cdn.miitomo.com/native/20180125111639/android/v2/asset_model_character_mii_AFLResHigh_2_3_dat.zip
-            * Extract the above and rename AFLResHigh_2_3.dat to FFLResHigh.dat.
-        - (As well as AFLResHigh_2_3.dat, AFLResHigh.dat will work too)
+            * Extract the above and rename `AFLResHigh_2_3.dat` to `FFLResHigh.dat`.
+        - (As well as `AFLResHigh_2_3.dat`, `AFLResHigh.dat` will work too. All AFL resources have to be renamed to `FFLResHigh.dat`.)
+        - In the Kadokawa breach, there is a Wii U tool called FFLUtility, located here: `dwango/projects/マルチデバイス/品証/WiiU/Tool/FFL/downloadimage/FFLUtilityJP_p01` - if you decrypt it with dev keys, then in `fs/content/nonproduct/miicapture/resource/`, you will find `FFLResPoster.dat`. This is a copy of FFLResHigh.dat with extremely high quality (512px) textures. If you successfully find this, share the love and enjoy.
     * Place that file in the root of this repo.
         - This file contains models and textures needed to render Miis and this program will not work without it.
 4. Run `ffl_testing_2_debug64`, and pray that it works.

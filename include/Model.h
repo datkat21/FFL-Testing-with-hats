@@ -28,6 +28,11 @@ public:
     bool initialize(const InitArg<T>& arg, IShader& shader);
 
     FFLCharModel* getCharModel() const { return mpCharModel; }
+    FFLiCharInfo* getCharInfo()
+    {
+        FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpCharModel);
+        return &pCharModel->charInfo;
+    }
     IShader* getShader() const { return mpShader; }
     FFLResult getInitializeCpuResult() const { return mInitializeCpuResult; }
 

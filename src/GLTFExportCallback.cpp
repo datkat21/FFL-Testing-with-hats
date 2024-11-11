@@ -249,6 +249,16 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
         const uint16_t* indices = static_cast<const uint16_t*>(drawParam.primitiveParam.pIndexBuffer);
         meshData.indices.assign(indices, indices + indexCount);
 
+        // When FFL set the cull mode to front... that means
+        // that X is flipped so we have to reverse face winding
+        // (glTF does not support front face culling)
+        if (drawParam.cullMode == FFL_CULL_MODE_FRONT) {
+            for (uint32_t i = 0; i < indexCount; i += 3) {
+                // Swap the first and last indices of each triangle to reverse winding
+                std::swap(meshData.indices[i], meshData.indices[i + 2]);
+            }
+        }
+
         // Get the maximum vertex index to know how many vertices we need
         uint16_t maxIndex = 0;
         for (uint32_t i = 0; i < indexCount; ++i)
@@ -670,13 +680,21 @@ void GLTFExportCallback::AddPrimitiveExtras(MeshData& meshData, tinygltf::Primit
         tinygltf::Value(meshData.colorR[2]),
         tinygltf::Value(meshData.colorR[3])
     });
-    tinygltf::Value cullModeValue(meshData.cullMode);
+    //FFLCullMode cullModeWithoutFront = meshData.cullMode;
+    // we do not want the client to apply front face culling
+    // because we already reversed the triangle winding
+    // effectively "simulating" it
+    /*
+    if (cullModeWithoutFront == FFL_CULL_MODE_FRONT)
+        cullModeWithoutFront = FFL_CULL_MODE_BACK;
+    tinygltf::Value cullModeValue(cullModeWithoutFront);
+    */
 
     primitive.extras = tinygltf::Value(tinygltf::Value::Object{
         {"modulateMode", modulateModeValue},
         {"modulateType", modulateTypeValue},
         {"modulateColor", modulateColor},
-        {"cullMode", cullModeValue}
+        //{"cullMode", cullModeValue}
     });
 }
 
@@ -932,6 +950,9 @@ void GLTFExportCallback::AssignMaterialToPrimitive(MeshData& meshData, tinygltf:
             break;
         case FFL_CULL_MODE_BACK:
         case FFL_CULL_MODE_FRONT:
+            // we should have converted from
+            // front culling to back culling earlier
+            // by reversing triangle windings
         default:
             material.doubleSided = false;
             break;

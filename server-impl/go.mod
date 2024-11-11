@@ -1,4 +1,4 @@
-module ffl-testing-faceonly-proto2
+module ffl-testing-web-server
 
 go 1.22.4
 

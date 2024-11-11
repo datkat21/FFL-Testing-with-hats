@@ -50,6 +50,13 @@ private:
                 case SHADER_TYPE_WIIU:
                     mpShaders[type] = new Shader();
                     break;
+                case SHADER_TYPE_WIIU_BLINN:
+                {
+                    Shader* s = new Shader();
+                    s->setSpecularMode(FFL_SPECULAR_MODE_BLINN);
+                    mpShaders[type] = s;
+                    break;
+                }
                 case SHADER_TYPE_SWITCH:
                     mpShaders[type] = new ShaderSwitch();
                     break;
@@ -67,7 +74,11 @@ private:
 #endif
 
     // NOTE: bc of the amount of arguments, consider putting this in mpModel
-    void drawMiiBodyREAL(const bool light_enable, FFLiCharInfo* charInfo, PantsColor pantsColor, rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::BaseMtx44f& proj_mtx, const rio::Vector3f scaleFactors);
+    void drawMiiBody(Model* pModel, PantsColor pantsColor,
+    rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx,
+    rio::BaseMtx44f& proj_mtx, const rio::Vector3f scaleFactors);
+
+    void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
 
 private:
     bool                mInitialized;
