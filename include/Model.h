@@ -4,6 +4,8 @@
 
 #include <nn/ffl.h>
 
+#include <nn/ffl/FFLiCharModel.h>
+
 class Shader;
 
 class Model

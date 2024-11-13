@@ -145,7 +145,7 @@ void RootTask::prepare_()
     mInitialized = false;
 
     FFLInitDesc init_desc;
-    init_desc.fontRegion = FFL_FONT_REGION_0;
+    init_desc.fontRegion = FFL_FONT_REGION_JP_US_EU;
     init_desc._c = false;
     init_desc._10 = true;
 

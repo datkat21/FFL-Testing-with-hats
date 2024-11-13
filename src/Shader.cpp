@@ -466,13 +466,13 @@ void Shader::setModulate_(const FFLModulateParam& modulateParam)
 
     switch (modulateParam.mode)
     {
-    case FFL_MODULATE_MODE_0:
-    case FFL_MODULATE_MODE_3:
-    case FFL_MODULATE_MODE_4:
-    case FFL_MODULATE_MODE_5:
+    case FFL_MODULATE_MODE_CONSTANT:
+    case FFL_MODULATE_MODE_ALPHA:
+    case FFL_MODULATE_MODE_LUMINANCE_ALPHA:
+    case FFL_MODULATE_MODE_ALPHA_OPA:
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST1], *modulateParam.pColorR);
         break;
-    case FFL_MODULATE_MODE_2:
+    case FFL_MODULATE_MODE_RGB_LAYERED:
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST1], *modulateParam.pColorR);
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST2], *modulateParam.pColorG);
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST3], *modulateParam.pColorB);
@@ -593,9 +593,9 @@ void Shader::draw_(const FFLDrawParam& draw_param)
 }
 
 
-void Shader::drawCallback_(void* p_obj, const FFLDrawParam& draw_param)
+void Shader::drawCallback_(void* p_obj, const FFLDrawParam* draw_param)
 {
-    static_cast<Shader*>(p_obj)->draw_(draw_param);
+    static_cast<Shader*>(p_obj)->draw_(*draw_param);
 }
 
 void Shader::setMatrix_(const rio::BaseMtx44f& matrix)
@@ -611,7 +611,7 @@ void Shader::setMatrix_(const rio::BaseMtx44f& matrix)
     mShader.setUniformColumnMajor(ident33, mVertexUniformLocation[VERTEX_UNIFORM_IT], u32(-1));
 }
 
-void Shader::setMatrixCallback_(void* p_obj, const rio::BaseMtx44f& matrix)
+void Shader::setMatrixCallback_(void* p_obj, const rio::BaseMtx44f* matrix)
 {
-    static_cast<Shader*>(p_obj)->setMatrix_(matrix);
+    static_cast<Shader*>(p_obj)->setMatrix_(*matrix);
 }

@@ -3,6 +3,8 @@
 #include <gpu/rio_Shader.h>
 #include <gpu/rio_TextureSampler.h>
 
+#include <nn/ffl/detail/FFLiCharInfo.h>
+
 #include <nn/ffl.h>
 
 #if RIO_IS_CAFE
@@ -47,10 +49,10 @@ private:
     void setMaterial_(const FFLDrawParam& drawParam);
 
     void draw_(const FFLDrawParam& draw_param);
-    static void drawCallback_(void* p_obj, const FFLDrawParam& draw_param);
+    static void drawCallback_(void* p_obj, const FFLDrawParam* draw_param);
 
     void setMatrix_(const rio::BaseMtx44f& matrix);
-    static void setMatrixCallback_(void* p_obj, const rio::BaseMtx44f& matrix);
+    static void setMatrixCallback_(void* p_obj, const rio::BaseMtx44f* matrix);
 
 private:
     enum VertexUniform

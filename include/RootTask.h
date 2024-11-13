@@ -3,7 +3,7 @@
 #include <gfx/rio_Camera.h>
 #include <task/rio_Task.h>
 
-#include <nn/ffl/FFLiMiiData.h>
+#include <nn/ffl/detail/FFLiCharInfo.h>
 
 #define FFLICHARINFO_SIZE sizeof(FFLiCharInfo)
 
