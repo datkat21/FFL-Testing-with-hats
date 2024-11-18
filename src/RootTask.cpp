@@ -624,6 +624,14 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
         texResolution = static_cast<FFLResolution>(buf->texResolution);
     }
 
+    u32 modelFlag = static_cast<u32>(buf->modelFlag);
+
+#ifdef FFL_ENABLE_NEW_MASK_ONLY_FLAG
+    // Enable special mode that will not initialize shapes.
+    if (buf->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY)
+        modelFlag |= FFL_MODEL_FLAG_NEW_MASK_ONLY;
+#endif
+
     // otherwise just fall through and use default
     Model::InitArgStoreData arg = {
         .desc = {
@@ -631,7 +639,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
             .expressionFlag = expressionFlag,
             // model flag includes model type (required)
             // and flatten nose bit at pos 4
-            .modelFlag = static_cast<u32>(buf->modelFlag),
+            .modelFlag = modelFlag,
             .resourceType = static_cast<FFLResourceType>(buf->resourceType),
         },
         .source = modelSource
@@ -1029,8 +1037,52 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
 
             *isCameraPosAbsolute = true;
 
-            pCamera->pos() = { 0.0f, 9.0f, 900.0f };
-            pCamera->at() = { 0.0f, 105.0f, 0.0f };
+            // NOTE: wii u mii maker does some strange
+            // camera zooming, to make the character
+            // bigger when it's shorter and smaller
+            // when it's taller, purely based on height
+
+            // this is an ATTEMPT??? to simulate that
+            // via interpolation which is... meh
+
+            const float scaleFactorY = (static_cast<float>(pCharInfo->height) * 0.006015625f) + 0.5f;
+
+            rio::Vector3f pos, at;
+
+            // These camera parameters look right when the character is tallest
+            const rio::Vector3f posStart = { 0.0f, 30.0f, 550.0f };
+            const rio::Vector3f atStart = { 0.0f, 65.0f, 0.0f };
+
+            // Likewise these look correct when it's shortest.
+            const rio::Vector3f posEnd = { 0.0f, 9.0f, 850.0f };
+            const rio::Vector3f atEnd = { 0.0f, 90.0f, 0.0f };
+
+            // Calculate interpolation factor (normalized to range [0, 1])
+            float t = (scaleFactorY - 0.5f) / (1.264f - 0.5f);
+
+            // Interpolate between start and end positions
+            pos.x = posStart.x + t * (posEnd.x - posStart.x);
+            pos.y = posStart.y + t * (posEnd.y - posStart.y);
+            pos.z = posStart.z + t * (posEnd.z - posStart.z);
+
+            // Interpolate between start and end target positions
+            at.x = atStart.x + t * (atEnd.x - atStart.x);
+            at.y = atStart.y + t * (atEnd.y - atStart.y);
+            at.z = atStart.z + t * (atEnd.z - atStart.z);
+
+            /*
+            // height = 127, 1.264
+            pCamera->pos() = { 0.0f, 9.0f, 850.0f };
+            pCamera->at() = { 0.0f, 90.0f, 0.0f }; // higher = model is lower
+            // height = 0,   0.5
+            pCamera->pos() = { 0.0f, 30.0f, 550.0f }; // lower = closer
+            pCamera->at() = { 0.0f, 65.0f, 0.0f };
+            */
+
+            pCamera->pos() = pos;
+            pCamera->at() = at;
+            //pCamera->pos() = { 0.0f, 9.0f, 900.0f };
+            //pCamera->at() = { 0.0f, 6.0f, 0.0f };
             pCamera->setUp({ 0.0f, 1.0f, 0.0f });
             break;
         }
@@ -1049,6 +1101,9 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         }
     }
 }
+
+
+
 
 // Convert degrees to radians
 rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3]) {
@@ -1116,6 +1171,20 @@ void RootTask::handleRenderRequest(char* buf) {
 
         // NOTE the resolution of this is the texture resolution so that would have to match what the client expects
         copyAndSendRenderBufferToSocket(*pRenderTexture->pRenderBuffer, pRenderTexture->pTexture2D, new_socket, 1);
+
+        // mpModel does not have shapes (maybe) and
+        // should not be drawn anymore
+#ifdef FFL_ENABLE_NEW_MASK_ONLY_FLAG
+        if (pCharModel->charModelDesc.modelFlag & FFL_MODEL_FLAG_NEW_MASK_ONLY)
+        {
+            // when you make a model with this flag
+            // it will actually make it so that it
+            // will crash if you try to draw any shapes
+            // so we are simply deleting the model
+            delete mpModel;
+            mpModel = nullptr;
+        }
+#endif
 
         closesocket(new_socket);
         return;

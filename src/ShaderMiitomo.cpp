@@ -6,8 +6,11 @@
 
 #include <filedevice/rio_FileDeviceMgr.h>
 
-#include <gpu/win/rio_Texture2DUtilWin.h>
 #include <gpu/rio_TextureSampler.h>
+
+#if RIO_IS_WIN
+#include <gpu/win/rio_Texture2DUtilWin.h>
+#endif
 
 #if RIO_IS_CAFE
 #include <gx2/registers.h>
@@ -185,13 +188,15 @@ ShaderMiitomo::~ShaderMiitomo()
         mVAOHandle = GL_NONE;
     }
 #endif
-    for (u32 i = 0; i < CUSTOM_MATERIAL_PARAM_SIZE; i++)
+    for (u32 i = 0; i < LUT_SPECULAR_TYPE_MAX; i++)
         delete sLUTSpecTextures[i];
-    for (u32 i = 0; i < CUSTOM_MATERIAL_PARAM_SIZE; i++)
+    for (u32 i = 0; i < LUT_SPECULAR_TYPE_MAX; i++)
         delete sLUTFresTextures[i];
 }
 
 #define MIITOMO_LUT_TGA_HEADER_SIZE 18
+
+#if RIO_IS_WIN
 
 void loadTextureFromPath(const char* filePathChar, rio::TextureFormat format, s32 width, s32 height, GLuint textureHandle) {
     // Use rio::FileDeviceMgr to load the file
@@ -234,6 +239,8 @@ const rio::TextureFormat cLUTTextureFormat = rio::TEXTURE_FORMAT_R8_UNORM;
 const u32 cLUTWidth = 512;
 const u32 cLUTHeight = 1;
 
+#endif // RIO_IS_WIN
+
 void ShaderMiitomo::initialize()
 {
     mShader.load("LUT", rio::Shader::MODE_UNIFORM_REGISTER);
@@ -275,6 +282,8 @@ void ShaderMiitomo::initialize()
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("aColor");
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("aTangent");
 
+#if RIO_IS_WIN
+
     for (int i = 0; i < LUT_FRESNEL_TYPE_MAX; i++) {
         sLUTFresTextures[i] = new rio::Texture2D(cLUTTextureFormat, cLUTWidth, cLUTHeight, cLUTNumMips);
         loadTextureFromPath(cLUTFresnelFileNames[i], cLUTTextureFormat, cLUTWidth, cLUTHeight, sLUTFresTextures[i]->getNativeTextureHandle());
@@ -287,6 +296,8 @@ void ShaderMiitomo::initialize()
 
         //mLUTSpecSampler[i].linkTexture2D(sLUTSpecTextures[i]);
     }
+
+#endif // RIO_IS_WIN
 
 #if RIO_IS_CAFE
     GX2InitAttribStream(
