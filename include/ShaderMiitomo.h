@@ -42,6 +42,69 @@ public:
 
     static void setCulling(FFLCullMode mode);
 
+
+    // Define types of Miitomo LUT textures
+    // Located in cache/res/asset/env/lut/
+    // LUTs for Mii head parts are located
+    // here: cache/res/asset/env/mii/mii_model.xml
+    // NOTE so i dont forget: default 02 is also for body/pants
+    enum LUTSpecularTextureType
+    {
+        LUT_SPECULAR_TYPE_NONE,
+        LUT_SPECULAR_TYPE_DEFAULT_02,
+        LUT_SPECULAR_TYPE_SKIN_01,
+        LUT_SPECULAR_TYPE_MAX
+    };
+    enum LUTFresnelTextureType
+    {
+        LUT_FRESNEL_TYPE_NONE,
+        LUT_FRESNEL_TYPE_DEFAULT_02,
+        LUT_FRESNEL_TYPE_SKIN_01,
+        LUT_FRESNEL_TYPE_MAX
+    };
+
+    const char* cLUTFresnelFileNames[LUT_SPECULAR_TYPE_MAX] = {
+        "fresnelNone.tga",       // LUT_FRESNEL_TYPE_NONE
+        //"fresnelDefault01.tga",// LUT_FRESNEL_TYPE_DEFAULT_01
+        "fresnelDefault02.tga",  // LUT_FRESNEL_TYPE_DEFAULT_02
+        "fresnelSkin01.tga",     // LUT_FRESNEL_TYPE_SKIN_01
+    };
+    const char* cLUTSpecularFileNames[LUT_FRESNEL_TYPE_MAX] = {
+        "specularNone.tga",      // LUT_SPECULAR_TYPE_NONE
+        //"specularDefault01.tga"// LUT_SPECULAR_TYPE_DEFAULT_01
+        "specularDefault02.tga", // LUT_SPECULAR_TYPE_DEFAULT_02
+        "specularSkin01.tga",    // LUT_SPECULAR_TYPE_SKIN_01
+    };
+
+    const LUTSpecularTextureType
+        cModulateToLUTSpecularType[CUSTOM_MATERIAL_PARAM_SIZE] = {
+        LUT_SPECULAR_TYPE_SKIN_01,    // FFL_MODULATE_TYPE_SHAPE_FACELINE
+        LUT_SPECULAR_TYPE_DEFAULT_02, // FFL_MODULATE_TYPE_SHAPE_BEARD
+        LUT_SPECULAR_TYPE_SKIN_01,    // FFL_MODULATE_TYPE_SHAPE_NOSE
+        LUT_SPECULAR_TYPE_SKIN_01,    // FFL_MODULATE_TYPE_SHAPE_FOREHEAD
+        LUT_SPECULAR_TYPE_DEFAULT_02, // FFL_MODULATE_TYPE_SHAPE_HAIR
+        LUT_SPECULAR_TYPE_DEFAULT_02, // FFL_MODULATE_TYPE_SHAPE_CAP
+        LUT_SPECULAR_TYPE_DEFAULT_02, // FFL_MODULATE_TYPE_SHAPE_MASK
+        LUT_SPECULAR_TYPE_NONE,       // FFL_MODULATE_TYPE_SHAPE_NOSELINE
+        LUT_SPECULAR_TYPE_NONE,       // FFL_MODULATE_TYPE_SHAPE_GLASS
+        LUT_SPECULAR_TYPE_DEFAULT_02, // CUSTOM_MATERIAL_PARAM_BODY
+        LUT_SPECULAR_TYPE_DEFAULT_02, // CUSTOM_MATERIAL_PARAM_PANTS
+    };
+    const LUTFresnelTextureType
+        cModulateToLUTFresnelType[CUSTOM_MATERIAL_PARAM_SIZE] = {
+        LUT_FRESNEL_TYPE_SKIN_01,     // FFL_MODULATE_TYPE_SHAPE_FACELINE
+        LUT_FRESNEL_TYPE_DEFAULT_02,  // FFL_MODULATE_TYPE_SHAPE_BEARD
+        LUT_FRESNEL_TYPE_SKIN_01,     // FFL_MODULATE_TYPE_SHAPE_NOSE
+        LUT_FRESNEL_TYPE_SKIN_01,     // FFL_MODULATE_TYPE_SHAPE_FOREHEAD
+        LUT_FRESNEL_TYPE_DEFAULT_02,  // FFL_MODULATE_TYPE_SHAPE_HAIR
+        LUT_FRESNEL_TYPE_DEFAULT_02,  // FFL_MODULATE_TYPE_SHAPE_CAP
+        LUT_FRESNEL_TYPE_DEFAULT_02,  // FFL_MODULATE_TYPE_SHAPE_MASK
+        LUT_FRESNEL_TYPE_NONE,        // FFL_MODULATE_TYPE_SHAPE_NOSELINE
+        LUT_FRESNEL_TYPE_NONE,        // FFL_MODULATE_TYPE_SHAPE_GLASS
+        LUT_FRESNEL_TYPE_DEFAULT_02,  // CUSTOM_MATERIAL_PARAM_BODY
+        LUT_FRESNEL_TYPE_DEFAULT_02,  // CUSTOM_MATERIAL_PARAM_PANTS
+    };
+
 private:
     static void applyAlphaTestCallback_(void* p_obj, bool enable, rio::Graphics::CompareFunc func, f32 ref);
     void setShaderCallback_();
@@ -90,6 +153,7 @@ private:
         PIXEL_UNIFORM_MAX
     };
 
+
     rio::Shader             mShader;
     IShader*                mpMaskShader;
     s32                     mVertexUniformLocation[VERTEX_UNIFORM_MAX];
@@ -109,7 +173,7 @@ private:
     rio::TextureSampler2D   mSampler;
     FFLiCharInfo*           mpCharInfo;
     bool                    mLightEnable;
-    rio::TextureSampler2D   mLUTSpecSampler;
-    rio::TextureSampler2D   mLUTFresSampler;
+    rio::TextureSampler2D   mLUTSpecSampler;//[LUT_SPECULAR_TYPE_MAX];
+    rio::TextureSampler2D   mLUTFresSampler;//[LUT_FRESNEL_TYPE_MAX];
     bool                    mIsUsingMaskShader;
 };

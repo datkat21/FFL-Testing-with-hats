@@ -660,6 +660,9 @@ void ShaderSwitch::setModulate_(const FFLModulateParam& modulateParam)
     bindTexture_(modulateParam);
 }
 
+#define SWITCH_MATERIAL_PARAM_PANTS_GRAY CUSTOM_MATERIAL_PARAM_PANTS
+#define SWITCH_MATERIAL_PARAM_PANTS_GOLD CUSTOM_MATERIAL_PARAM_PANTS + 1
+
 void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
 {
     // we need to get favorite/faceline/hair/beard color from somewhere so
@@ -687,15 +690,14 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
             drawParamMaterial = cNoseMaterials[mpCharInfo->parts.facelineColor];
             break;
         // body: favorite color
-        // TODO: TODO: ADD THIS AS A REAL CONSTANT
-        case 20: // body
+        case static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY):
             drawParamMaterial = cBodyMaterials[mpCharInfo->favoriteColor];
             break;
-        case 21: // pants gray
-            drawParamMaterial = cPantsMaterials[0];
+        case static_cast<FFLModulateType>(SWITCH_MATERIAL_PARAM_PANTS_GRAY):
+            drawParamMaterial = cPantsMaterials[0]; // gray index
             break;
-        case 22: // pants gold
-            drawParamMaterial = cPantsMaterials[1];
+        case static_cast<FFLModulateType>(SWITCH_MATERIAL_PARAM_PANTS_GOLD):
+            drawParamMaterial = cPantsMaterials[1]; // gold index
             break;
         case FFL_MODULATE_TYPE_SHAPE_CAP:
             drawParamMaterial = cHatMaterials[mpCharInfo->favoriteColor];
@@ -780,7 +782,7 @@ void ShaderSwitch::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 
     const FFLColor& favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
 
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(20);
+    const FFLModulateType modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY);
     const FFLModulateParam modulateParam = {
         FFL_MODULATE_MODE_CONSTANT,
         // CUSTOM MODULATE TYPE FOR BODY
@@ -796,25 +798,20 @@ void ShaderSwitch::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 
 void ShaderSwitch::setBodyShaderPantsMaterial(PantsColor pantsColor)
 {
-    FFLColor color;
-    int pantsIndex;
+    FFLColor color = cPantsColors[PANTS_COLOR_GRAY];
+    s32 pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GRAY;
     // NOTE: switch color only supports these two and only by index
     if (pantsColor == PANTS_COLOR_GOLD)
     {
         color = cPantsColors[PANTS_COLOR_GOLD];
-        pantsIndex = 1;
-    }
-    else
-    {
-        color = cPantsColors[PANTS_COLOR_GRAY];
-        pantsIndex = 0;
+        pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GOLD;
     }
 
 
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(21 + pantsIndex); // pants is 21 and 22
+    const FFLModulateType modulateType = static_cast<FFLModulateType>(pantsMaterialParam);
+
     const FFLModulateParam modulateParam = {
         FFL_MODULATE_MODE_CONSTANT,
-        // CUSTOM MODULATE TYPE FOR BODY
         modulateType,
         &color,
         nullptr, // no color G

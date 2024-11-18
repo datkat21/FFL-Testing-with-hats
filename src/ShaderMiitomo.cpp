@@ -1,7 +1,5 @@
-#include "math/rio_MathTypes.h"
 #include <ShaderMiitomo.h>
 
-#include <fstream>
 #include <gpu/rio_RenderState.h>
 #include <math/rio_Matrix.h>
 #include <misc/rio_MemUtil.h>
@@ -167,10 +165,8 @@ ShaderMiitomo::ShaderMiitomo(IShader* mpMaskShader)
 }
 
 // names not intentional
-const int cMaterialParamSize = 11;
-rio::Texture2D* sLUTSpecTextures[cMaterialParamSize];
-rio::Texture2D* sLUTFresTextures[cMaterialParamSize];
-// 9 for each draw type
+rio::Texture2D* sLUTSpecTextures[ShaderMiitomo::LUT_SPECULAR_TYPE_MAX];
+rio::Texture2D* sLUTFresTextures[ShaderMiitomo::LUT_FRESNEL_TYPE_MAX];
 
 ShaderMiitomo::~ShaderMiitomo()
 {
@@ -189,46 +185,54 @@ ShaderMiitomo::~ShaderMiitomo()
         mVAOHandle = GL_NONE;
     }
 #endif
-    for (u32 i = 0; i < cMaterialParamSize; i++)
+    for (u32 i = 0; i < CUSTOM_MATERIAL_PARAM_SIZE; i++)
         delete sLUTSpecTextures[i];
-    for (u32 i = 0; i < cMaterialParamSize; i++)
+    for (u32 i = 0; i < CUSTOM_MATERIAL_PARAM_SIZE; i++)
         delete sLUTFresTextures[i];
 }
 
-void loadRawR8Image(std::string filePath, int width, int height, GLuint texture) {
+#define MIITOMO_LUT_TGA_HEADER_SIZE 18
+
+void loadTextureFromPath(const char* filePathChar, rio::TextureFormat format, s32 width, s32 height, GLuint textureHandle) {
     // Use rio::FileDeviceMgr to load the file
     rio::FileDevice::LoadArg arg;
+    const std::string filePath = std::string(filePathChar);
     arg.path = std::string("miitomo_shader_lut/") + filePath;
-    arg.alignment = 0x2000;  // Adjust alignment if necessary
 
     // not the native file device so it will be in fs/content/
-    u8* data = rio::FileDeviceMgr::instance()->tryLoad(arg);
+    const u8* data = rio::FileDeviceMgr::instance()->tryLoad(arg);
 
     if (data == nullptr) {
         RIO_LOG("NativeFileDevice failed to load when trying to load LUT for ShaderMiitomo: %s\n", filePath.c_str());
         return;
     }
 
-    u32 imageSize = width * height * 1; // 1 channel (R)
+    const u32 imageSize = rio::Texture2DUtil::calcImageSize(format, width, height);
 
-    if (arg.read_size != imageSize) {
-        RIO_LOG("Failed to load the correct size: %s\n", filePath.c_str());
-        return;
-    }
+    RIO_ASSERT(arg.read_size ==
+            (imageSize + MIITOMO_LUT_TGA_HEADER_SIZE));
 
-    /*GLuint texture;
-    glGenTextures(1, &texture);
-    */
-    RIO_GL_CALL(glBindTexture(GL_TEXTURE_2D, texture));
+    // skip past tga header...
+    const u8* dataPastTGAHeader = data + MIITOMO_LUT_TGA_HEADER_SIZE;
 
-    //RIO_GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, data));
-    RIO_GL_CALL(glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED, GL_UNSIGNED_BYTE, data));
-    delete[] data;
+    rio::NativeTextureFormat nativeFormat;
+    rio::TextureFormatUtil::getNativeTextureFormat(nativeFormat, format);
+    // calls glBindTexture, glTexImage2D
+    rio::Texture2DUtil::uploadTexture(textureHandle, format, nativeFormat,
+                                      width, height, imageSize,
+                                      dataPastTGAHeader);
 
     RIO_GL_CALL(glGenerateMipmap(GL_TEXTURE_2D));
 
-    return;//texture;
+    delete[] data;
 }
+
+//const u32 cLUTCompMap = 0x00000005; // swizzle RRR1
+const u32 cLUTNumMips = 1; // no mipmaps
+// miitomo LUT texture format:
+const rio::TextureFormat cLUTTextureFormat = rio::TEXTURE_FORMAT_R8_UNORM;
+const u32 cLUTWidth = 512;
+const u32 cLUTHeight = 1;
 
 void ShaderMiitomo::initialize()
 {
@@ -271,20 +275,17 @@ void ShaderMiitomo::initialize()
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("aColor");
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("aTangent");
 
-    // swizzle RRR1
-    const u32 compMap = 0x00000005;
-    const std::string lutFresFileNamePrefix = "miitomo_lut_fres_r8_";
-    for (u32 i = 0; i < cMaterialParamSize; i++) {
-        sLUTFresTextures[i] = new rio::Texture2D(rio::TEXTURE_FORMAT_R8_UNORM, 512, 1, 1);
-        loadRawR8Image(lutFresFileNamePrefix + std::to_string(i), 512, 1, sLUTFresTextures[i]->getNativeTextureHandle());
-        rio::Texture2DUtil::setSwizzle(sLUTFresTextures[i]->getNativeTextureHandle(), compMap);
-    }
+    for (int i = 0; i < LUT_FRESNEL_TYPE_MAX; i++) {
+        sLUTFresTextures[i] = new rio::Texture2D(cLUTTextureFormat, cLUTWidth, cLUTHeight, cLUTNumMips);
+        loadTextureFromPath(cLUTFresnelFileNames[i], cLUTTextureFormat, cLUTWidth, cLUTHeight, sLUTFresTextures[i]->getNativeTextureHandle());
 
-    const std::string lutSpecFileNamePrefix = "miitomo_lut_spec_r8_";
-    for (u32 i = 0; i < cMaterialParamSize; i++) {
-        sLUTSpecTextures[i] = new rio::Texture2D(rio::TEXTURE_FORMAT_R8_UNORM, 512, 1, 1);
-        loadRawR8Image(lutSpecFileNamePrefix + std::to_string(i), 512, 1, sLUTSpecTextures[i]->getNativeTextureHandle());
-        rio::Texture2DUtil::setSwizzle(sLUTSpecTextures[i]->getNativeTextureHandle(), compMap);
+        //mLUTFresSampler[i].linkTexture2D(sLUTFresTextures[i]);
+    }
+    for (int i = 0; i < LUT_SPECULAR_TYPE_MAX; i++) {
+        sLUTSpecTextures[i] = new rio::Texture2D(cLUTTextureFormat, cLUTWidth, cLUTHeight, cLUTNumMips);
+        loadTextureFromPath(cLUTSpecularFileNames[i], cLUTTextureFormat, cLUTWidth, cLUTHeight, sLUTSpecTextures[i]->getNativeTextureHandle());
+
+        //mLUTSpecSampler[i].linkTexture2D(sLUTSpecTextures[i]);
     }
 
 #if RIO_IS_CAFE
@@ -354,11 +355,13 @@ void ShaderMiitomo::bind(bool light_enable, FFLiCharInfo* pCharInfo)
     // ASSUME this is drawing mask/faceline texture in which case the LUT shader cannot be used for that
     mLightEnable = light_enable;
     mIsUsingMaskShader = false;
+#ifndef USE_LUT_SHADER_FOR_MASK
     if (!light_enable)
     {
         mIsUsingMaskShader = true;
         return mpMaskShader->bind(light_enable, pCharInfo);
     }
+#endif
 
     mpCharInfo = pCharInfo;
     mShader.bind();
@@ -462,56 +465,47 @@ void ShaderMiitomo::bindTexture_(const FFLModulateParam& modulateParam)
     {
         mSampler.linkTexture2D(modulateParam.pTexture2D);
         mSampler.tryBindFS(mSamplerLocation, 0);
-/*
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, modulateParam.pTexture2D->getNativeTextureHandle());
-        glUniform1i(glGetUniformLocation(mShader.getShaderProgram(), "uAlbedoTexture"), 0);
-*/
     }
 
     if (modulateParam.type == FFL_MODULATE_TYPE_SHAPE_NOSELINE
-        || modulateParam.type > cMaterialParamSize
+        || modulateParam.type > CUSTOM_MATERIAL_PARAM_SIZE
+        || !mLightEnable
     )
         return;
 
-    mLUTSpecSampler.linkTexture2D(sLUTSpecTextures[modulateParam.type]);
-    mLUTSpecSampler.tryBindFS(mLUTSpecSamplerLocation, 4);
+    const LUTSpecularTextureType specType =
+                        cModulateToLUTSpecularType[modulateParam.type];
+    const LUTFresnelTextureType fresType =
+                        cModulateToLUTFresnelType[modulateParam.type];
 
-    mLUTFresSampler.linkTexture2D(sLUTFresTextures[modulateParam.type]);
+    mLUTSpecSampler.linkTexture2D(sLUTSpecTextures[specType]);
+    mLUTFresSampler.linkTexture2D(sLUTFresTextures[fresType]);
+
+    mLUTSpecSampler.tryBindFS(mLUTSpecSamplerLocation, 4);
     mLUTFresSampler.tryBindFS(mLUTFresSamplerLocation, 5);
-/*
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, sLUTFresTextures[modulateParam.type]->getNativeTextureHandle());
-    glUniform1i(glGetUniformLocation(mShader.getShaderProgram(), "uLUTFresTexture"), 5);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, sLUTSpecTextures[modulateParam.type]->getNativeTextureHandle());
-    glUniform1i(glGetUniformLocation(mShader.getShaderProgram(), "uLUTSpecTexture"), 4);
-*/
 }
 
-FFLColor multiplyColorIfNeeded(FFLModulateType modulateType, FFLColor color)
+FFLColor multiplyColorIfNeeded(FFLModulateParam param, FFLColor color)
 {
-    // faceline/skin color should be excluded from this
+    // only multiply these colors
+    // notably do not multiply mouth, eye, faceline/forehead
     if (
-        // forehead, nose etc. use faceline color
-        // faceline usually uses texture but if there is no
-        // wrinkles or blush then faceline will go through this
-        // though that is only because of an optimization
-
-        modulateType == FFL_MODULATE_TYPE_SHAPE_FACELINE
-        || modulateType == FFL_MODULATE_TYPE_SHAPE_FOREHEAD
-        || modulateType == FFL_MODULATE_TYPE_SHAPE_NOSE
-        || modulateType == FFL_MODULATE_TYPE_SHAPE_GLASS
-        //|| modulateType == 9 // body, favorite color
+           param.type == FFL_MODULATE_TYPE_SHAPE_BEARD
+        || param.type == FFL_MODULATE_TYPE_SHAPE_HAIR
+        || param.type == FFL_MODULATE_TYPE_MOLE // not sure
+        || (param.mode == FFL_MODULATE_MODE_CONSTANT
+            && param.type == CUSTOM_MATERIAL_PARAM_BODY) // body/favorite color
     )
-        return color;
-    // FUN_0056ba10 in libcocos2dcpp.so
-    return FFLColor {
-        color.r * 0.9019608f,
-        color.g * 0.9019608f,
-        color.b * 0.9019608f,
-        color.a
-    };
+    {
+        // FUN_0056ba10 in libcocos2dcpp.so 2.4.0
+        return FFLColor {
+            color.r * 0.9019608f,
+            color.g * 0.9019608f,
+            color.b * 0.9019608f,
+            color.a
+        };
+    }
+    return color; // do not multiply
 }
 
 void ShaderMiitomo::setConstColor_(u32 ps_loc, FFLColor color)
@@ -541,16 +535,20 @@ void ShaderMiitomo::setModulate_(const FFLModulateParam& modulateParam)
     case FFL_MODULATE_MODE_ALPHA:
     case FFL_MODULATE_MODE_LUMINANCE_ALPHA:
     case FFL_MODULATE_MODE_ALPHA_OPA:
-        setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST1], multiplyColorIfNeeded(modulateParam.type, *modulateParam.pColorR));
+        setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST1], multiplyColorIfNeeded(modulateParam, *modulateParam.pColorR));
         break;
     case FFL_MODULATE_MODE_RGB_LAYERED:
+    {
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST1],
-                       multiplyColorIfNeeded(modulateParam.type, *modulateParam.pColorR));
+                       multiplyColorIfNeeded(modulateParam, *modulateParam.pColorR));
+        // sclera (white part of eye), upper lip
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST2],
-                       multiplyColorIfNeeded(modulateParam.type, *modulateParam.pColorG));
+                       multiplyColorIfNeeded(modulateParam, *modulateParam.pColorG));
+        // inner eye (mouth is never multiplied)
         setConstColor_(mPixelUniformLocation[PIXEL_UNIFORM_CONST3],
-                       multiplyColorIfNeeded(modulateParam.type, *modulateParam.pColorB));
+                       multiplyColorIfNeeded(modulateParam, *modulateParam.pColorB));
         break;
+    }
     default:
         break;
     }
@@ -566,8 +564,7 @@ void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
         return;
     }
 
-    // assuming we are never drawing the mask here
-    mShader.setUniform(true, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
+    mShader.setUniform(mLightEnable, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
 
     mShader.setUniform(cHSLightGroundColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_GROUND_COLOR], u32(-1));
     mShader.setUniform(cHSLightSkyColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_SKY_COLOR], u32(-1));
@@ -609,7 +606,7 @@ void ShaderMiitomo::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 
     const FFLColor& favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
 
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(9);
+    const FFLModulateType modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY);
     const FFLModulateParam modulateParam = {
         FFL_MODULATE_MODE_CONSTANT,
         // CUSTOM MODULATE TYPE FOR setModulate
@@ -629,7 +626,7 @@ void ShaderMiitomo::setBodyShaderPantsMaterial(PantsColor pantsColor)
         return mpMaskShader->setBodyShaderPantsMaterial(pantsColor);
     const FFLColor& color = cPantsColors[pantsColor];
 
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(10);
+    const FFLModulateType modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS);
     const FFLModulateParam modulateParam = {
         FFL_MODULATE_MODE_CONSTANT,
         // CUSTOM MODULATE TYPE FOR setModulate

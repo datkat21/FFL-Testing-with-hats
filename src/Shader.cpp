@@ -137,10 +137,7 @@ struct FFLiDefaultShaderMaterial
     FFLiDefaultShaderSpecularMode specularMode;
 };
 
-const int cMaterialParamSize = FFL_MODULATE_TYPE_SHAPE_MAX + 2;
-#define MATERIAL_PARAM_BODY FFL_MODULATE_TYPE_SHAPE_MAX
-#define MATERIAL_PARAM_PANTS FFL_MODULATE_TYPE_SHAPE_MAX + 1
-const FFLiDefaultShaderMaterial cMaterialParam[cMaterialParamSize] = {
+const FFLiDefaultShaderMaterial cMaterialParam[CUSTOM_MATERIAL_PARAM_SIZE] = {
     { // ShapeFaceline
         { 0.85f, 0.75f, 0.75f, 1.0f }, // ambient
         { 0.75f, 0.75f, 0.75f, 1.0f }, // diffuse
@@ -551,7 +548,7 @@ void Shader::setModulate_(const FFLModulateParam& modulateParam)
 
 void Shader::setMaterial_(const FFLModulateType modulateType)
 {
-    if (modulateType >= cMaterialParamSize)
+    if (modulateType >= CUSTOM_MATERIAL_PARAM_SIZE)
         return;
 
     mShader.setUniform(getColorUniform(cMaterialParam[modulateType].ambient), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_AMBIENT]);
@@ -608,9 +605,9 @@ void Shader::setBodyMaterialDefaultShader_(const FFLColor& pColor, bool usePants
 {
     FFLModulateType modulateType;
     if (usePantsMaterial)
-        modulateType = static_cast<FFLModulateType>(MATERIAL_PARAM_PANTS);
+        modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS);
     else
-        modulateType = static_cast<FFLModulateType>(MATERIAL_PARAM_BODY);
+        modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY);
     const FFLModulateParam modulateParam = {
         FFL_MODULATE_MODE_CONSTANT,
         modulateType,
@@ -625,8 +622,8 @@ void Shader::setBodyMaterialDefaultShader_(const FFLColor& pColor, bool usePants
     mShader.setUniform(getColorUniform(cRimColorBody), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
     // found that color attribute needs to be set? idk if this works very friendly?
 #if RIO_IS_WIN
-    static const u8 color[4] = { 255, 255, 0, 255 };
-    RIO_GL_CALL(glVertexAttrib4Nubv(mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR], color));
+    // TODO: needs opengl and may not be reliable for opengl es
+    RIO_GL_CALL(glVertexAttrib4f(mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR], 1.0f, 1.0f, 0.0f, 1.0f));
 #endif
 }
 
@@ -660,7 +657,7 @@ void Shader::draw_(const FFLDrawParam& draw_param)
     setMaterial_(modulateType);
 
     // moved from setMaterial_ to here, set material specular mode
-    if (modulateType < cMaterialParamSize) {
+    if (modulateType < CUSTOM_MATERIAL_PARAM_SIZE) {
         // blinn as default...
         FFLiDefaultShaderSpecularMode materialSpecularMode = FFL_SPECULAR_MODE_BLINN;
         if (mSpecularMode != FFL_SPECULAR_MODE_BLINN) // if the default is not blinn,
@@ -758,10 +755,7 @@ void Shader::draw_(const FFLDrawParam& draw_param)
                     break;
                 }
             }
-/*
-            else if (location != -1 && type == FFL_ATTRIBUTE_BUFFER_TYPE_COLOR)
-                RIO_GL_CALL(glVertexAttrib4Nubv(location, static_cast<u8*>(ptr)));
-*/
+
             else if (location != -1)
                 // Disable the attribute to avoid using uninitialized data
                 RIO_GL_CALL(glDisableVertexAttribArray(location));

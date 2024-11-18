@@ -4,7 +4,14 @@
 #include <nn/ffl.h>
 #include <nn/ffl/FFLiCharModel.h>
 
-#include <PantsColor.h>
+// Custom material parameters to accomodate body and pants
+// used in all shader classes at the moment.
+#define CUSTOM_MATERIAL_PARAM_BODY  FFL_MODULATE_TYPE_SHAPE_MAX
+#define CUSTOM_MATERIAL_PARAM_PANTS FFL_MODULATE_TYPE_SHAPE_MAX + 1
+
+#define CUSTOM_MATERIAL_PARAM_SIZE  CUSTOM_MATERIAL_PARAM_PANTS + 1
+
+#include <PantsColor.h> // make available to shaders
 
 class IShader
 {

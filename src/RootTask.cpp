@@ -663,6 +663,8 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
     return true;
 }
 
+#define TGA_HEADER_SIZE 18
+
 void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Texture2D* texture, int socket, int ssaaFactor) {
     // does operations on the renderbuffer assuming it is already bound
 #ifdef TRY_SCALING
@@ -677,7 +679,7 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
     u32 bufferSize = rio::Texture2DUtil::calcImageSize(textureFormat, width, height);
 
     const u8 bitsPerPixel = rio::TextureFormatUtil::getPixelByteSize(textureFormat) * 8;
-#define TGA_HEADER_SIZE 18
+
     // create tga header for this texture
     u8 header[TGA_HEADER_SIZE]; // tga header size = 0x12
     // set all fields to 0 initially including unused ones
@@ -688,7 +690,7 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
     header[14] = height & 0xff;        // height MSB
     header[15] = (height >> 8) & 0xff; // height LSB
     header[16] = bitsPerPixel;
-    header[17] = 32; // 32 = Flag that sets the image origin to the top left
+    header[17] = 8;  // 32 = Flag that sets the image origin to the top left
                      // nnas standard tgas set this to 8 to be upside down
     // tga header will be written to socket at the same time pixels are reads
 
@@ -958,6 +960,8 @@ void RootTask::drawMiiBody(Model* pModel, PantsColor pantsColor,
     }
 }
 
+
+
 // configures camera, proj mtx, uses height from charinfo...
 // ... to handle the view type appropriately
 void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo) {
@@ -1185,13 +1189,30 @@ void RootTask::handleRenderRequest(char* buf) {
 
     mCamera.getMatrix(&view_mtx);
 
-    #ifdef RIO_NO_CLIP_CONTROL
-        // render upside down so glReadPixels is right side up
-        if (projMtx->m[1][1] > 0) // if it is not already negative
-            projMtx->m[1][1] *= -1.f; // Flip Y axis
-        // set front face culling from CCW to CW
-        RIO_GL_CALL(glFrontFace(GL_CW));
-    #endif
+#if RIO_IS_WIN
+    // if default gl clip control is being used, or the response needs flipped y for tga...
+    bool flipY = false;
+
+    // When RIO_NO_CLIP_CONTROL is not defined, we only flip Y if the response format requires it
+    if (renderRequest->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y)
+        flipY = true;
+
+#ifdef RIO_NO_CLIP_CONTROL
+    // When RIO_NO_CLIP_CONTROL is defined, we need to flip Y to get the image right-side up
+    flipY = !flipY;
+#endif // RIO_NO_CLIP_CONTROL
+
+    GLint prevFrontFace;
+
+    if (flipY) {
+        // Flip the Y-axis of the projection matrix
+        projMtx.m[1][1] *= -1.f;
+        // Save the current front face state
+        glGetIntegerv(GL_FRONT_FACE, &prevFrontFace);
+        // Change the front face culling
+        RIO_GL_CALL(glFrontFace(prevFrontFace == GL_CCW ? GL_CW : GL_CCW));
+    }
+#endif // RIO_IS_WIN
 
     mpModel->setLightEnable(renderRequest->lightEnable);
 
@@ -1219,8 +1240,12 @@ void RootTask::handleRenderRequest(char* buf) {
     // ig this works on opengl and is the teeniest tiniest bit more efficient
     // however golang does not support this and png, jpeg, webp aren't using this anyway so
     textureFormat = rio::TEXTURE_FORMAT_B8_G8_R8_A8_UNORM;
-#elif RIO_IS_WIN
-    if (renderRequest->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y)
+#elif RIO_IS_WIN //&& !defined(RIO_GLES) // not supported in gles core
+    if (renderRequest->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y
+#ifdef RIO_GLES
+        && GLAD_GL_EXT_texture_format_BGRA8888
+#endif
+    )
         textureFormat = rio::TEXTURE_FORMAT_B8_G8_R8_A8_UNORM;
 #endif
     rio::Texture2D renderTextureColor(textureFormat, renderBuffer.getSize().x, renderBuffer.getSize().y, 1);
@@ -1266,8 +1291,7 @@ void RootTask::handleRenderRequest(char* buf) {
     RIO_LOG("drawOpa rendered to the buffer.\n");
 
     // draw body?
-    if (willDrawBody)
-    {
+    if (willDrawBody) {
         FFLFavoriteColor originalFavoriteColor = pCharInfo->favoriteColor;
         if (renderRequest->clothesColor >= 0
             // verify favorite color is in range here bc it is NOT verified in drawMiiBodyREAL
@@ -1314,13 +1338,17 @@ void RootTask::handleRenderRequest(char* buf) {
 
     //RIO_LOG("Render buffer unbound and GPU cache invalidated.\n");
 
+#if RIO_IS_WIN
+    // Restore OpenGL state if we modified it
+    if (flipY) {
+        // Restore the front face culling to its default state
+        RIO_GL_CALL(glFrontFace(prevFrontFace));
+
+        // Flip the Y-axis back
+        projMtx.m[1][1] *= -1.f;
+    }
+#endif
     if (!mpServerOnly) {
-        #ifdef RIO_NO_CLIP_CONTROL
-            // set back front face culling
-            RIO_GL_CALL(glFrontFace(GL_CCW));
-            if (projMtx->m[1][1] < 0) // if it is negative
-                projMtx->m[1][1] *= -1.f; // Flip Y axis back
-        #endif
         rio::Window::instance()->makeContextCurrent();
 
         u32 width = rio::Window::instance()->getWidth();

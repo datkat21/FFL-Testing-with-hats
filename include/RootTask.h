@@ -83,9 +83,9 @@ private:
 private:
     bool                mInitialized;
     bool                mSocketIsListening;
-    #if RIO_IS_WIN
+#if RIO_IS_WIN
     std::vector<std::vector<char>> mStoreDataArray;
-    #endif
+#endif
     FFLResourceDesc     mResourceDesc;
     IShader*            mpShaders[SHADER_TYPE_MAX];
     rio::BaseMtx44f     mProjMtx;
