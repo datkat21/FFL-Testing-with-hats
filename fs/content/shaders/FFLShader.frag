@@ -229,7 +229,7 @@ void main()
 //#endif
 
     // avoids little outline around mask elements
-    if(color.a == 0.0f)
+    if(u_mode != FFL_MODULATE_MODE_CONSTANT && color.a == 0.0f)
     {
         discard;
     }
