@@ -103,7 +103,7 @@ CXXFLAGS := -g -std=c++17 -Wall -Wno-unused-private-field -Wno-missing-braces $(
 # glob all files in here for now
 ifeq (,$(findstring FFL_NO_NINTEXUTILS, $(DEFS)))
 # then FFL_NO_NINTEXUTILS is NOT defined
-NINTEXUTILS_SRC := $(shell find ninTexUtils/src/ninTexUtils -name '*.c' -o -name '*.cpp')
+NINTEXUTILS_SRC := ninTexUtils/src/ninTexUtils/gx2/gx2Surface.cpp ninTexUtils/src/ninTexUtils/gx2/tcl/addrlib.cpp
 endif
 RIO_SRC := $(shell find rio/src -name '*.cpp')
 FFL_SRC := $(shell find ffl/src -name '*.cpp')

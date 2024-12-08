@@ -405,6 +405,8 @@ ShaderSwitch::ShaderSwitch()
     : mVBOHandle()
     , mVAOHandle()
 #endif
+    , mCallback()
+    , mpCharInfo(nullptr)
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
     rio::MemUtil::set(mPixelUniformLocation, u8(-1), sizeof(mPixelUniformLocation));
@@ -463,10 +465,12 @@ void ShaderSwitch::initialize()
 
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_POSITION]  = mShader.getVertexAttribLocation("i_Position");
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL]    = mShader.getVertexAttribLocation("i_Normal");
+    // no tangent with switch shader, despite there being
+    // evidence that the switch assets have them (AdjustVertexBuffer)
     //mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("a_tangent");
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD]  = mShader.getVertexAttribLocation("i_TexCoord");
-    // TODO TODO I DO NOT KNOW WHAT TO DO WITH PARAMETER SO THIS MAKES IT EFFECTIVELY RANDOMY
-    // NOTE: VALUES FOR JASMINE, IN CASE IT IS NEEDED: -0.00787f, 0.40157f, 0.03937f, -1.0f
+    // NOTE: i_Parameter is another name for the color attribute
+    // only one used is specular mix/blend in r component, only for hair
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("i_Parameter");
 
 #if RIO_IS_CAFE
@@ -526,7 +530,7 @@ void ShaderSwitch::initialize()
     setShaderCallback_();
 }
 
-void ShaderSwitch::setShaderCallback_()
+void ShaderSwitch::setShaderCallback_() const
 {
     FFLSetShaderCallback(&mCallback);
     // have to set this AFTER FFLSetShaderCallback (initializes it to false)
@@ -610,7 +614,7 @@ void ShaderSwitch::bindTexture_(const FFLModulateParam& modulateParam)
 {
     if (modulateParam.pTexture2D != nullptr)
     {
-        mSampler.linkTexture2D(modulateParam.pTexture2D);
+        mSampler.linkTexture2D(reinterpret_cast<const rio::Texture2D*>(modulateParam.pTexture2D));
         mSampler.tryBindFS(mSamplerLocation, 0);
     }
 }
@@ -709,6 +713,7 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
                 commonColor = 8;
             else
                 commonColor = mpCharInfo->parts.hairColor & FFLI_NN_MII_COMMON_COLOR_MASK;
+            RIO_ASSERT(commonColor >= 0 && commonColor <= 100);
             drawParamMaterial = cHairMaterials[commonColor];
             //RIO_LOG("hair color: %d, specular factor B: %f\n", commonColor, drawParamMaterial.specular.factorB);
             break;
@@ -718,6 +723,7 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
                 commonColor = 8;
             else
                 commonColor = mpCharInfo->parts.beardColor & FFLI_NN_MII_COMMON_COLOR_MASK;
+            RIO_ASSERT(commonColor >= 0 && commonColor <= 100);
             drawParamMaterial = cBeardMaterials[commonColor];
             break;
         default:
@@ -753,7 +759,11 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
 
     switch (modulateParam.type) {
         case FFL_MODULATE_TYPE_SHAPE_HAIR:
+            // takes specular blend/mix into account
+            // meaning a_color.r / i_Parameter.r
             drawType = DRAW_TYPE_HAIR;
+            // without that, certain highlights/shadows
+            // will not appear as they do on switch
             break;
         // NOTE: the shader will take alpha into account if
         // you set draw type uniform to this, and the faceline

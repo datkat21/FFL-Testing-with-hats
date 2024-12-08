@@ -89,31 +89,37 @@ void safeNormalizeVec3(rio::BaseVec3f* vec) {
 
 void gramSchmidtOrthonormalizeMtx34(rio::BaseMtx34f* mat)
 {
-    rio::BaseVec3f c0, c0Normalized, c1, c1Normalized, c1New, c2New;
-
     // Extract and normalize the first column
-    c0.x = mat->m[0][0];
-    c0.y = mat->m[1][0];
-    c0.z = mat->m[2][0];
-    c0Normalized = c0;
+    rio::BaseVec3f c0 = {
+        mat->m[0][0],
+        mat->m[1][0],
+        mat->m[2][0]
+    };
+    rio::BaseVec3f c0Normalized = c0;
     safeNormalizeVec3(&c0Normalized);
 
     // Extract and normalize the second column
-    c1.x = mat->m[0][1];
-    c1.y = mat->m[1][1];
-    c1.z = mat->m[2][1];
-    c1Normalized = c1;
+    rio::BaseVec3f c1 = {
+            mat->m[0][1],
+            mat->m[1][1],
+            mat->m[2][1]
+    };
+    rio::BaseVec3f c1Normalized = c1;
     safeNormalizeVec3(&c1Normalized);
 
     // Compute the third column as the cross product of the first two normalized columns
-    c2New.x = c0Normalized.y * c1Normalized.z - c0Normalized.z * c1Normalized.y;
-    c2New.y = c0Normalized.z * c1Normalized.x - c0Normalized.x * c1Normalized.z;
-    c2New.z = c0Normalized.x * c1Normalized.y - c0Normalized.y * c1Normalized.x;
+    rio::BaseVec3f c2New = {
+        c0Normalized.y * c1Normalized.z - c0Normalized.z * c1Normalized.y,
+        c0Normalized.z * c1Normalized.x - c0Normalized.x * c1Normalized.z,
+        c0Normalized.x * c1Normalized.y - c0Normalized.y * c1Normalized.x
+    };
 
     // Compute the new second column as the cross product of the third column and the first normalized column
-    c1New.x = c2New.y * c0Normalized.z - c2New.z * c0Normalized.y;
-    c1New.y = c2New.z * c0Normalized.x - c2New.x * c0Normalized.z;
-    c1New.z = c2New.x * c0Normalized.y - c2New.y * c0Normalized.x;
+    rio::BaseVec3f c1New = {
+        c2New.y * c0Normalized.z - c2New.z * c0Normalized.y,
+        c2New.z * c0Normalized.x - c2New.x * c0Normalized.z,
+        c2New.x * c0Normalized.y - c2New.y * c0Normalized.x
+    };
 
     // Update the matrix with the new orthonormal columns
     mat->m[0][0] = c0Normalized.x;
@@ -157,7 +163,10 @@ ShaderMiitomo::ShaderMiitomo(IShader* mpMaskShader)
     , mVBOHandle()
     , mVAOHandle()
 #endif
-
+    , mCallback()
+    , mpCharInfo(nullptr)
+    , mLightEnable(true)
+    , mIsUsingMaskShader(false)
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
     rio::MemUtil::set(mPixelUniformLocation, u8(-1), sizeof(mPixelUniformLocation));
@@ -198,7 +207,7 @@ ShaderMiitomo::~ShaderMiitomo()
 
 #if RIO_IS_WIN
 
-void loadTextureFromPath(const char* filePathChar, rio::TextureFormat format, s32 width, s32 height, GLuint textureHandle) {
+static void loadTextureFromPath(const char* filePathChar, rio::TextureFormat format, s32 width, s32 height, GLuint textureHandle) {
     // Use rio::FileDeviceMgr to load the file
     rio::FileDevice::LoadArg arg;
     const std::string filePath = std::string(filePathChar);
@@ -277,10 +286,13 @@ void ShaderMiitomo::initialize()
     mLUTFresSamplerLocation =  mShader.getFragmentSamplerLocation("uLUTFresTexture");
 
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_POSITION]  = mShader.getVertexAttribLocation("aPosition");
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL]    = mShader.getVertexAttribLocation("aNormal");
+    // texcoord is not set for hair
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD]  = mShader.getVertexAttribLocation("aTexcoord0");
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("aColor");
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("aTangent");
+    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL]    = mShader.getVertexAttribLocation("aNormal");
+    // below are unused for mii drawing, only for accessories
+    //mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("aColor");   // AGX_FEATURE_VERTEX_COLOR
+    //mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("aTangent"); // to "vEyeVecWorldOrTangent"
+                                                                                                             // only with AGX_FEATURE_BUMP_TEXTURE
 
 #if RIO_IS_WIN
 
@@ -356,7 +368,7 @@ void ShaderMiitomo::initialize()
     setShaderCallback_();
 }
 
-void ShaderMiitomo::setShaderCallback_()
+void ShaderMiitomo::setShaderCallback_() const
 {
     FFLSetShaderCallback(&mCallback);
 }
@@ -474,7 +486,7 @@ void ShaderMiitomo::bindTexture_(const FFLModulateParam& modulateParam)
 {
     if (modulateParam.pTexture2D != nullptr)
     {
-        mSampler.linkTexture2D(modulateParam.pTexture2D);
+        mSampler.linkTexture2D(reinterpret_cast<const rio::Texture2D*>(modulateParam.pTexture2D));
         mSampler.tryBindFS(mSamplerLocation, 0);
     }
 
@@ -483,6 +495,9 @@ void ShaderMiitomo::bindTexture_(const FFLModulateParam& modulateParam)
         || !mLightEnable
     )
         return;
+
+    RIO_ASSERT(modulateParam.type < sizeof(cModulateToLUTSpecularType) / sizeof(LUTSpecularTextureType));
+    RIO_ASSERT(modulateParam.type < sizeof(cModulateToLUTFresnelType) / sizeof(LUTFresnelTextureType));
 
     const LUTSpecularTextureType specType =
                         cModulateToLUTSpecularType[modulateParam.type];
@@ -496,7 +511,7 @@ void ShaderMiitomo::bindTexture_(const FFLModulateParam& modulateParam)
     mLUTFresSampler.tryBindFS(mLUTFresSamplerLocation, 5);
 }
 
-FFLColor multiplyColorIfNeeded(FFLModulateParam param, FFLColor color)
+static FFLColor multiplyColorIfNeeded(FFLModulateParam param, FFLColor color)
 {
     // only multiply these colors
     // notably do not multiply mouth, eye, faceline/forehead
@@ -595,6 +610,7 @@ void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
         case FFL_MODULATE_TYPE_SHAPE_NOSELINE:
         case FFL_MODULATE_TYPE_SHAPE_GLASS:
             mShader.setUniform(true, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_ALPHA_TEST]);
+            [[fallthrough]];
         default:
             mShader.setUniform(false, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_ALPHA_TEST]);
             break;

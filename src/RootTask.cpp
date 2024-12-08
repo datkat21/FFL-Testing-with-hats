@@ -11,6 +11,10 @@
 #include <gfx/rio_Projection.h>
 #include <gfx/rio_Window.h>
 #include <gfx/rio_Graphics.h>
+
+#include <gpu/rio_RenderBuffer.h>
+#include <gpu/rio_RenderTarget.h>
+
 #include <gpu/rio_RenderState.h>
 #include <gpu/win/rio_Texture2DUtilWin.h>
 
@@ -24,6 +28,18 @@
 RootTask::RootTask()
     : ITask("FFL Testing")
     , mInitialized(false)
+    , mSocketIsListening(false)
+    // contains pointers
+    , mResourceDesc()
+    , mpShaders{ nullptr }
+    , mProjMtx()
+    , mProjMtxIconBody(nullptr)
+    , mCamera()
+    , mCounter(0.0f)
+    , mMiiCounter(0)
+    , mpModel(nullptr)
+    , mpBodyModels{ nullptr }
+
     // disables occasionally drawing mii and enables blocking
     , mpServerOnly(getenv("SERVER_ONLY"))
     , mpNoSpin(getenv("NO_SPIN"))
@@ -184,10 +200,11 @@ void RootTask::prepare_()
 {
     mInitialized = false;
 
-    FFLInitDesc init_desc;
-    init_desc.fontRegion = FFL_FONT_REGION_JP_US_EU;
-    init_desc._c = false;
-    init_desc._10 = true;
+    FFLInitDesc init_desc = {
+        .fontRegion = FFL_FONT_REGION_JP_US_EU,
+        ._c = false,
+        ._10 = true
+    };
 
 #ifndef TEST_FFL_DEFAULT_RESOURCE_LOADING
 
@@ -565,7 +582,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
         }
         RIO_LOG("%s", errMsg.c_str());
         errMsg = socketErrorPrefix + errMsg;
-        send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
+        send(socket_handle, errMsg.c_str(), static_cast<int>(errMsg.length()), 0);
         return false;
     }
 
@@ -585,7 +602,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
             + "\n";
             RIO_LOG("%s", errMsg.c_str());
             errMsg = socketErrorPrefix + errMsg;
-            send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
+            send(socket_handle, errMsg.c_str(), static_cast<int>(errMsg.length()), 0);
             return false;
         }
 /*
@@ -602,13 +619,13 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
     // NOTE NOTE: MAKE SURE TO CHECK NULL MII ID TOO
 
 
-    FFLCharModelSource modelSource;
-    // needs to be initialized to zero
-    modelSource.index = 0;
-    // don't call PickupCharInfo or verify mii after we already did
-    modelSource.dataSource = FFL_DATA_SOURCE_DIRECT_POINTER;
-    //modelSource.dataSource = FFL_DATA_SOURCE_BUFFER; // aka CharInfo
-    modelSource.pBuffer = &charInfo;
+    FFLCharModelSource modelSource = {
+        // don't call PickupCharInfo or verify mii after we already did
+        .dataSource = FFL_DATA_SOURCE_DIRECT_POINTER, // aka CharInfo/CharModel??
+                                                      // or _SOURCE_BUFFER (verifies)
+        .pBuffer = &charInfo,
+        .index = 0 // needs to be initialized to zero
+    };
 
     const FFLExpressionFlag expressionFlag = (buf->expressionFlag != 0 ? buf->expressionFlag
         : static_cast<FFLExpressionFlag>(1) << buf->expression
@@ -661,7 +678,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
         + "\n";
         RIO_LOG("%s", errMsg.c_str());
         errMsg = socketErrorPrefix + errMsg;
-        send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
+        send(socket_handle, errMsg.c_str(), static_cast<int>(errMsg.length()), 0);
         delete mpModel;
         mpModel = nullptr;
         return false;
@@ -673,7 +690,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
 
 #define TGA_HEADER_SIZE 18
 
-void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Texture2D* texture, int socket, int ssaaFactor) {
+static void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Texture2D* texture, int socket, int ssaaFactor) {
     // does operations on the renderbuffer assuming it is already bound
 #ifdef TRY_SCALING
     const u32 width = texture->getWidth() / ssaaFactor;
@@ -874,7 +891,7 @@ void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Textu
 }
 
 // scale vec3 for body
-const rio::Vector3f calculateScaleFactors(f32 build, f32 height) {
+static const rio::Vector3f calculateScaleFactors(f32 build, f32 height) {
     rio::Vector3f scaleFactors;
     // referenced in anonymous function in nn::mii::detail::VariableIconBodyImpl::CalculateWorldMatrix
     // also in ffl_app.rpx: FUN_020ec380 (FFLUtility), FUN_020737b8 (mii maker US)
@@ -1047,8 +1064,6 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
 
             const float scaleFactorY = (static_cast<float>(pCharInfo->height) * 0.006015625f) + 0.5f;
 
-            rio::Vector3f pos, at;
-
             // These camera parameters look right when the character is tallest
             const rio::Vector3f posStart = { 0.0f, 30.0f, 550.0f };
             const rio::Vector3f atStart = { 0.0f, 65.0f, 0.0f };
@@ -1060,15 +1075,21 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
             // Calculate interpolation factor (normalized to range [0, 1])
             float t = (scaleFactorY - 0.5f) / (1.264f - 0.5f);
 
+
+
             // Interpolate between start and end positions
-            pos.x = posStart.x + t * (posEnd.x - posStart.x);
-            pos.y = posStart.y + t * (posEnd.y - posStart.y);
-            pos.z = posStart.z + t * (posEnd.z - posStart.z);
+            rio::Vector3f pos = {
+                posStart.x + t * (posEnd.x - posStart.x),
+                posStart.y + t * (posEnd.y - posStart.y),
+                posStart.z + t * (posEnd.z - posStart.z)
+            };
 
             // Interpolate between start and end target positions
-            at.x = atStart.x + t * (atEnd.x - atStart.x);
-            at.y = atStart.y + t * (atEnd.y - atStart.y);
-            at.z = atStart.z + t * (atEnd.z - atStart.z);
+            rio::Vector3f at = {
+                atStart.x + t * (atEnd.x - atStart.x),
+                atStart.y + t * (atEnd.y - atStart.y),
+                atStart.z + t * (atEnd.z - atStart.z)
+            };
 
             /*
             // height = 127, 1.264
@@ -1106,7 +1127,7 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
 
 
 // Convert degrees to radians
-rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3]) {
+static rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3]) {
     rio::Vector3f radians;
     radians.x = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[0]), 360.0f));
     radians.y = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[1]), 360.0f));
@@ -1115,16 +1136,16 @@ rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3]) {
 }
 
 // Calculate position based on spherical coordinates
-rio::Vector3f calculateCameraOrbitPosition(f32 radius, const rio::Vector3f& radians) {
-    rio::Vector3f position;
-    position.x = radius * -std::sin(radians.y) * std::cos(radians.x);
-    position.y = radius * std::sin(radians.x);
-    position.z = radius * std::cos(radians.y) * std::cos(radians.x);
-    return position;
+static rio::Vector3f calculateCameraOrbitPosition(f32 radius, const rio::Vector3f& radians) {
+    return {
+        radius * -std::sin(radians.y) * std::cos(radians.x),
+        radius * std::sin(radians.x),
+        radius * std::cos(radians.y) * std::cos(radians.x)
+    };
 }
 
 // Calculate up vector based on z rotation
-rio::Vector3f calculateUpVector(const rio::Vector3f& radians) {
+static rio::Vector3f calculateUpVector(const rio::Vector3f& radians) {
     rio::Vector3f up;
     up.x = std::sin(radians.z);
     up.y = std::cos(radians.z);
@@ -1154,6 +1175,9 @@ void RootTask::handleRenderRequest(char* buf) {
 
     // mask ONLY - which was already initialized, so nothing else needs to happen
     if (renderRequest->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY) {
+#ifdef FFL_NO_RENDER_TEXTURE
+        RIO_ASSERT(false && "FFL_NO_RENDER_TEXTURE is enabled, but mask only draw mode relies on binding to/reading from it.");
+#else
         FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel());
         /* NOTE: Official FFL has the following methods:
          * FFLiGetCharInfoFromCharModel
@@ -1184,8 +1208,9 @@ void RootTask::handleRenderRequest(char* buf) {
             delete mpModel;
             mpModel = nullptr;
         }
-#endif
+#endif // FFL_ENABLE_NEW_MASK_ONLY_FLAG
 
+#endif // FFL_NO_RENDER_TEXTURE
         closesocket(new_socket);
         return;
     }
@@ -1236,8 +1261,6 @@ void RootTask::handleRenderRequest(char* buf) {
     mCamera.pos() = position;
     mCamera.setUp(upVector);
 
-    rio::Matrix34f view_mtx;
-
     rio::Matrix34f model_mtx = rio::Matrix34f::ident;
 
 
@@ -1256,6 +1279,7 @@ void RootTask::handleRenderRequest(char* buf) {
 
     mpModel->setMtxRT(model_mtx);
 
+    rio::Matrix34f view_mtx;
     mCamera.getMatrix(&view_mtx);
 
 #if RIO_IS_WIN
@@ -1298,7 +1322,10 @@ void RootTask::handleRenderRequest(char* buf) {
     const int iResolution = static_cast<int>(renderRequest->resolution);
     const int width = iResolution * ssaaFactor;
     // TODO: may need to round to nearest multiple of twwooooo????
-    const int height = (iResolution * aspectHeightFactor) * ssaaFactor;
+    const int height = static_cast<const int>(
+        (static_cast<float>(iResolution) * aspectHeightFactor)
+        * static_cast<float>(ssaaFactor)
+    );
 
     renderBuffer.setSize(width, height);
     RIO_LOG("Render buffer created with size: %dx%d\n", renderBuffer.getSize().x, renderBuffer.getSize().y);

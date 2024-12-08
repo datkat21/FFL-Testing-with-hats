@@ -42,7 +42,7 @@ public:
 
 private:
     static void applyAlphaTestCallback_(void* p_obj, bool enable, rio::Graphics::CompareFunc func, f32 ref);
-    void setShaderCallback_();
+    void setShaderCallback_() const;
 
     void bindTexture_(const FFLModulateParam& modulateParam);
     void setConstColor_(u32 ps_loc, const FFLColor& color);

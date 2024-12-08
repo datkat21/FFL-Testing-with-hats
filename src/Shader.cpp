@@ -88,31 +88,37 @@ void safeNormalizeVec3(rio::BaseVec3f* vec) {
 
 void gramSchmidtOrthonormalizeMtx34(rio::BaseMtx34f* mat)
 {
-    rio::BaseVec3f c0, c0Normalized, c1, c1Normalized, c1New, c2New;
-
     // Extract and normalize the first column
-    c0.x = mat->m[0][0];
-    c0.y = mat->m[1][0];
-    c0.z = mat->m[2][0];
-    c0Normalized = c0;
+    rio::BaseVec3f c0 = {
+        mat->m[0][0],
+        mat->m[1][0],
+        mat->m[2][0]
+    };
+    rio::BaseVec3f c0Normalized = c0;
     safeNormalizeVec3(&c0Normalized);
 
     // Extract and normalize the second column
-    c1.x = mat->m[0][1];
-    c1.y = mat->m[1][1];
-    c1.z = mat->m[2][1];
-    c1Normalized = c1;
+    rio::BaseVec3f c1 = {
+            mat->m[0][1],
+            mat->m[1][1],
+            mat->m[2][1]
+    };
+    rio::BaseVec3f c1Normalized = c1;
     safeNormalizeVec3(&c1Normalized);
 
     // Compute the third column as the cross product of the first two normalized columns
-    c2New.x = c0Normalized.y * c1Normalized.z - c0Normalized.z * c1Normalized.y;
-    c2New.y = c0Normalized.z * c1Normalized.x - c0Normalized.x * c1Normalized.z;
-    c2New.z = c0Normalized.x * c1Normalized.y - c0Normalized.y * c1Normalized.x;
+    rio::BaseVec3f c2New = {
+        c0Normalized.y * c1Normalized.z - c0Normalized.z * c1Normalized.y,
+        c0Normalized.z * c1Normalized.x - c0Normalized.x * c1Normalized.z,
+        c0Normalized.x * c1Normalized.y - c0Normalized.y * c1Normalized.x
+    };
 
     // Compute the new second column as the cross product of the third column and the first normalized column
-    c1New.x = c2New.y * c0Normalized.z - c2New.z * c0Normalized.y;
-    c1New.y = c2New.z * c0Normalized.x - c2New.x * c0Normalized.z;
-    c1New.z = c2New.x * c0Normalized.y - c2New.y * c0Normalized.x;
+    rio::BaseVec3f c1New = {
+        c2New.y * c0Normalized.z - c2New.z * c0Normalized.y,
+        c2New.z * c0Normalized.x - c2New.x * c0Normalized.z,
+        c2New.x * c0Normalized.y - c2New.y * c0Normalized.x
+    };
 
     // Update the matrix with the new orthonormal columns
     mat->m[0][0] = c0Normalized.x;
@@ -242,6 +248,8 @@ Shader::Shader()
     : mVBOHandle()
     , mVAOHandle()
 #endif
+    , mCallback()
+    , mpCharInfo(nullptr)
     , mSpecularMode(FFL_SPECULAR_MODE_ANISO)
 #ifndef DEFAULT_SHADER_FOR_BODY
     , mIsBodyUsingDefaultShader(false)
@@ -249,6 +257,8 @@ Shader::Shader()
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
     rio::MemUtil::set(mPixelUniformLocation, u8(-1), sizeof(mPixelUniformLocation));
+    rio::MemUtil::set(mBodyVertexUniformLocation, u8(-1), sizeof(mBodyVertexUniformLocation));
+    rio::MemUtil::set(mBodyPixelUniformLocation, u8(-1), sizeof(mBodyPixelUniformLocation));
     mSamplerLocation = -1;
     rio::MemUtil::set(mAttributeLocation, u8(-1), sizeof(mAttributeLocation));
 }
@@ -317,9 +327,25 @@ void Shader::initialize()
     mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SP_POWER]   = mBodyShader.getFragmentUniformLocation("SP_power");
 
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_POSITION]  = mShader.getVertexAttribLocation("a_position");
+    // hair does not have texcoord
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD]  = mShader.getVertexAttribLocation("a_texCoord");
+
+    // 2D planes (faceline/mask) do not have any of these
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL]    = mShader.getVertexAttribLocation("a_normal");
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("a_color");
+    /* NOTE: "color" is not meant as an actual color... it is
+     * only here as parameters to control the anisotropic effect
+     * color.r - aniso specular blend, param 1 to calculateSpecularBlend
+                 (switch SampleShader: "specularMix" in vertex shader)
+     * color.g - aniso specular strength, param 4 to calculateSpecularColor
+                 (for blinn they force it to 1.0)
+     * color.b - unused?
+     * color.a - rim lighting width "rimWidth", param 3 into calculateRimColor
+                 (when rim lighting is not active, usually the reason is that A is 0 here)
+
+     * color's stride is 0 and size is 4 on everything else, suggesting it is constant
+     */
+    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("a_color"); // default <1, 1, 0, 1>
+    // tangent is only set on hair, size and stride are 0 on everything else
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("a_tangent");
 
 #if RIO_IS_CAFE
@@ -382,7 +408,7 @@ void Shader::initialize()
     setShaderCallback_();
 }
 
-void Shader::setShaderCallback_()
+void Shader::setShaderCallback_() const
 {
     FFLSetShaderCallback(&mCallback);
 }
@@ -500,7 +526,7 @@ void Shader::bindTexture_(const FFLModulateParam& modulateParam)
 {
     if (modulateParam.pTexture2D != nullptr)
     {
-        mSampler.linkTexture2D(modulateParam.pTexture2D);
+        mSampler.linkTexture2D(reinterpret_cast<const rio::Texture2D*>(modulateParam.pTexture2D));
         mSampler.tryBindFS(mSamplerLocation, 0);
     }
 }
@@ -721,8 +747,14 @@ void Shader::draw_(const FFLDrawParam& draw_param)
             const FFLAttributeBuffer& buffer = draw_param.attributeBufferParam.attributeBuffers[type];
             s32 location = mAttributeLocation[type];
             void* ptr = buffer.ptr;
-
-            if (ptr && location != -1 && buffer.stride > 0)
+            /*
+            if (ptr && buffer.stride == 0 && type == FFL_ATTRIBUTE_BUFFER_TYPE_COLOR)
+            {
+                u8* ptrU8 = reinterpret_cast<u8*>(ptr);
+                RIO_LOG("color stride 0: %d, %d, %d, %d\n", ptrU8[0], ptrU8[1], ptrU8[2], ptrU8[3]);
+            }
+            */
+            if (ptr && location != -1 && buffer.stride > 0) //only color's stride is 0
             {
                 u32 stride = buffer.stride;
                 u32 vbo_handle = mVBOHandle[type];
