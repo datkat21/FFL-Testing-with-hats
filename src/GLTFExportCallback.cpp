@@ -91,6 +91,11 @@ int GLTFExportCallback::MapPrimitiveMode(rio::Drawer::PrimitiveMode mode)
 
 bool GLTFExportCallback::ExtractTextureToRGBA(rio::Texture2D* texture, std::vector<unsigned char>& rgbaData, int* width, int* height)
 {
+#if !RIO_IS_WIN
+    #pragma warning("GLTFExportCallback::ExtractTextureToRGBA does not work on non-Windows right now.")
+    RIO_ASSERT("GLTFExportCallback::ExtractTextureToRGBA does not work on non-Windows right now.");
+    return false;
+#else
     if (!texture) return false;
 
     // Use texture width, height, and internal format
@@ -144,6 +149,7 @@ bool GLTFExportCallback::ExtractTextureToRGBA(rio::Texture2D* texture, std::vect
         rgbaData[i * 4 + 3] = (channels > 3) ? imageData[i * channels + 3] : 255;
     }
     return true;
+#endif
 }
 
 bool GLTFExportCallback::EncodeRGBADataToPNG(const std::vector<unsigned char>& rgbaData, int width, int height, std::vector<unsigned char>& pngData)

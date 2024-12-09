@@ -1,5 +1,3 @@
-#include "gfx/rio_Camera.h"
-#include "nn/ffl/FFLGender.h"
 #include <nn/ffl/FFLResourceType.h>
 #include <nn/ffl/detail/FFLiCharInfo.h>
 #include <nn/ffl/FFLiCreateID.h>
@@ -226,8 +224,7 @@ void RootTask::prepare_()
                 u8* buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
                 if (buffer == nullptr)
                 {
-                    RIO_LOG("NativeFileDevice failed to load: %s\n", resPath.c_str());
-                    RIO_LOG("Skipping loading FFL_RESOURCE_TYPE_MIDDLE\n");
+                    RIO_LOG("Skipping loading FFL_RESOURCE_TYPE_MIDDLE (%s failed to load)\n", resPath.c_str());
                     // I added a line that skips the resource if the size is zero
                     mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = 0;
                 } else {
@@ -265,9 +262,8 @@ void RootTask::prepare_()
             }
 
             if (!resLoaded) {
-                RIO_LOG("Was not able to load high resource!!!\n");
+                RIO_LOG("Was not able to load high resource.\n");
                 RIO_LOG("\033[1;31mThe FFLResHigh.dat needs to be present, or else this program won't work. It will probably crash right now.\033[0m\n");
-                RIO_ASSERT(false);
             }
         }
     }
@@ -278,9 +274,11 @@ void RootTask::prepare_()
 #endif
     if (result != FFL_RESULT_OK)
     {
-        RIO_LOG("FFLInitResEx() failed with result: %s\n", FFLResultToString(result));
-        RIO_ASSERT(false);
-        return;
+        fprintf(stderr, "FFLInitResEx() failed with result: %s\n", FFLResultToString(result));
+#if RIO_RELEASE
+        fprintf(stderr, "(Hint: build with RIO_DEBUG for more helpful information.)\n");
+#endif
+        exit(EXIT_FAILURE);
     }
 
     RIO_ASSERT(FFLIsAvailable());

@@ -11,14 +11,18 @@ enum PantsColor {
 const FFLColor cPantsColors[PANTS_COLOR_MAX] =
 {
     // gray - one of your own miis
-    { 0.25098f, 0.27451f, 0.30588f, 1.0f },
-
-    // red - favorite/account mii
-    { 0.43922f, 0.12549f, 0.06275f, 1.0f },
+    // nn::mii::detail::PantsNormalColor
+    { 0.2509804f, 0.2745099f, 0.30588239f, 1.0f },
 
     // blue - foreign mii from other console
-    { 0.15686f, 0.25098f, 0.47059f, 1.0f },
+    // nn::mii::detail::PantsPresentColor
+    { 0.1568628f, 0.2509804f, 0.4705883f, 1.0f },
 
-    // gold - special mii created by N
-    { 0.75294f, 0.62745f, 0.18824f, 1.0f }
+    // red - favorite/account mii
+    // nn::mii::detail::PantsRegularColor
+    { 0.43921569f, 0.1254902f, 0.0627451f, 1.0f },
+
+    // gold - special mii created officially
+    // nn::mii::detail::PantsSpecialColor
+    { 0.75294119f, 0.627451f, 0.1882353f, 1.0f }
 };

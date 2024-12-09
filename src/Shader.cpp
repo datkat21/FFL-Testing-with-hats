@@ -620,10 +620,13 @@ void Shader::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
 void Shader::setBodyShaderPantsMaterial(PantsColor pantsColor)
 {
     const FFLColor& color = cPantsColors[pantsColor];
-#ifdef DEFAULT_SHADER_FOR_BODY
-    setBodyMaterialDefaultShader_(color, true);
+#ifndef DEFAULT_SHADER_FOR_BODY
+    if (mIsBodyUsingDefaultShader)
+        setBodyMaterialDefaultShader_(color, true);
+    else
+        setBodyMaterialBodyShader_(color, true);
 #else
-    setBodyMaterialBodyShader_(color, true);
+    setBodyMaterialDefaultShader_(color, true);
 #endif
 }
 
