@@ -418,7 +418,7 @@ void RootTask::createModel_() {
     Model::InitArgStoreData arg = {
         .desc = {
             .resolution = FFLResolution(768),
-            .expressionFlag = 1 << 0,
+            .allExpressionFlag = { .flags = { 1 << 0, 0, 0 } },
             .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
             .resourceType = FFL_RESOURCE_TYPE_HIGH,
         },
@@ -625,10 +625,19 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
         .index = 0 // needs to be initialized to zero
     };
 
-    const FFLExpressionFlag expressionFlag = (buf->expressionFlag != 0 ? buf->expressionFlag
-        : static_cast<FFLExpressionFlag>(1) << buf->expression
-        // % (FFL_EXPRESSION_MAX - 1),
-    );
+    // initialize expanded expression flags to blank
+    FFLAllExpressionFlag expressionFlag = { .flags = { 0, 0, 0 } }; //{ .flags = { 1 << FFL_EXPRESSION_NORMAL } };
+
+    u32 modelFlag = static_cast<u32>(buf->modelFlag);
+
+    if (buf->expressionFlag != 0)
+        expressionFlag.flags[0] = buf->expressionFlag;
+    else
+    {
+        FFLSetExpressionFlagIndex(&expressionFlag, buf->expression, true); // set that bit
+        modelFlag |= FFL_MODEL_FLAG_NEW_EXPRESSIONS;
+        // NOTE: This flag is needed to use expressions past 31 ^^
+    }
 
     FFLResolution texResolution;
     if (buf->texResolution < 0) { // if it is negative...
@@ -638,8 +647,6 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
     } else {
         texResolution = static_cast<FFLResolution>(buf->texResolution);
     }
-
-    u32 modelFlag = static_cast<u32>(buf->modelFlag);
 
 #ifdef FFL_ENABLE_NEW_MASK_ONLY_FLAG
     // Enable special mode that will not initialize shapes.
@@ -651,7 +658,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
     Model::InitArgStoreData arg = {
         .desc = {
             .resolution = texResolution,
-            .expressionFlag = expressionFlag,
+            .allExpressionFlag = expressionFlag,
             // model flag includes model type (required)
             // and flatten nose bit at pos 4
             .modelFlag = modelFlag,
