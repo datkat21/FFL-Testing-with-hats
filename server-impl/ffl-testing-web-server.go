@@ -1113,8 +1113,8 @@ var clothesColorMap = map[string]int{
 
 var pantsColorMap = map[string]int{
 	"gray": 0,
-	"red":  1,
-	"blue": 2,
+	"blue": 1,
+	"red":  2,
 	"gold": 3,
 }
 
