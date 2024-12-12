@@ -124,6 +124,8 @@ func isConnectionRefused(err error) bool {
 		errors.Is(err, syscall.Errno(10061))
 }
 
+var corsOrigin string
+
 func main() {
 	// Command-line arguments
 	var host, unixSocket, certFile, keyFile, assetsDir, mysqlConnStr, upstreamAddr string
@@ -137,6 +139,8 @@ func main() {
 	flag.StringVar(&mysqlConnStr, "mysql", "", "MySQL connection string for NNID fetch")
 	flag.StringVar(&upstreamAddr, "upstream", "localhost:12346", "Upstream TCP server address")
 	flag.BoolVar(&useXForwardedFor, "use-x-forwarded-for", false, "Use X-Forwarded-For header for client IP")
+	flag.StringVar(&corsOrigin, "cors", "", "CORS origin to allow. Set to * to allow all origins. Leave blank to disable CORS header.")
+
 
 	flag.Parse()
 
@@ -523,6 +527,16 @@ func handleRenderRequestError(w http.ResponseWriter, bufferData []byte, err erro
 
 // renderImage handles the /render.png endpoint
 func renderImage(w http.ResponseWriter, r *http.Request) {
+	header := w.Header()
+	if corsOrigin != "" {
+		// Add permissive CORS headers.
+		header.Set("Access-Control-Allow-Private-Network", "true")
+		header.Set("Access-Control-Allow-Methods", "POST")
+		header.Set("Access-Control-Allow-Headers", "Content-Type")
+
+		header.Set("Access-Control-Allow-Origin", corsOrigin)
+	}
+
 	query := r.URL.Query()
 	data := query.Get("data")
 	typeStr := query.Get("type")
@@ -935,7 +949,6 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 	fullReader := bufio.NewReader(io.MultiReader(bytes.NewReader(bufferData), reader)) // use bufio to allow discard
 
-	header := w.Header()
 	if responseFormat == 1 { // gltf
 		// Read size from GLB header
 		var glbHeader GLBHeader
