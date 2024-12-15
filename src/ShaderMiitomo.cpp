@@ -236,8 +236,6 @@ static void loadTextureFromPath(const char* filePathChar, rio::TextureFormat for
                                       width, height, imageSize,
                                       dataPastTGAHeader);
 
-    RIO_GL_CALL(glGenerateMipmap(GL_TEXTURE_2D));
-
     delete[] data;
 }
 
@@ -359,7 +357,13 @@ void ShaderMiitomo::initialize()
 #endif
 
     mSampler.setWrap(rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR, rio::TEX_WRAP_MODE_MIRROR);
-    mSampler.setFilter(rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_MIP_FILTER_MODE_NONE, rio::TEX_ANISO_1_TO_1);
+
+    // Their mask drawing sampler uses no mipmaps
+    // but the one to draw shapes, does.
+    mSampler.setFilter(rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_XY_FILTER_MODE_LINEAR, rio::TEX_MIP_FILTER_MODE_LINEAR, rio::TEX_ANISO_1_TO_1);
+
+    // It also sets LUT textures to both not use mipmaps
+    // but there are no mipmaps so probably not necessary
 
     mCallback.pObj = this;
     mCallback.pApplyAlphaTestFunc = &ShaderMiitomo::applyAlphaTestCallback_;
