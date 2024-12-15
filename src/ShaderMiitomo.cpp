@@ -368,7 +368,7 @@ void ShaderMiitomo::initialize()
     setShaderCallback_();
 }
 
-void ShaderMiitomo::setShaderCallback_() const
+void ShaderMiitomo::setShaderCallback_()
 {
     FFLSetShaderCallback(&mCallback);
 }

@@ -101,8 +101,9 @@ struct RenderRequest {
     uint8_t  viewType;       // camera
     uint8_t  resourceType;   // FFLResourceType
     uint8_t  shaderType;
-    uint8_t  expression;     // used if expressionFlag is 0
-    uint32_t expressionFlag; // for multiple expressions
+    uint8_t  expression;     // used if expressionFlag is all zeroes
+    uint32_t expressionFlag[3]; // casted to FFLAllExpressionFlag
+                                // used for multiple expressions
     // expressionFlag will only apply in gltf mode for now
     int16_t  cameraRotate[3];
     int16_t  modelRotate[3];

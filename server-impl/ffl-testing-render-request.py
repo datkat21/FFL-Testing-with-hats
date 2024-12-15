@@ -42,8 +42,8 @@ def main():
     camera_rotate = [0, 0, 0]
     model_rotate = [0, 0, 0]
     background_color = [255, 255, 255, 0]
-    verify_charinfo = False
-    verify_crc16 = False
+    verify_charinfo = True  #  False
+    verify_crc16 = True  #  False
     light_enable = True
     clothes_color = -1
     pants_color = 0  # gray i think
@@ -51,7 +51,7 @@ def main():
     # Ensure fflstoredata is exactly 96 bytes
     #fflstoredata = fflstoredata[:96] + b'\x00' * (96 - len(fflstoredata))
 
-    struct_format = '96sHB?HhBBBBIhhhhhhBBBBBB???bBBB3x'
+    struct_format = '96sHB?HhBBBBIIIhhhhhhBBBBBB???bBBB3x'
     packed_data = struct.pack(
         struct_format,
         fflstoredata,         # data: 96s
@@ -64,7 +64,7 @@ def main():
         resource_type,        # resourceType: B (uint8_t)
         shader_type,          # shaderType: B (uint8_t)
         expression,           # expression: B (uint8_t)
-        0,                    # expressionFlag: I (uint32_t)
+        0, 0, 0,              # expressionFlag: III (uint32_t[3])
         camera_rotate[0],     # cameraRotate.x: h (int16_t)
         camera_rotate[1],     # cameraRotate.y: h (int16_t)
         camera_rotate[2],     # cameraRotate.z: h (int16_t)

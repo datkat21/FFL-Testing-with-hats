@@ -530,13 +530,12 @@ void ShaderSwitch::initialize()
     setShaderCallback_();
 }
 
-void ShaderSwitch::setShaderCallback_() const
+void ShaderSwitch::setShaderCallback_()
 {
     FFLSetShaderCallback(&mCallback);
     // have to set this AFTER FFLSetShaderCallback (initializes it to false)
     // this sets the faceline color alpha to 0, which is needed by this shader
-    //mCallback.facelineColorIsTransparent = true;
-    // read where drawType uniform is set, this is not needed anymore
+    mCallback.facelineColorIsTransparent = true;
 }
 
 void ShaderSwitch::bind(bool light_enable, FFLiCharInfo* pCharInfo)
@@ -767,16 +766,15 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
             break;
         // NOTE: the shader will take alpha into account if
         // you set draw type uniform to this, and the faceline
-        // texture would need to be drawn with alpha, however
-        // ffl does not do this by default and as of writing
-        // i have removed the hack to do this and it seems fine
-        /*case FFL_MODULATE_TYPE_SHAPE_FACELINE:
+        // texture would need to be drawn with alpha background
+        // color. if you dont apply this then most faceline
+        // textures will be fine except ones with beards
+        case FFL_MODULATE_TYPE_SHAPE_FACELINE:
             if (modulateParam.pTexture2D)
             {
                 drawType = DRAW_TYPE_FACELINE;
                 break;
             }
-        */
         default:
             drawType = DRAW_TYPE_NORMAL;
             break;

@@ -408,7 +408,7 @@ void Shader::initialize()
     setShaderCallback_();
 }
 
-void Shader::setShaderCallback_() const
+void Shader::setShaderCallback_()
 {
     FFLSetShaderCallback(&mCallback);
 }

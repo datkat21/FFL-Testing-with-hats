@@ -629,15 +629,17 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle) {
     FFLAllExpressionFlag expressionFlag = { .flags = { 0, 0, 0 } }; //{ .flags = { 1 << FFL_EXPRESSION_NORMAL } };
 
     u32 modelFlag = static_cast<u32>(buf->modelFlag);
+    // This is set because we always initialize all flags to zero:
+    modelFlag |= FFL_MODEL_FLAG_NEW_EXPRESSIONS;
+    // NOTE: This flag is needed to use expressions past 31 ^^
 
-    if (buf->expressionFlag != 0)
-        expressionFlag.flags[0] = buf->expressionFlag;
+    if (buf->expressionFlag[0] != 0
+        || buf->expressionFlag[1] != 0
+        || buf->expressionFlag[2] != 0)
+        //expressionFlag.flags[0] = buf->expressionFlag;
+        rio::MemUtil::copy(expressionFlag.flags, buf->expressionFlag, sizeof(u32) * 3);
     else
-    {
         FFLSetExpressionFlagIndex(&expressionFlag, buf->expression, true); // set that bit
-        modelFlag |= FFL_MODEL_FLAG_NEW_EXPRESSIONS;
-        // NOTE: This flag is needed to use expressions past 31 ^^
-    }
 
     FFLResolution texResolution;
     if (buf->texResolution < 0) { // if it is negative...

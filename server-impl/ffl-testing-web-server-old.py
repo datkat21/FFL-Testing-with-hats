@@ -103,7 +103,7 @@ class RenderRequest:
 
     def pack(self):
         return struct.pack(
-            '96sHB?HhBBBBIhhhhhhBBBBBB???bBBB3x',
+            '96sHB?HhBBBBIIIhhhhhhBBBBBB???bBBB3x',
             self.data,                 # data: 96s
             self.data_length,          # dataLength: H (uint16_t)
             1 << 0,                    # modelType: B (uint8_t)
@@ -114,7 +114,7 @@ class RenderRequest:
             self.resource_type,        # resourceType: B (uint8_t)
             self.shader_type,          # shaderType: B (uint8_t)
             self.expression,           # expression: B (uint8_t)
-            0,                         # expressionFlag: I (uint32_t)
+            0, 0, 0,                   # expressionFlag: III (uint32_t[3])
             self.camera_rotate[0],     # cameraRotate.x: h (int16_t)
             self.camera_rotate[1],     # cameraRotate.y: h (int16_t)
             self.camera_rotate[2],     # cameraRotate.z: h (int16_t)
