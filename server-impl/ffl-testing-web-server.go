@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	// ApproxBiLinear for CPU SSAA
 	"golang.org/x/image/draw"
 
@@ -38,47 +39,52 @@ var (
 
 // RenderRequest is the equivalent struct in Go for handling the render request data.
 type RenderRequest struct {
-	Data                 [96]byte
-	DataLength           uint16
-	ModelFlag            uint8
-	ResponseFormat       uint8   // rgba, gltf, tga
-	Resolution           uint16
-	TexResolution        int16
-	ViewType             uint8
-	ResourceType         uint8
-	ShaderType           uint8
-	Expression           uint8
-	ExpressionFlag       FFLAllExpressionFlag //uint32  // used if there are multiple
-	CameraRotate         [3]int16
-	ModelRotate          [3]int16
-	BackgroundColor      [4]uint8
+	Data            [96]byte
+	DataLength      uint16
+	ModelFlag       uint8
+	ResponseFormat  uint8 // rgba, gltf, tga
+	Resolution      uint16
+	TexResolution   int16
+	ViewType        uint8
+	ResourceType    uint8
+	ShaderType      uint8
+	Expression      uint8
+	ExpressionFlag  FFLAllExpressionFlag //uint32 // used if there are multiple
+	CameraRotate    [3]int16
+	ModelRotate     [3]int16
+	BackgroundColor [4]uint8
 
-	AAMethod             uint8   // UNUSED
+	AAMethod             uint8 // UNUSED
 	DrawStageMode        uint8
 	VerifyCharInfo       bool
 	VerifyCRC16          bool
 	LightEnable          bool
-	ClothesColor         int8    // default: -1
+	ClothesColor         int8 // default: -1
 	PantsColor           uint8
-	InstanceCount        uint8   // UNUSED
-	InstanceRotationMode uint8   // UNUSED
-	_                    [3]byte // padding for alignment
+	InstanceCount        uint8 // UNUSED
+	InstanceRotationMode uint8 // UNUSED
+
+	HatType  uint8   // Custom Hat Type?!
+	HatColor uint8   // Custom Hat Color?!
+	_        [1]byte // padding for alignment
 	//SetLightDirection bool
 	//LightDirection    [3]int32
 }
 
 const FFL_EXPRESSION_LIMIT = 70
+
 type FFLAllExpressionFlag struct {
 	Flags [3]uint32 // 0-96
 }
+
 func SetExpressionFlagIndex(ef *FFLAllExpressionFlag, index int, set bool) {
 	if index < 0 || index >= FFL_EXPRESSION_LIMIT {
 		fmt.Printf("FFLSetExpressionFlagIndex: input out of range: %d\n", index)
 		return // Do not set anything.
 	}
 
-	part := index / 32       // Determine which 32-bit block
-	bitIndex := index % 32   // Determine which bit within the block
+	part := index / 32     // Determine which 32-bit block
+	bitIndex := index % 32 // Determine which bit within the block
 
 	if set {
 		ef.Flags[part] |= (1 << bitIndex) // Set the bit
@@ -86,7 +92,6 @@ func SetExpressionFlagIndex(ef *FFLAllExpressionFlag, index int, set bool) {
 		ef.Flags[part] &^= (1 << bitIndex) // Clear the bit
 	}
 }
-
 
 // TGAHeader is put in front of render responses.
 // It indicates the width, height, and BPP of the render.
@@ -161,7 +166,6 @@ func main() {
 	flag.StringVar(&upstreamAddr, "upstream", "localhost:12346", "Upstream TCP server address")
 	flag.BoolVar(&useXForwardedFor, "use-x-forwarded-for", false, "Use X-Forwarded-For header for client IP")
 	flag.StringVar(&corsOrigin, "cors", "", "CORS origin to allow. Set to * to allow all origins. Leave blank to disable CORS header.")
-
 
 	flag.Parse()
 
@@ -740,6 +744,28 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	mipmapEnable := query.Get("mipmapEnable") != ""      // is present?
 	lightEnable := query.Get("lightEnable") != "0"       // 0 = no lighting
 	verifyCharInfo := query.Get("verifyCharInfo") != "0" // verify default
+	// hatType := query.Get("hatType") != "0" // verify default
+
+	hatTypeStr := query.Get("hatType")
+	if hatTypeStr == "" {
+		hatTypeStr = "default"
+	}
+	hatColorStr := query.Get("hatColor")
+	if hatColorStr == "" {
+		hatColorStr = "default"
+	}
+
+	var hatType int
+	hatType, err = strconv.Atoi(hatTypeStr)
+	if err != nil {
+		hatType = getHatTypeInt(hatTypeStr)
+	}
+
+	var hatColor int
+	hatColor, err = strconv.Atoi(hatColorStr)
+	if err != nil {
+		hatColor = getHatColorInt(hatColorStr)
+	}
 
 	// Parsing and validating resource type
 	resourceType, err := strconv.Atoi(resourceTypeStr)
@@ -952,6 +978,8 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		*/
 		DrawStageMode:  uint8(drawStageMode),
 		VerifyCharInfo: verifyCharInfo,
+		HatType:        uint8(hatType),
+		HatColor:       uint8(hatColor),
 		VerifyCRC16:    verifyCRC16,
 		LightEnable:    lightEnable,
 		ClothesColor:   int8(clothesColor),
@@ -965,7 +993,6 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 	// Copying store data into the request data buffer
 	copy(renderRequest.Data[:], storeData)
-
 
 	var bufferData []byte
 	var reader io.Reader
@@ -1029,7 +1056,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 	// Create an image directly using the read data
 	img := &image.NRGBA{
-		Pix:    imageData,
+		Pix: imageData,
 		// NOTE: ig this assumes it could be not rgba
 		// but we are... composing rgba
 		Stride: int(tgaHeader.Width) * bytesPerPixel,
@@ -1056,7 +1083,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 		// size is deterministic so set it
 		imageDataSize := int(img.Rect.Dx()) * int(img.Rect.Dy()) * 4 // NRGBA
-		size := imageDataSize + 18 // tga header size
+		size := imageDataSize + 18                                   // tga header size
 		header.Set("Content-Length", strconv.Itoa(size))
 		header.Set("Content-Type", "image/tga")
 
@@ -1152,6 +1179,37 @@ var clothesColorMap = map[string]int{
 	"black":       11,
 }
 
+var hatTypeMap = map[string]int{
+	// NOTE: solely based on mii studio consts, not FFL enums
+	"default":     0,
+	"cap":         1,
+	"beanie":      2,
+	"top_hat":     3,
+	"ribbon":      4,
+	"bow":         5,
+	"cat_ears":    6,
+	"straw_hat":   7,
+	"hijab":       8,
+	"bike_helmet": 9,
+}
+
+var hatColorMap = map[string]int{
+	// NOTE: solely based on mii studio consts, not FFL enums
+	"default":     0,
+	"red":         1,
+	"orange":      2,
+	"yellow":      3,
+	"yellowgreen": 4,
+	"green":       5,
+	"blue":        6,
+	"skyblue":     7,
+	"pink":        8,
+	"purple":      9,
+	"brown":       10,
+	"white":       11,
+	"black":       12,
+}
+
 var pantsColorMap = map[string]int{
 	"gray": 0,
 	"blue": 1,
@@ -1182,6 +1240,26 @@ func getPantsColorInt(input string) int {
 func getClothesColorInt(input string) int {
 	input = strings.ToLower(input)
 	if colorIdx, exists := clothesColorMap[input]; exists {
+		return colorIdx
+	}
+	// NOTE: mii studio rejects requests if the string doesn't match ..
+	// .. perhaps we should do the same
+	return -1
+}
+
+func getHatColorInt(input string) int {
+	input = strings.ToLower(input)
+	if colorIdx, exists := hatColorMap[input]; exists {
+		return colorIdx
+	}
+	// NOTE: mii studio rejects requests if the string doesn't match ..
+	// .. perhaps we should do the same
+	return -1
+}
+
+func getHatTypeInt(input string) int {
+	input = strings.ToLower(input)
+	if colorIdx, exists := hatTypeMap[input]; exists {
 		return colorIdx
 	}
 	// NOTE: mii studio rejects requests if the string doesn't match ..
