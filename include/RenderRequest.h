@@ -80,6 +80,7 @@ enum DrawStageMode {
     DRAW_STAGE_MODE_OPA_ONLY,
     DRAW_STAGE_MODE_XLU_ONLY,
     DRAW_STAGE_MODE_MASK_ONLY,
+    DRAW_STAGE_XLU_DEPTH_MASK,
 };
 
 enum ResponseFormat {

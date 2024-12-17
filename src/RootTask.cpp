@@ -1286,6 +1286,11 @@ void RootTask::handleRenderRequest(char* buf)
                       &projMtx,&aspectHeightFactor,
                       &isCameraPosAbsolute, &willDrawBody, pCharInfo);
 
+    if (renderRequest->drawStageMode == DRAW_STAGE_XLU_DEPTH_MASK)
+        // Do not draw body in this mode since it
+        // would have been cleared out anyway
+        willDrawBody = false;
+
     // Update camera position
     const rio::Vector3f cameraPosInitial = mCamera.pos();
     const f32 radius = cameraPosInitial.z;
@@ -1442,7 +1447,9 @@ void RootTask::handleRenderRequest(char* buf)
     DrawStageMode drawStages = static_cast<DrawStageMode>(renderRequest->drawStageMode);
 
     // Render the first frame to the buffer
-    if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_OPA_ONLY)
+    if (drawStages == DRAW_STAGE_MODE_ALL
+        || drawStages == DRAW_STAGE_MODE_OPA_ONLY
+        || drawStages == DRAW_STAGE_XLU_DEPTH_MASK)
         mpModel->drawOpa(view_mtx, projMtx);
     RIO_LOG("drawOpa rendered to the buffer.\n");
 
@@ -1465,12 +1472,29 @@ void RootTask::handleRenderRequest(char* buf)
         pCharInfo->favoriteColor = originalFavoriteColor;
     }
 
-    renderBuffer.bind();
 
     // draw xlu mask only after body is drawn
     // in case there are elements of the mask that go in the body region
-    if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_XLU_ONLY)
+    if (drawStages == DRAW_STAGE_MODE_ALL
+        || drawStages == DRAW_STAGE_MODE_XLU_ONLY
+        || drawStages == DRAW_STAGE_XLU_DEPTH_MASK)
+    {
+        if (drawStages == DRAW_STAGE_XLU_DEPTH_MASK)
+        {
+            // Use faceline color as background color.
+            const FFLColor facelineColor = FFLGetFacelineColor(pCharInfo->parts.facelineColor);
+            // Clear color but not depth. This punches out
+            // depth for DrawOpa, intended for overlaying
+            // this image over a DrawOpa image.
+            renderBuffer.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR, { facelineColor.r, facelineColor.g, facelineColor.b, fBackgroundColor.a });
+            // ^^ use alpha from original background color
+        }
+
+        // Bind renderbuffer again
+        renderBuffer.bind();
+
         mpModel->drawXlu(view_mtx, projMtx);
+    }
     RIO_LOG("drawXlu rendered to the buffer.\n");
 
 

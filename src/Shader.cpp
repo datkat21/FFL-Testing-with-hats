@@ -1,5 +1,3 @@
-#include "nn/ffl/FFLDrawParam.h"
-#include "nn/ffl/FFLModulateParam.h"
 #include <Shader.h>
 
 #include <gpu/rio_RenderState.h>
