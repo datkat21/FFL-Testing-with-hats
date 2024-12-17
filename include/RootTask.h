@@ -44,9 +44,12 @@ private:
     //void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
     bool createModel_(RenderRequest* buf, int socket_handle);
 
-    void initializeShaders_() {
-        for (int type = 0; type < SHADER_TYPE_MAX; type++) {
-            switch (type) {
+    void initializeShaders_()
+    {
+        for (int type = 0; type < SHADER_TYPE_MAX; type++)
+        {
+            switch (type)
+            {
                 case SHADER_TYPE_WIIU:
                     mpShaders[type] = new Shader();
                     break;

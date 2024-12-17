@@ -9,7 +9,8 @@
 // for markCommonColor
 #include <nn/ffl/FFLiColor.h>
 
-void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src) {
+void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src)
+{
     // Initialize charInfo struct with zeros
     rio::MemUtil::set(dest, 0, sizeof(FFLiCharInfo));
 
@@ -78,7 +79,8 @@ void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src) {
 }
 
 
-void studioToCharInfoNX(charInfo* dest, const charInfoStudio* src) {
+void studioToCharInfoNX(charInfo* dest, const charInfoStudio* src)
+{
     // Initialize charInfo struct with zeros
     rio::MemUtil::set(dest, 0, sizeof(charInfo));
 
@@ -132,14 +134,16 @@ void studioToCharInfoNX(charInfo* dest, const charInfoStudio* src) {
     // Other fields of charInfo will remain zero-initialized.
 }
 
-void studioURLObfuscationDecode(char* data) {
+void studioURLObfuscationDecode(char* data)
+{
     // The first byte is the random seed used in encoding
     unsigned char random = data[0];
     unsigned char previous = random;
 
     // Reverse the encoding process
     // NOTE: 47 = length of obfuscated studio data
-    for (int i = 1; i < STUDIO_DATA_ENCODED_LENGTH; i++) {
+    for (int i = 1; i < STUDIO_DATA_ENCODED_LENGTH; i++)
+    {
         // Reverse the modulation and XOR to find the original byte
         unsigned char encodedByte = data[i];
         unsigned char original = (encodedByte - 7 + 256) % 256; // reverse the addition of 7
@@ -149,7 +153,8 @@ void studioURLObfuscationDecode(char* data) {
     }
 }
 
-void coreDataToCharInfoNX(charInfo* dest, const coreData* src) {
+void coreDataToCharInfoNX(charInfo* dest, const coreData* src)
+{
     // Initialize charInfo struct with zeros
     rio::MemUtil::set(dest, 0, sizeof(charInfo));
 

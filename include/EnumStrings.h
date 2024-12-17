@@ -119,20 +119,20 @@ const char* FFLResultStrings[] = {
 
 #define UNKNOWN "(unknown)"
 
-const char* FFLiVerifyCharInfoReasonToString(FFLiVerifyCharInfoReason reason) {
+const char* FFLiVerifyCharInfoReasonToString(FFLiVerifyCharInfoReason reason)
+{
     // make sure it is in range
-    if (reason < 0 || reason > FFLI_VERIFY_CHAR_INFO_REASON_CREATOR_ID_INVALID) {
+    if (reason < 0 || reason > FFLI_VERIFY_CHAR_INFO_REASON_CREATOR_ID_INVALID)
         return UNKNOWN;
-    }
 
     return FFLiVerifyCharInfoReasonStrings[reason];
 }
 
-const char* FFLResultToString(FFLResult result) {
+const char* FFLResultToString(FFLResult result)
+{
     // make sure it is in range
-    if (result < 0 || result > FFL_RESULT_FS_NOT_FOUND) {
+    if (result < 0 || result > FFL_RESULT_FS_NOT_FOUND)
         return UNKNOWN;
-    }
 
     return FFLResultStrings[result];
 }

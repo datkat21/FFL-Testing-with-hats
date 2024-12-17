@@ -62,9 +62,11 @@ const rio::BaseVec4f& getColorUniform(const FFLColor& color)
     return reinterpret_cast<const rio::BaseVec4f&>(color.r);
 }
 
-void safeNormalizeVec3(rio::BaseVec3f* vec) {
+void safeNormalizeVec3(rio::BaseVec3f* vec)
+{
     float magnitude = std::sqrt(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
-    if (magnitude != 0.0f) {
+    if (magnitude != 0.0f)
+    {
         vec->x /= magnitude;
         vec->y /= magnitude;
         vec->z /= magnitude;
@@ -74,13 +76,18 @@ void safeNormalizeVec3(rio::BaseVec3f* vec) {
     vec->y = std::fmax(std::fmin(vec->y, 1.0f), -1.0f);
     vec->z = std::fmax(std::fmin(vec->z, 1.0f), -1.0f);
 
-    if (vec->x == 1.0f || vec->x == -1.0f) {
+    if (vec->x == 1.0f || vec->x == -1.0f)
+    {
         vec->y = 0.0f;
         vec->z = 0.0f;
-    } else if (vec->y == 1.0f || vec->y == -1.0f) {
+    }
+    else if (vec->y == 1.0f || vec->y == -1.0f)
+    {
         vec->x = 0.0f;
         vec->z = 0.0f;
-    } else if (vec->z == 1.0f || vec->z == -1.0f) {
+    }
+    else if (vec->z == 1.0f || vec->z == -1.0f)
+    {
         vec->x = 0.0f;
         vec->y = 0.0f;
     }
@@ -684,7 +691,8 @@ void Shader::draw_(const FFLDrawParam& draw_param)
     setMaterial_(modulateType);
 
     // moved from setMaterial_ to here, set material specular mode
-    if (modulateType < CUSTOM_MATERIAL_PARAM_SIZE) {
+    if (modulateType < CUSTOM_MATERIAL_PARAM_SIZE)
+    {
         // blinn as default...
         FFLiDefaultShaderSpecularMode materialSpecularMode = FFL_SPECULAR_MODE_BLINN;
         if (mSpecularMode != FFL_SPECULAR_MODE_BLINN) // if the default is not blinn,

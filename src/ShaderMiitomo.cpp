@@ -63,9 +63,11 @@ inline void GX2InitAttribStream(
 #endif // RIO_IS_CAFE
 
 
-void safeNormalizeVec3(rio::BaseVec3f* vec) {
+void safeNormalizeVec3(rio::BaseVec3f* vec)
+{
     float magnitude = std::sqrt(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
-    if (magnitude != 0.0f) {
+    if (magnitude != 0.0f)
+    {
         vec->x /= magnitude;
         vec->y /= magnitude;
         vec->z /= magnitude;
@@ -75,13 +77,18 @@ void safeNormalizeVec3(rio::BaseVec3f* vec) {
     vec->y = std::fmax(std::fmin(vec->y, 1.0f), -1.0f);
     vec->z = std::fmax(std::fmin(vec->z, 1.0f), -1.0f);
 
-    if (vec->x == 1.0f || vec->x == -1.0f) {
+    if (vec->x == 1.0f || vec->x == -1.0f)
+    {
         vec->y = 0.0f;
         vec->z = 0.0f;
-    } else if (vec->y == 1.0f || vec->y == -1.0f) {
+    }
+    else if (vec->y == 1.0f || vec->y == -1.0f)
+    {
         vec->x = 0.0f;
         vec->z = 0.0f;
-    } else if (vec->z == 1.0f || vec->z == -1.0f) {
+    }
+    else if (vec->z == 1.0f || vec->z == -1.0f)
+    {
         vec->x = 0.0f;
         vec->y = 0.0f;
     }
@@ -207,7 +214,8 @@ ShaderMiitomo::~ShaderMiitomo()
 
 #if RIO_IS_WIN
 
-static void loadTextureFromPath(const char* filePathChar, rio::TextureFormat format, s32 width, s32 height, GLuint textureHandle) {
+static void loadTextureFromPath(const char* filePathChar, rio::TextureFormat format, s32 width, s32 height, GLuint textureHandle)
+{
     // Use rio::FileDeviceMgr to load the file
     rio::FileDevice::LoadArg arg;
     const std::string filePath = std::string(filePathChar);
@@ -216,7 +224,8 @@ static void loadTextureFromPath(const char* filePathChar, rio::TextureFormat for
     // not the native file device so it will be in fs/content/
     const u8* data = rio::FileDeviceMgr::instance()->tryLoad(arg);
 
-    if (data == nullptr) {
+    if (data == nullptr)
+    {
         RIO_LOG("NativeFileDevice failed to load when trying to load LUT for ShaderMiitomo: %s\n", filePath.c_str());
         return;
     }
@@ -294,13 +303,15 @@ void ShaderMiitomo::initialize()
 
 #if RIO_IS_WIN
 
-    for (int i = 0; i < LUT_FRESNEL_TYPE_MAX; i++) {
+    for (int i = 0; i < LUT_FRESNEL_TYPE_MAX; i++)
+    {
         sLUTFresTextures[i] = new rio::Texture2D(cLUTTextureFormat, cLUTWidth, cLUTHeight, cLUTNumMips);
         loadTextureFromPath(cLUTFresnelFileNames[i], cLUTTextureFormat, cLUTWidth, cLUTHeight, sLUTFresTextures[i]->getNativeTextureHandle());
 
         //mLUTFresSampler[i].linkTexture2D(sLUTFresTextures[i]);
     }
-    for (int i = 0; i < LUT_SPECULAR_TYPE_MAX; i++) {
+    for (int i = 0; i < LUT_SPECULAR_TYPE_MAX; i++)
+    {
         sLUTSpecTextures[i] = new rio::Texture2D(cLUTTextureFormat, cLUTWidth, cLUTHeight, cLUTNumMips);
         loadTextureFromPath(cLUTSpecularFileNames[i], cLUTTextureFormat, cLUTWidth, cLUTHeight, sLUTSpecTextures[i]->getNativeTextureHandle());
 
@@ -588,7 +599,8 @@ void ShaderMiitomo::setModulate_(const FFLModulateParam& modulateParam)
 
 void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
 {
-    if (modulateType == FFL_MODULATE_TYPE_SHAPE_NOSELINE) {
+    if (modulateType == FFL_MODULATE_TYPE_SHAPE_NOSELINE)
+    {
         //mShader.setUniform(0.00f, 0.00f, 0.00f, mVertexUniformLocation[VERTEX_UNIFORM_EYE_PT], u32(-1));
         mShader.setUniform(false, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
         return;
@@ -609,7 +621,8 @@ void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
 
     mShader.setUniform(cLightColor, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_COLOR]);
 
-    switch (modulateType) {
+    switch (modulateType)
+    {
         case FFL_MODULATE_TYPE_SHAPE_MASK:
         case FFL_MODULATE_TYPE_SHAPE_NOSELINE:
         case FFL_MODULATE_TYPE_SHAPE_GLASS:

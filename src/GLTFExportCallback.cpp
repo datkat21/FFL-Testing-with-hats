@@ -180,12 +180,12 @@ bool GLTFExportCallback::EncodeRGBADataToPNG(const std::vector<unsigned char>& r
 }
 
 // Function to convert sRGB value to linear for baseColorFactor
-float GLTFExportCallback::SRGBToLinear(float color) {
-    if (color <= 0.04045f) {
+float GLTFExportCallback::SRGBToLinear(float color)
+{
+    if (color <= 0.04045f)
         return color / 12.92f;
-    } else {
+    else
         return powf((color + 0.055f) / 1.055f, 2.4f);
-    }
 }
 
 // Helper function to convert FFLVec3 to tinygltf::Value array
@@ -258,20 +258,16 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
         // When FFL set the cull mode to front... that means
         // that X is flipped so we have to reverse face winding
         // (glTF does not support front face culling)
-        if (drawParam.cullMode == FFL_CULL_MODE_FRONT) {
-            for (uint32_t i = 0; i < indexCount; i += 3) {
+        if (drawParam.cullMode == FFL_CULL_MODE_FRONT)
+            for (uint32_t i = 0; i < indexCount; i += 3)
                 // Swap the first and last indices of each triangle to reverse winding
                 std::swap(meshData.indices[i], meshData.indices[i + 2]);
-            }
-        }
 
         // Get the maximum vertex index to know how many vertices we need
         uint16_t maxIndex = 0;
         for (uint32_t i = 0; i < indexCount; ++i)
-        {
             if (indices[i] > maxIndex)
                 maxIndex = indices[i];
-        }
         uint32_t vertexCount = maxIndex + 1;
 
         // Initialize per-vertex arrays
@@ -296,7 +292,9 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
                 {
                     RIO_LOG("Error: Stride is 0 and this is not the color attribute.\n");
                     continue;
-                } else if (stride > 0) {
+                }
+                else if (stride > 0)
+                {
                     uint32_t numElements = size / stride;
 
                     if (numElements < vertexCount)
@@ -356,7 +354,8 @@ void GLTFExportCallback::Draw(const FFLDrawParam& drawParam)
                         float magnitude = sqrtf(x * x + y * y + z * z);
 
                         // Normalize if needed
-                        if (magnitude != 0.0f) {
+                        if (magnitude != 0.0f)
+                        {
                             x /= magnitude;
                             y /= magnitude;
                             z /= magnitude;
@@ -950,7 +949,8 @@ void GLTFExportCallback::AssignMaterialToPrimitive(MeshData& meshData, tinygltf:
     }
 
     // Set the doubleSided property based on the culling mode
-    switch (meshData.cullMode) {
+    switch (meshData.cullMode)
+    {
         case FFL_CULL_MODE_NONE:
             material.doubleSided = true;
             break;
@@ -995,7 +995,8 @@ void GLTFExportCallback::AssignMaterialWithoutTexture(MeshData& meshData, tinygl
     material.alphaMode = "OPAQUE";
 
     // Set the doubleSided property based on the culling mode
-    switch (meshData.cullMode) {
+    switch (meshData.cullMode)
+    {
         case FFL_CULL_MODE_NONE:
             material.doubleSided = true;
             break;

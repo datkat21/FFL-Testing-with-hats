@@ -675,7 +675,8 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
 
     DrawParamMaterial drawParamMaterial;
     int commonColor;
-    switch (modulateParam.type) {
+    switch (modulateParam.type)
+    {
         case FFL_MODULATE_TYPE_SHAPE_NOSELINE:
         case FFL_MODULATE_TYPE_SHAPE_MASK:
             drawParamMaterial = cMaskMaterial;
@@ -756,7 +757,8 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
     #define DRAW_TYPE_HAIR     2
     int drawType;
 
-    switch (modulateParam.type) {
+    switch (modulateParam.type)
+    {
         case FFL_MODULATE_TYPE_SHAPE_HAIR:
             // takes specular blend/mix into account
             // meaning a_color.r / i_Parameter.r

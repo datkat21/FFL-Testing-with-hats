@@ -23,7 +23,8 @@ static rio::InitializeArg initializeArg = {
 
 #ifdef __EMSCRIPTEN__
 rio::Window* window;
-void mainLoop() {
+void mainLoop()
+{
     // Main loop iteration
     // Update the task manager
     rio::TaskMgr::instance()->calc();
@@ -74,7 +75,9 @@ int main()
             // Swap the front and back buffers
             //window->swapBuffers();
         }
-    } else {
+    }
+    else
+    {
         // Main loop
         rio::EnterMainLoop();
     }
