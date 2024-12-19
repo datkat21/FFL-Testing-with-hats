@@ -6,7 +6,7 @@ static const int MAX_HATS = 10;
 // const int HATS_USING_FACE_ONLY[] = {8};
 
 // temp define for now...
-#define FFL_HAIR_TYPE_EMPTY 30
+#define FFL_HAIR_BALD 30
 
 typedef enum HatType
 {
