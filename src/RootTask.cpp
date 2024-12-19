@@ -721,21 +721,27 @@ bool RootTask::createModel_(RenderRequest *buf, int socket_handle)
 
     if (HAT_TYPES[int(buf->hatType)] == HAT_TYPE_ALL)
     {
-        RIO_LOG("hat is using all head!");
+        RIO_LOG("hat is using all head!\n");
     }
     else if (HAT_TYPES[int(buf->hatType)] == HAT_TYPE_HAT_ONLY)
     {
         modelFlag = FFL_MODEL_FLAG_HAT;
-        RIO_LOG("hat is using hat model type! %i\n", modelFlag);
+        RIO_LOG("hat is using hat model type!\n");
     }
     else if (HAT_TYPES[int(buf->hatType)] == HAT_TYPE_FACE_ONLY)
     {
         modelFlag = FFL_MODEL_FLAG_FACE_ONLY;
-        RIO_LOG("hat is using only face model type! %i\n", modelFlag);
+        RIO_LOG("hat is using only face model type!\n");
+    }
+    else if (HAT_TYPES[int(buf->hatType)] == HAT_TYPE_BALD)
+    {
+        // bald Hair type
+        charInfo.parts.hairType = FFL_HAIR_BALD;
+        RIO_LOG("hat is using bald model type! ha ha bald!\n");
     }
     else
     {
-        RIO_LOG("hat is not set or is not using a specific type.");
+        RIO_LOG("hat is not set or is not using a specific type.\n");
     }
 
     // otherwise just fall through and use default

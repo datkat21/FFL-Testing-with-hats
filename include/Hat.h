@@ -5,12 +5,16 @@ static const int MAX_HATS = 10;
 // const int HATS_USING_HAT_ONLY[] = {1, 2, 3, 7, 9};
 // const int HATS_USING_FACE_ONLY[] = {8};
 
+// temp define for now...
+#define FFL_HAIR_TYPE_EMPTY 30
+
 typedef enum HatType
 {
   HAT_TYPE_ALL = 0,
   HAT_TYPE_HAT_ONLY = 1,
   HAT_TYPE_FACE_ONLY = 2,
-  HAT_TYPE_MAX = 3
+  HAT_TYPE_BALD = 3,
+  HAT_TYPE_MAX = 4
 } HatType;
 
 static const int HAT_TYPES[MAX_HATS] = {
@@ -31,6 +35,6 @@ static const int HAT_TYPES[MAX_HATS] = {
     // Straw hat
     HAT_TYPE_HAT_ONLY,
     // Hijab
-    HAT_TYPE_FACE_ONLY,
+    HAT_TYPE_BALD,
     // Bike helmet
     HAT_TYPE_HAT_ONLY};
