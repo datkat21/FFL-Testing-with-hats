@@ -130,6 +130,8 @@ struct RenderRequest
     // bool          setLightDirection;
     // int16_t       lightDirection[3];
 
-    uint8_t hatType;  // custom!
-    uint8_t hatColor; // custom!
+    // custom
+    uint8_t hatType;  
+    uint8_t hatColor;
+    uint8_t bodyType;
 };

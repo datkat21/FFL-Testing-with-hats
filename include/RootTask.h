@@ -17,6 +17,16 @@
 #include <vector>
 #endif
 
+// arian told me to put it in here instead of another one so ok i will do that
+typedef enum BodyType
+{
+    BODY_TYPE_WIIU,
+    BODY_TYPE_SWITCH,
+    BODY_TYPE_MIITOMO,
+    BODY_TYPE_MAX,
+} BodyType;
+
+
 class Model;
 
 #define RENDERREQUEST_SIZE sizeof(RenderRequest)
@@ -76,7 +86,7 @@ private:
 #endif
 
     // NOTE: bc of the amount of arguments, consider putting this in mpModel
-    void drawMiiBody(Model *pModel, PantsColor pantsColor,
+    void drawMiiBody(Model *pModel, PantsColor pantsColor, uint8_t bodyType,
                      rio::Matrix34f &model_mtx, rio::BaseMtx34f &view_mtx,
                      rio::BaseMtx44f &proj_mtx, const rio::Vector3f scaleFactors);
     void drawMiiHat(Model *pModel, uint8_t &hatType,
@@ -99,7 +109,7 @@ private:
     f32 mCounter;
     s32 mMiiCounter;
     Model *mpModel;
-    rio::mdl::Model *mpBodyModels[FFL_GENDER_MAX];
+    rio::mdl::Model *mpBodyModels[6];
     rio::mdl::Model *mpHatModels[10];
     const char *mpServerOnly;
     const char *mpNoSpin;

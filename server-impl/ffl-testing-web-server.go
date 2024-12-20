@@ -63,12 +63,14 @@ type RenderRequest struct {
 	PantsColor           uint8
 	InstanceCount        uint8 // UNUSED
 	InstanceRotationMode uint8 // UNUSED
+	// SetLightDirection bool
+	// LightDirection    [3]int32
 
-	HatType  uint8   // Custom Hat Type?!
-	HatColor uint8   // Custom Hat Color?!
-	_        [1]byte // padding for alignment
-	//SetLightDirection bool
-	//LightDirection    [3]int32
+	// Custom
+	HatType  uint8
+	HatColor uint8
+	BodyType uint8
+	// _        [1]byte // padding for alignment
 }
 
 const FFL_EXPRESSION_LIMIT = 70
@@ -605,10 +607,8 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if clothesColorStr == "" {
 		clothesColorStr = "-1"
 	}
-	pantsColorStr := query.Get("pantsColor")
-	if pantsColorStr == "" {
-		pantsColorStr = "red"
-	}
+
+	bodyTypeStr := query.Get("bodyType")
 
 	var responseFormat uint8 = 0
 	if strings.HasSuffix(r.URL.Path, ".glb") {
@@ -833,11 +833,6 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		clothesColor = getClothesColorInt(clothesColorStr)
 	}
-	var pantsColor int
-	pantsColor, err = strconv.Atoi(pantsColorStr)
-	if err != nil {
-		pantsColor = getPantsColorInt(pantsColorStr)
-	}
 
 	// Parsing and validating width
 	width, err := strconv.Atoi(widthStr)
@@ -957,6 +952,42 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pantsColorStr := query.Get("pantsColor")
+	if pantsColorStr == "" {
+		if shaderType == 0 || shaderType == 3 {
+			pantsColorStr = "red"
+		} else {
+			pantsColorStr = "gray"
+		}
+	}
+	var pantsColor int
+	pantsColor, err = strconv.Atoi(pantsColorStr)
+	if err != nil {
+		pantsColor = getPantsColorInt(pantsColorStr)
+	}
+
+	if bodyTypeStr == "" {
+		if shaderType == 0 || shaderType == 3 {
+			bodyTypeStr = "wiiu"
+		} else if shaderType == 1 {
+			bodyTypeStr = "switch"
+		} else if shaderType == 2 {
+			bodyTypeStr = "studio"
+		}
+	}
+
+	var bodyType int
+	bodyType, err = strconv.Atoi(bodyTypeStr)
+	if err != nil {
+		bodyType = getBodyTypeInt(bodyTypeStr)
+	}
+
+	// prevent crash lol!
+	if bodyType > 2 {
+		// prefer studio model because some ppl like it...
+		bodyType = 2
+	}
+
 	// Creating the render request
 	renderRequest := RenderRequest{
 		Data:            [96]byte{},
@@ -980,6 +1011,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		VerifyCharInfo: verifyCharInfo,
 		HatType:        uint8(hatType),
 		HatColor:       uint8(hatColor),
+		BodyType:       uint8(bodyType),
 		VerifyCRC16:    verifyCRC16,
 		LightEnable:    lightEnable,
 		ClothesColor:   int8(clothesColor),
@@ -1217,6 +1249,12 @@ var pantsColorMap = map[string]int{
 	"gold": 3,
 }
 
+var bodyTypeMap = map[string]int{
+	"wiiu":   0,
+	"switch": 1,
+	"studio": 2,
+}
+
 func getExpressionInt(input string) int {
 	input = strings.ToLower(input)
 	if expression, exists := expressionMap[input]; exists {
@@ -1252,8 +1290,6 @@ func getHatColorInt(input string) int {
 	if colorIdx, exists := hatColorMap[input]; exists {
 		return colorIdx
 	}
-	// NOTE: mii studio rejects requests if the string doesn't match ..
-	// .. perhaps we should do the same
 	return -1
 }
 
@@ -1262,8 +1298,14 @@ func getHatTypeInt(input string) int {
 	if colorIdx, exists := hatTypeMap[input]; exists {
 		return colorIdx
 	}
-	// NOTE: mii studio rejects requests if the string doesn't match ..
-	// .. perhaps we should do the same
+	return -1
+}
+
+func getBodyTypeInt(input string) int {
+	input = strings.ToLower(input)
+	if colorIdx, exists := bodyTypeMap[input]; exists {
+		return colorIdx
+	}
 	return -1
 }
 

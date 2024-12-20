@@ -1,5 +1,5 @@
 // idk
-static const int MAX_HATS = 10;
+static const int cMaxHats = 10;
 
 // const int HATS_USING_ALL[] = {4, 5, 6};
 // const int HATS_USING_HAT_ONLY[] = {1, 2, 3, 7, 9};
@@ -17,7 +17,7 @@ typedef enum HatType
   HAT_TYPE_MAX = 4
 } HatType;
 
-static const int HAT_TYPES[MAX_HATS] = {
+static const int cHatTypes[MAX_HATS] = {
     // Ignore 0
     HAT_TYPE_ALL,
     // Cap

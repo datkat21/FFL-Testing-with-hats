@@ -25,11 +25,15 @@
 #include <array>
 #include <algorithm>
 
-template <size_t N>
-bool isInArray(int value, const int (&arr)[N])
-{
-    return std::find(std::begin(arr), std::end(arr), value) != std::end(arr);
-}
+const char *cBodyTypeName[BODY_TYPE_MAX] = {
+    "wiiu",
+    "switch",
+    "miitomo"};
+
+const char *cGenderName[FFL_GENDER_MAX] = {
+    "male",
+    "female",
+};
 
 RootTask::RootTask()
     : ITask("FFL Testing"), mInitialized(false), mSocketIsListening(false)
@@ -360,46 +364,31 @@ void RootTask::prepare_()
     mMiiCounter = 0;
     createModel_();
 
-    // load (just male for now) body model
-    // the male and female bodies are like identical
-    // from the torso up (only perspective we use)
-    // #ifndef USE_OLD_MODELS
-    //     char key[] = "mii_static_bodyn0";
-    // #else
-    //     char key[] = "mii_static_body0";
-    // #endif
+    // body models! yay!!
+    const std::string bodyPathPrefix = "body/mii_static_body_";
+    std::string bodyPathName;
 
-    //     for (u32 i = 0; i < FFL_GENDER_MAX; i++)
-    //     {
-    //         RIO_LOG("loading body model: %s\n", key);
-    //         // bodyResModels[i] = rio::mdl::res::ModelCacher::instance()->loadModel(key, key); // "body0", "body1" per gender
-    //         const rio::mdl::res::Model *resModel = rio::mdl::res::ModelCacher::instance()->loadModel(key, key);
-    //         key[sizeof(key) - 2]++; // iterate last character
-    //         RIO_ASSERT(resModel);
+    int mpBodyModelCount = 0;
 
-    //         mpBodyModels[i] = new rio::mdl::Model(resModel);
-    //     }
-
-#ifndef USE_OLD_MODELS
-    const std::string bodyPathPrefix = "mii_static_bodyn";
-#else
-    const std::string bodyPathPrefix = "mii_static_body";
-#endif
-    for (u32 i = 0; i < FFL_GENDER_MAX; i++)
+    for (u32 bodyType = 0; bodyType < BODY_TYPE_MAX; bodyType++)
     {
-        std::string bodyPath = bodyPathPrefix + std::to_string(i);
-        const char *bodyPathC = bodyPath.c_str();
+        for (u32 i = 0; i < FFL_GENDER_MAX; i++)
+        {
+            std::string bodyPath = bodyPathPrefix + cBodyTypeName[bodyType] + "_" + cGenderName[i];
+            const char *bodyPathC = bodyPath.c_str();
 
-        RIO_LOG("loading body model: %s\n", bodyPathC);
-        const rio::mdl::res::Model *resModel = rio::mdl::res::ModelCacher::instance()->loadModel(bodyPathC, bodyPathC);
+            RIO_LOG("loading body model: %s\n", bodyPathC);
+            const rio::mdl::res::Model *resModel = rio::mdl::res::ModelCacher::instance()->loadModel(bodyPathC, bodyPathC);
 
-        RIO_ASSERT(resModel);
+            RIO_ASSERT(resModel);
 
-        mpBodyModels[i] = new rio::mdl::Model(resModel);
+            mpBodyModels[mpBodyModelCount] = new rio::mdl::Model(resModel);
+            mpBodyModelCount++;
+        }
     }
 
-    const std::string hatPathPrefix = "hat_";
-    for (u32 i = 1; i < 10; i++)
+    const std::string hatPathPrefix = "hat/hat_";
+    for (u32 i = 1; i < cMaxHats; i++)
     {
         std::string hatPath = hatPathPrefix + std::to_string(i);
         const char *hatPathC = hatPath.c_str();
@@ -719,29 +708,19 @@ bool RootTask::createModel_(RenderRequest *buf, int socket_handle)
         modelFlag |= FFL_MODEL_FLAG_NEW_MASK_ONLY;
 #endif
 
-    if (HAT_TYPES[int(buf->hatType)] == HAT_TYPE_ALL)
-    {
-        RIO_LOG("hat is using all head!\n");
-    }
-    else if (HAT_TYPES[int(buf->hatType)] == HAT_TYPE_HAT_ONLY)
+    // Hat modelFlag conditions.
+    if (cHatTypes[int(buf->hatType)] == HAT_TYPE_HAT_ONLY)
     {
         modelFlag = FFL_MODEL_FLAG_HAT;
-        RIO_LOG("hat is using hat model type!\n");
     }
-    else if (HAT_TYPES[int(buf->hatType)] == HAT_TYPE_FACE_ONLY)
+    else if (cHatTypes[int(buf->hatType)] == HAT_TYPE_FACE_ONLY)
     {
         modelFlag = FFL_MODEL_FLAG_FACE_ONLY;
-        RIO_LOG("hat is using only face model type!\n");
     }
-    else if (HAT_TYPES[int(buf->hatType)] == HAT_TYPE_BALD)
+    else if (cHatTypes[int(buf->hatType)] == HAT_TYPE_BALD)
     {
         // bald Hair type
         charInfo.parts.hairType = FFL_HAIR_BALD;
-        RIO_LOG("hat is using bald model type! ha ha bald!\n");
-    }
-    else
-    {
-        RIO_LOG("hat is not set or is not using a specific type.\n");
     }
 
     // otherwise just fall through and use default
@@ -1032,7 +1011,7 @@ static const rio::Vector3f cBodyHeadRotation = {(0.002f + -0.005f), 0.000005f, -
 
 // draws mii body based on charinfo's build/height
 // shader sets favorite and pants color
-void RootTask::drawMiiBody(Model *pModel, PantsColor pantsColor,
+void RootTask::drawMiiBody(Model *pModel, PantsColor pantsColor, uint8_t bodyType,
                            rio::Matrix34f &model_mtx, rio::BaseMtx34f &view_mtx,
                            rio::BaseMtx44f &proj_mtx, const rio::Vector3f scaleFactors)
 {
@@ -1043,7 +1022,9 @@ void RootTask::drawMiiBody(Model *pModel, PantsColor pantsColor,
     // SELECT BODY MODEL
     RIO_ASSERT(pCharInfo->gender < FFL_GENDER_MAX);
 
-    const rio::mdl::Model *model = mpBodyModels[pCharInfo->gender];
+    int i = bodyType * 2;
+
+    const rio::mdl::Model *model = mpBodyModels[pCharInfo->gender + i];
 
     const rio::mdl::Mesh *const meshes = model->meshes();
 
@@ -1565,7 +1546,7 @@ void RootTask::handleRenderRequest(char *buf)
 
         // drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);
         PantsColor pantsColor = static_cast<PantsColor>(renderRequest->pantsColor % PANTS_COLOR_MAX);
-        drawMiiBody(mpModel, pantsColor, rotationMtx,
+        drawMiiBody(mpModel, pantsColor, renderRequest->bodyType, rotationMtx,
                     view_mtx, projMtx, scaleFactors);
         // restore original favorite color tho
         pCharInfo->favoriteColor = originalFavoriteColor;
@@ -1758,7 +1739,7 @@ void RootTask::calc_()
 
     mpModel->drawOpa(view_mtx, *mProjMtxIconBody);
 
-    drawMiiBody(mpModel, PANTS_COLOR_GRAY, rotationMtx,
+    drawMiiBody(mpModel, PANTS_COLOR_GRAY, uint8_t(0), rotationMtx,
                 view_mtx, *mProjMtxIconBody, scaleFactors);
     mpModel->drawXlu(view_mtx, *mProjMtxIconBody);
 }
