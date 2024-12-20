@@ -972,7 +972,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		} else if shaderType == 1 {
 			bodyTypeStr = "switch"
 		} else if shaderType == 2 {
-			bodyTypeStr = "studio"
+			bodyTypeStr = "miitomo"
 		}
 	}
 
@@ -1250,9 +1250,9 @@ var pantsColorMap = map[string]int{
 }
 
 var bodyTypeMap = map[string]int{
-	"wiiu":   0,
-	"switch": 1,
-	"studio": 2,
+	"wiiu":    0,
+	"switch":  1,
+	"miitomo": 2,
 }
 
 func getExpressionInt(input string) int {

@@ -17,7 +17,7 @@ typedef enum HatType
   HAT_TYPE_MAX = 4
 } HatType;
 
-static const int cHatTypes[MAX_HATS] = {
+static const int cHatTypes[cMaxHats] = {
     // Ignore 0
     HAT_TYPE_ALL,
     // Cap
