@@ -1111,6 +1111,7 @@ void RootTask::handleRenderRequest(char* buf)
         closesocket(new_socket);
         return;
     }
+    RIO_LOG("handleRenderRequest: socket handle: %d\n", new_socket);
 
     // hopefully renderrequest is proper
     RenderRequest* renderRequest = reinterpret_cast<RenderRequest*>(buf);
@@ -1437,6 +1438,7 @@ void RootTask::handleRenderRequest(char* buf)
     }
 
     closesocket(new_socket);
+    RIO_LOG("Closed socket %d.\n", new_socket);
 }
 
 void RootTask::calc_()
