@@ -48,8 +48,9 @@ private:
     void setConstColor_(u32 ps_loc, const FFLColor& color);
     void setModulateMode_(FFLModulateMode mode);
     void setModulate_(const FFLModulateParam& modulateParam);
+    void setDrawType_(const FFLModulateParam& modulateParam);
 
-    void setMaterial_(const FFLModulateParam& modulateParam);
+    void setMaterial_(const FFLModulateType modulateType);
 
     void draw_(const FFLDrawParam& draw_param);
     static void drawCallback_(void* p_obj, const FFLDrawParam* draw_param);

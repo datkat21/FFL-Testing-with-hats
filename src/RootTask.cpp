@@ -73,37 +73,35 @@ RootTask::RootTask()
 #include <filesystem>
 #include <fstream>
 
+#define STORE_DATA_FOLDER_PATH "place_ffsd_files_here"
+
 // read Mii data from a folder
 void RootTask::fillStoreDataArray_()
 {
     // Path to the folder
-    const std::string folderPath = "place_ffsd_files_here";
+    const std::string folderPath = STORE_DATA_FOLDER_PATH;
     // Check if the folder exists
-    if (std::filesystem::exists(folderPath) && std::filesystem::is_directory(folderPath))
+    if (!std::filesystem::exists(folderPath) || !std::filesystem::is_directory(folderPath))
+        return; // folder is not usable, skip this
+    for (const auto& entry : std::filesystem::directory_iterator(folderPath))
     {
-        for (const auto& entry : std::filesystem::directory_iterator(folderPath))
-        {
-            if (entry.is_regular_file()
-                && entry.file_size() >= sizeof(charInfoStudio)
-                && entry.path().filename().string().at(0) != '.')
-            {
-                // Read the file content
-                std::ifstream file(entry.path(), std::ios::binary);
-                if (file.is_open())
-                {
-                    std::vector<char> data;
-                    data.resize(entry.file_size());
-                    file.read(&data[0], entry.file_size());
-                    //if (file.gcount() == sizeof(FFLStoreData))
-                    //{
-                        mStoreDataArray.push_back(data);
-                    //}
-                    file.close();
-                }
-            }
-        }
-        RIO_LOG("Loaded %zu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
+        if (!entry.is_regular_file()
+            || entry.file_size() < sizeof(charInfoStudio)
+            || entry.path().filename().string().at(0) == '.')
+            continue; // skip: dotfiles, not regular/too small files
+
+        // Read the file content
+        std::ifstream file(entry.path(), std::ios::binary);
+        if (!file.is_open())
+            continue;
+        std::vector<char> data;
+        data.resize(entry.file_size());
+        file.read(&data[0], entry.file_size());
+        //if (file.gcount() == sizeof(FFLStoreData))
+        mStoreDataArray.push_back(data);
+        file.close();
     }
+    RIO_LOG("Loaded %zu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
 }
 
 int server_fd, new_socket;
@@ -220,6 +218,9 @@ void RootTask::prepare_()
         ._c = false,
         ._10 = true
     };
+    // Initialize mResourceDesc with zeroes.
+    rio::MemUtil::set(&mResourceDesc, 0, sizeof(FFLResourceDesc));
+
 
 #ifndef TEST_FFL_DEFAULT_RESOURCE_LOADING
 
@@ -240,12 +241,10 @@ void RootTask::prepare_()
 
                 u8* buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
                 if (buffer == nullptr)
-                {
                     RIO_LOG("Skipping loading FFL_RESOURCE_TYPE_MIDDLE (%s failed to load)\n", resPath.c_str());
-                    mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = 0;
-                }
                 else
                 {
+                    RIO_LOG("FFL_RESOURCE_TYPE_MIDDLE successfully loaded from: %s\n", arg.path.c_str());
                     mResourceDesc.pData[FFL_RESOURCE_TYPE_MIDDLE] = buffer;
                     mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = arg.read_size;
                 }
@@ -271,6 +270,7 @@ void RootTask::prepare_()
                 u8* buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
                 if (buffer != nullptr)
                 {
+                    RIO_LOG("FFL_RESOURCE_TYPE_HIGH successfully loaded from: %s\n", arg.path.c_str());
                     mResourceDesc.pData[FFL_RESOURCE_TYPE_HIGH] = buffer;
                     mResourceDesc.size[FFL_RESOURCE_TYPE_HIGH] = arg.read_size;
                     resLoaded = true;
@@ -278,9 +278,7 @@ void RootTask::prepare_()
                     break;
                 }
                 else
-                {
                     RIO_LOG("NativeFileDevice failed to load: %s\n", arg.path.c_str());
-                }
             }
 
             if (!resLoaded)
@@ -402,13 +400,13 @@ void RootTask::createModel_()
     if (!mStoreDataArray.empty())
     {
         // Use the custom Mii data array
-        RenderRequest fakeRenderRequest;
-        fakeRenderRequest.dataLength = static_cast<u16>(mStoreDataArray[mMiiCounter].size());
-        fakeRenderRequest.verifyCRC16 = false;
-        rio::MemUtil::copy(fakeRenderRequest.data, &mStoreDataArray[mMiiCounter][0], fakeRenderRequest.dataLength);
-        if (pickupCharInfoFromRenderRequest(&charInfo, &fakeRenderRequest) != FFL_RESULT_OK)
+        if (FFLResult result = pickupCharInfoFromData(&charInfo,
+            &mStoreDataArray[mMiiCounter][0],
+            static_cast<u32>(mStoreDataArray[mMiiCounter].size()),
+            true // verifyCRC16
+        ); result != FFL_RESULT_OK)
         {
-            RIO_LOG("pickupCharInfoFromRenderRequest failed on Mii counter: %d\n", mMiiCounter);
+            RIO_LOG("pickupCharInfoFromData failed on Mii counter: %d with result %s\n", mMiiCounter, FFLResultToString(result));
             mpModel = nullptr;
             mCounter = 0.0f;
             mMiiCounter = (mMiiCounter + 1) % maxMiis;
@@ -441,7 +439,7 @@ void RootTask::createModel_()
 
     Model::InitArgStoreData arg = {
         .desc = {
-            .resolution = FFLResolution(768),
+            .resolution = static_cast<FFLResolution>(FFL_RESOLUTION_TEX_256 | FFL_RESOLUTION_MIP_MAP_ENABLE_MASK),
             .allExpressionFlag = { .flags = { 1 << 0, 0, 0 } },
             .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
             .resourceType = FFL_RESOURCE_TYPE_HIGH,
@@ -464,133 +462,6 @@ void RootTask::createModel_()
     mCounter = 0.0f;
 }
 
-FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest *buf)
-{
-    MiiDataInputType inputType;
-
-    switch (buf->dataLength)
-    {
-        /*case sizeof(FFLStoreData):
-        case sizeof(FFLiMiiDataOfficial):
-        case sizeof(FFLiMiiDataCore):
-            inputType = INPUT_TYPE_FFL_MIIDATACORE;
-            break;
-        */
-        case 76: // RFLStoreData, FFLiStoreDataRFL ....????? (idk if this exists)
-            inputType = INPUT_TYPE_RFL_STOREDATA;
-            break;
-        case 74: // RFLCharData, FFLiMiiDataOfficialRFL
-            inputType = INPUT_TYPE_RFL_CHARDATA;
-            break;
-        case sizeof(charInfo): // nx char info
-            inputType = INPUT_TYPE_NX_CHARINFO;
-            break;
-        case sizeof(coreData):
-        case 68://sizeof(storeData):
-            inputType = INPUT_TYPE_NX_COREDATA;
-            break;
-        case sizeof(charInfoStudio): // studio raw
-            inputType = INPUT_TYPE_STUDIO_RAW;
-            break;
-        case STUDIO_DATA_ENCODED_LENGTH: // studio encoded i think
-            inputType = INPUT_TYPE_STUDIO_ENCODED;
-            break;
-        case sizeof(FFLiMiiDataCore):
-        case sizeof(FFLiMiiDataOfficial): // creator name unused
-            inputType = INPUT_TYPE_FFL_MIIDATACORE;
-            break;
-        case sizeof(FFLStoreData):
-            inputType = INPUT_TYPE_FFL_STOREDATA;
-            break;
-        default:
-            // uh oh, we can't detect it
-            return FFL_RESULT_ERROR;
-            break;
-    }
-
-    // create temporary charInfoNX for studio, coredata
-    charInfo charInfoNX;
-
-    switch (inputType)
-    {
-        case INPUT_TYPE_RFL_STOREDATA:
-            // 76 = sizeof RFLStoreData
-            if (buf->verifyCRC16 && !FFLiIsValidCRC16(buf->data, 76))
-                return FFL_RESULT_FILE_INVALID;
-            [[fallthrough]];
-        case INPUT_TYPE_RFL_CHARDATA:
-        {
-            FFLiMiiDataCoreRFL charDataRFL;
-            rio::MemUtil::copy(&charDataRFL, buf->data, sizeof(FFLiMiiDataCoreRFL));
-            // look at create id to run FFLiIsNTRMiiID
-            // NOTE: FFLiMiiDataCoreRFL2CharInfo is SUPPOSED to check
-            // whether it is an NTR mii id or not and store
-            // the result as pCharInfo->birthPlatform = FFL_BIRTH_PLATFORM_NTR
-            // HOWEVER, it clears out the create ID and runs the compare anyway
-            // the create id is actually not the same size either
-
-            // NOTE: NFLCharData for DS can be little endian tho!!!!!!
-#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
-            charDataRFL.SwapEndian();
-#endif // __BYTE_ORDER__
-
-            FFLiMiiDataCoreRFL2CharInfo(pCharInfo,
-                charDataRFL,
-                NULL, false
-                //reinterpret_cast<u16*>(&buf->data[0x36]), true // creator name
-                // name offset: https://github.com/SMGCommunity/Petari/blob/53fd4ff9db54cb1c91a96534dcae9f2c2ea426d1/libs/RVLFaceLib/include/RFLi_Types.h#L342
-            );
-            break;
-        }
-        case INPUT_TYPE_STUDIO_ENCODED:
-        {
-            // mii studio url data format is obfuscated
-            // decodes it in a buffer
-            char decodedData[STUDIO_DATA_ENCODED_LENGTH];
-            rio::MemUtil::copy(decodedData, buf->data, STUDIO_DATA_ENCODED_LENGTH);
-            studioURLObfuscationDecode(decodedData);
-            studioToCharInfoNX(&charInfoNX, reinterpret_cast<::charInfoStudio*>(decodedData));
-            charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
-            break;
-        }
-        case INPUT_TYPE_STUDIO_RAW:
-            // we may not need this if we decode from and to buf->data but that's confusing
-            studioToCharInfoNX(&charInfoNX, reinterpret_cast<::charInfoStudio*>(buf->data));
-            charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
-            break;
-        case INPUT_TYPE_NX_CHARINFO:
-            charInfoNXToFFLiCharInfo(pCharInfo, reinterpret_cast<::charInfo*>(buf->data));
-            break;
-        case INPUT_TYPE_NX_COREDATA:
-            coreDataToCharInfoNX(&charInfoNX, reinterpret_cast<::coreData*>(buf->data));
-            charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
-            break;
-        case INPUT_TYPE_FFL_STOREDATA:
-            // only verify CRC16, then fall through
-            if (buf->verifyCRC16 && !FFLiIsValidCRC16(buf->data, sizeof(FFLiStoreDataCFL)))
-                return FFL_RESULT_FILE_INVALID;
-            [[fallthrough]];
-        case INPUT_TYPE_FFL_MIIDATACORE:
-        {
-            FFLiMiiDataCore miiDataCore;
-            rio::MemUtil::copy(&miiDataCore, buf->data, sizeof(FFLiMiiDataCore));
-            // NOTE: FFLiMiiDataOfficial from CFL/FFL databases
-            // are both in big endian, not sure how to detect that
-#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
-            miiDataCore.SwapEndian();
-#endif // __BYTE_ORDER__
-            FFLiMiiDataCore2CharInfo(pCharInfo, miiDataCore,
-            // const u16* pCreatorName, bool resetBirthday
-            NULL, false);
-            break;
-        }
-        default: // unknown
-            return FFL_RESULT_ERROR;
-            break;
-    }
-    return FFL_RESULT_OK;
-}
-
 const std::string socketErrorPrefix = "ERROR: ";
 
 // create model for render request
@@ -601,14 +472,17 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
 
     std::string errMsg;
 
-    FFLResult pickupResult = pickupCharInfoFromRenderRequest(&charInfo, buf);
+    FFLResult pickupResult = pickupCharInfoFromData(&charInfo,
+                                                    buf->data,
+                                                    buf->dataLength,
+                                                    buf->verifyCRC16);
 
     if (pickupResult != FFL_RESULT_OK)
     {
         if (pickupResult == FFL_RESULT_FILE_INVALID) // crc16 fail
             errMsg = "Data CRC16 verification failed.\n";
         else
-            errMsg = "Unknown data type (pickupCharInfoFromRenderRequest failed)\n";
+            errMsg = "Unknown data type (pickupCharInfoFromData failed)\n";
 
         RIO_LOG("%s", errMsg.c_str());
         errMsg = socketErrorPrefix + errMsg;
@@ -996,19 +870,18 @@ void RootTask::drawMiiBody(Model* pModel, PantsColor pantsColor,
     const bool lightEnable = pModel->getLightEnable();
     FFLiCharInfo* pCharInfo = pModel->getCharInfo();
 
-    // SELECT BODY MODEL
+    // Select body model.
     RIO_ASSERT(pCharInfo->gender < FFL_GENDER_MAX);
+    const rio::mdl::Model* model = mpBodyModels[pCharInfo->gender]; // Based on gender.
 
-    const rio::mdl::Model* model = mpBodyModels[pCharInfo->gender];
-
-    const rio::mdl::Mesh* const meshes = model->meshes();
+    const rio::mdl::Mesh* meshes = model->meshes(); // Body and pants mesh.
 
     // Render each mesh in order
     for (u32 i = 0; i < model->numMeshes(); i++)
     {
         const rio::mdl::Mesh& mesh = meshes[i];
 
-        // BIND SHADER
+        // Bind shader and set body material.
         IShader* pShader = pModel->getShader();
         pShader->bindBodyShader(lightEnable, pCharInfo);
 #ifndef USE_OLD_MODELS

@@ -233,3 +233,4 @@ void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src);
 void studioToCharInfoNX(charInfo* dest, const charInfoStudio* src);
 void studioURLObfuscationDecode(char* data);
 void coreDataToCharInfoNX(charInfo* dest, const coreData* src);
+FFLResult pickupCharInfoFromData(FFLiCharInfo* pCharInfo, const void* data, u32 dataLength, bool verifyCRC16);

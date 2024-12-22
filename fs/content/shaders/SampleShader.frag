@@ -19,7 +19,7 @@ layout( location = 0 ) out vec4 o_Color;
     uniform int  modulateType;
     uniform int  gammaType;
     uniform int  drawType;
-    uniform int  pad0;
+    uniform bool lightEnable; // custom
     uniform vec4 constColor1;
     uniform vec4 constColor2;
     uniform vec4 constColor3;
@@ -38,7 +38,6 @@ layout( location = 0 ) out vec4 o_Color;
     uniform float u_RimPower;
 
     uniform float u_RimWidth;
-    uniform bool  lightEnable;
 //};
 
 

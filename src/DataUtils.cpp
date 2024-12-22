@@ -3,11 +3,15 @@
 #include <nn/ffl/detail/FFLiCharInfo.h>
 
 #include <misc/rio_MemUtil.h>
+#include <nn/ffl/FFLiColor.h>
+
+#include <nn/ffl/FFLiMiiData.h>
+#include <nn/ffl/FFLiMiiDataCore.h>
+#include <nn/ffl/detail/FFLiCrc.h>
+#include <RenderRequest.h>
 
 #include <mii_ext_MiiPort.h>
 
-// for markCommonColor
-#include <nn/ffl/FFLiColor.h>
 
 void charInfoNXToFFLiCharInfo(FFLiCharInfo* dest, const charInfo* src)
 {
@@ -212,4 +216,126 @@ void coreDataToCharInfoNX(charInfo* dest, const coreData* src)
     memcpy(dest->nickname, src->nickname, sizeof(src->nickname));
 
     // Other fields of charInfo will remain zero-initialized.
+}
+
+
+FFLResult pickupCharInfoFromData(FFLiCharInfo* pCharInfo, const void* data, u32 dataLength, bool verifyCRC16)
+{
+    MiiDataInputType inputType;
+
+    switch (dataLength)
+    {
+        case 76: // RFLStoreData, FFLiStoreDataRFL ....????? (idk if this exists)
+            inputType = INPUT_TYPE_RFL_STOREDATA;
+            break;
+        case 74: // RFLCharData, FFLiMiiDataOfficialRFL
+            inputType = INPUT_TYPE_RFL_CHARDATA;
+            break;
+        case sizeof(charInfo): // nx char info
+            inputType = INPUT_TYPE_NX_CHARINFO;
+            break;
+        case sizeof(coreData):
+        case 68://sizeof(storeData):
+            inputType = INPUT_TYPE_NX_COREDATA;
+            break;
+        case sizeof(charInfoStudio): // studio raw
+            inputType = INPUT_TYPE_STUDIO_RAW;
+            break;
+        case STUDIO_DATA_ENCODED_LENGTH: // studio encoded i think
+            inputType = INPUT_TYPE_STUDIO_ENCODED;
+            break;
+        case sizeof(FFLiMiiDataCore):
+        case sizeof(FFLiMiiDataOfficial): // creator name unused
+            inputType = INPUT_TYPE_FFL_MIIDATACORE;
+            break;
+        case sizeof(FFLStoreData):
+            inputType = INPUT_TYPE_FFL_STOREDATA;
+            break;
+        default:
+            // uh oh, we can't detect it
+            return FFL_RESULT_ERROR;
+            break;
+    }
+
+    // create temporary charInfoNX for studio, coredata
+    charInfo charInfoNX;
+
+    switch (inputType)
+    {
+        case INPUT_TYPE_RFL_STOREDATA:
+            // 76 = sizeof RFLStoreData
+            if (verifyCRC16 && !FFLiIsValidCRC16(data, 76))
+                return FFL_RESULT_FILE_INVALID;
+            [[fallthrough]];
+        case INPUT_TYPE_RFL_CHARDATA:
+        {
+            FFLiMiiDataCoreRFL charDataRFL;
+            rio::MemUtil::copy(&charDataRFL, data, sizeof(FFLiMiiDataCoreRFL));
+            // look at create id to run FFLiIsNTRMiiID
+            // NOTE: FFLiMiiDataCoreRFL2CharInfo is SUPPOSED to check
+            // whether it is an NTR mii id or not and store
+            // the result as pCharInfo->birthPlatform = FFL_BIRTH_PLATFORM_NTR
+            // HOWEVER, it clears out the create ID and runs the compare anyway
+            // the create id is actually not the same size either
+
+            // NOTE: NFLCharData for DS can be little endian tho!!!!!!
+#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+            charDataRFL.SwapEndian();
+#endif // __BYTE_ORDER__
+
+            FFLiMiiDataCoreRFL2CharInfo(pCharInfo,
+                charDataRFL,
+                NULL, false
+                //reinterpret_cast<u16*>(&buf->data[0x36]), true // creator name
+                // name offset: https://github.com/SMGCommunity/Petari/blob/53fd4ff9db54cb1c91a96534dcae9f2c2ea426d1/libs/RVLFaceLib/include/RFLi_Types.h#L342
+            );
+            break;
+        }
+        case INPUT_TYPE_STUDIO_ENCODED:
+        {
+            // mii studio url data format is obfuscated
+            // decodes it in a buffer
+            char decodedData[STUDIO_DATA_ENCODED_LENGTH];
+            rio::MemUtil::copy(decodedData, data, STUDIO_DATA_ENCODED_LENGTH);
+            studioURLObfuscationDecode(decodedData);
+            studioToCharInfoNX(&charInfoNX, reinterpret_cast<::charInfoStudio*>(decodedData));
+            charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
+            break;
+        }
+        case INPUT_TYPE_STUDIO_RAW:
+            // we may not need this if we decode from and to data but that's confusing
+            studioToCharInfoNX(&charInfoNX, reinterpret_cast<const ::charInfoStudio*>(data));
+            charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
+            break;
+        case INPUT_TYPE_NX_CHARINFO:
+            charInfoNXToFFLiCharInfo(pCharInfo, reinterpret_cast<const ::charInfo*>(data));
+            break;
+        case INPUT_TYPE_NX_COREDATA:
+            coreDataToCharInfoNX(&charInfoNX, reinterpret_cast<const ::coreData*>(data));
+            charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
+            break;
+        case INPUT_TYPE_FFL_STOREDATA:
+            // only verify CRC16, then fall through
+            if (verifyCRC16 && !FFLiIsValidCRC16(data, sizeof(FFLiStoreDataCFL)))
+                return FFL_RESULT_FILE_INVALID;
+            [[fallthrough]];
+        case INPUT_TYPE_FFL_MIIDATACORE:
+        {
+            FFLiMiiDataCore miiDataCore;
+            rio::MemUtil::copy(&miiDataCore, data, sizeof(FFLiMiiDataCore));
+            // NOTE: FFLiMiiDataOfficial from CFL/FFL databases
+            // are both in big endian, not sure how to detect that
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+            miiDataCore.SwapEndian();
+#endif // __BYTE_ORDER__
+            FFLiMiiDataCore2CharInfo(pCharInfo, miiDataCore,
+            // const u16* pCreatorName, bool resetBirthday
+            NULL, false);
+            break;
+        }
+        default: // unknown
+            return FFL_RESULT_ERROR;
+            break;
+    }
+    return FFL_RESULT_OK;
 }

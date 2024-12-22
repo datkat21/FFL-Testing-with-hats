@@ -418,6 +418,18 @@ void ShaderMiitomo::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 
     mShader.setUniform(light_enable, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
 
+    mShader.setUniform(cHSLightGroundColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_GROUND_COLOR], u32(-1));
+    mShader.setUniform(cHSLightSkyColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_SKY_COLOR], u32(-1));
+
+
+    mShader.setUniform(cDirLightColor0, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR0], u32(-1));
+    mShader.setUniform(cDirLightColor1, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR1], u32(-1));
+
+    mShader.setUniform(cLightDirAndType0, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE0], u32(-1));
+    mShader.setUniform(cLightDirAndType1, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE1], u32(-1));
+    mShader.setUniform(cDirLightCount, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COUNT], u32(-1));
+
+    mShader.setUniform(cLightColor, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_COLOR]);
 }
 
 void ShaderMiitomo::setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const
@@ -562,6 +574,7 @@ void ShaderMiitomo::setModulateMode_(FFLModulateMode mode)
 void ShaderMiitomo::setModulate_(const FFLModulateParam& modulateParam)
 {
     setModulateMode_(modulateParam.mode);
+    setMaterial_(modulateParam.type);
 
     // if you want to change colors based on modulateParam.type
     // FFL_MODULATE_TYPE_SHAPE_HAIR
@@ -599,32 +612,17 @@ void ShaderMiitomo::setModulate_(const FFLModulateParam& modulateParam)
 
 void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
 {
-    if (modulateType == FFL_MODULATE_TYPE_SHAPE_NOSELINE)
-    {
-        //mShader.setUniform(0.00f, 0.00f, 0.00f, mVertexUniformLocation[VERTEX_UNIFORM_EYE_PT], u32(-1));
-        mShader.setUniform(false, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
-        return;
-    }
-
-    mShader.setUniform(mLightEnable, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
-
-    mShader.setUniform(cHSLightGroundColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_GROUND_COLOR], u32(-1));
-    mShader.setUniform(cHSLightSkyColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_SKY_COLOR], u32(-1));
-
-
-    mShader.setUniform(cDirLightColor0, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR0], u32(-1));
-    mShader.setUniform(cDirLightColor1, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR1], u32(-1));
-
-    mShader.setUniform(cLightDirAndType0, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE0], u32(-1));
-    mShader.setUniform(cLightDirAndType1, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE1], u32(-1));
-    mShader.setUniform(cDirLightCount, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COUNT], u32(-1));
-
-    mShader.setUniform(cLightColor, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_COLOR]);
-
+    // doesn't necessarily set material but tweaks uniforms based on draw type
     switch (modulateType)
     {
-        case FFL_MODULATE_TYPE_SHAPE_MASK:
         case FFL_MODULATE_TYPE_SHAPE_NOSELINE:
+        {
+            //mShader.setUniform(0.00f, 0.00f, 0.00f, mVertexUniformLocation[VERTEX_UNIFORM_EYE_PT], u32(-1));
+            mShader.setUniform(false, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
+            return; // no other uniforms are set
+        }
+        case FFL_MODULATE_TYPE_SHAPE_MASK:
+            [[fallthrough]];
         case FFL_MODULATE_TYPE_SHAPE_GLASS:
             mShader.setUniform(true, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_ALPHA_TEST]);
             [[fallthrough]];
@@ -661,7 +659,6 @@ void ShaderMiitomo::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
         nullptr  // no texture
     };
     setModulate_(modulateParam);
-    setMaterial_(modulateType);
 }
 
 void ShaderMiitomo::setBodyShaderPantsMaterial(PantsColor pantsColor)
@@ -681,14 +678,12 @@ void ShaderMiitomo::setBodyShaderPantsMaterial(PantsColor pantsColor)
         nullptr  // no texture
     };
     setModulate_(modulateParam);
-    setMaterial_(modulateType);
 }
 
 void ShaderMiitomo::draw_(const FFLDrawParam& draw_param)
 {
     setCulling(draw_param.cullMode);
     setModulate_(draw_param.modulateParam);
-    setMaterial_(draw_param.modulateParam.type);
 
     if (draw_param.primitiveParam.pIndexBuffer != nullptr)
     {

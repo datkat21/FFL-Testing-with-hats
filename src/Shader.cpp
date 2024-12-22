@@ -313,6 +313,8 @@ void Shader::initialize()
     mPixelUniformLocation[PIXEL_UNIFORM_MODE]                       = mShader.getFragmentUniformLocation("u_mode");
     mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]                  = mShader.getFragmentUniformLocation("u_rim_color");
     mPixelUniformLocation[PIXEL_UNIFORM_RIM_POWER]                  = mShader.getFragmentUniformLocation("u_rim_power");
+    // Custom uniform to set values previously handled by v_color if the color attribute is constant (stride = 0).
+    mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]             = mShader.getFragmentUniformLocation("u_parameter_mode");
 
     mSamplerLocation = mShader.getFragmentSamplerLocation("s_texture");
 
@@ -332,24 +334,27 @@ void Shader::initialize()
     mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SP_POWER]   = mBodyShader.getFragmentUniformLocation("SP_power");
 
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_POSITION]  = mShader.getVertexAttribLocation("a_position");
-    // hair does not have texcoord
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD]  = mShader.getVertexAttribLocation("a_texCoord");
-
-    // 2D planes (faceline/mask) do not have any of these
+    // 2D planes (faceline/mask) do not have anything but position and texcoord
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL]    = mShader.getVertexAttribLocation("a_normal");
+    // hair does not have texcoord
+    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD] = mShader.getVertexAttribLocation("a_texCoord");
     /* NOTE: "color" is not meant as an actual color... it is
      * only here as parameters to control the anisotropic effect
      * color.r - aniso specular blend, param 1 to calculateSpecularBlend
                  (switch SampleShader: "specularMix" in vertex shader)
      * color.g - aniso specular strength, param 4 to calculateSpecularColor
                  (for blinn they force it to 1.0)
-     * color.b - unused?
+     * color.b - unused and set to 0
      * color.a - rim lighting width "rimWidth", param 3 into calculateRimColor
                  (when rim lighting is not active, usually the reason is that A is 0 here)
 
      * color's stride is 0 and size is 4 on everything else, suggesting it is constant
+
+     * in the FFL resource on Wii U, all shapes where color's stride is 0 use the value: <1, 1, 0, 1>
+     * ... EXCEPT for where R is 0 in: hair type 34/beanie, and hair
+     *              for hat meshes: 18, 23, 34, 39, 45, 57, 114, 127
      */
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("a_color"); // default <1, 1, 0, 1>
+    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("a_color");
     // tangent is only set on hair, size and stride are 0 on everything else
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("a_tangent");
 
@@ -546,7 +551,8 @@ void Shader::setModulateMode_(FFLModulateMode mode)
 
 void Shader::setModulate_(const FFLModulateParam& modulateParam)
 {
-    setModulateMode_(modulateParam.mode);
+    setModulateMode_(modulateParam.mode); // Modulate mode
+    setMaterial_(modulateParam.type); // Material shader uniforms
 
     // if you want to change colors based on modulateParam.type
     // FFL_MODULATE_TYPE_SHAPE_HAIR
@@ -652,11 +658,8 @@ void Shader::setBodyMaterialDefaultShader_(const FFLColor& pColor, bool usePants
     setMaterial_(modulateParam.type);
     // body uses different rim color
     mShader.setUniform(getColorUniform(cRimColorBody), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
-    // found that color attribute needs to be set? idk if this works very friendly?
-#if RIO_IS_WIN
-    // TODO: needs opengl and may not be reliable for opengl es
-    RIO_GL_CALL(glVertexAttrib4f(mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR], 1.0f, 1.0f, 0.0f, 1.0f));
-#endif
+    // set parameter/basically rim light enable
+    mShader.setUniform(1, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_DEFAULT_1
 }
 
 #ifndef DEFAULT_SHADER_FOR_BODY
@@ -754,14 +757,8 @@ void Shader::draw_(const FFLDrawParam& draw_param)
             const FFLAttributeBuffer& buffer = draw_param.attributeBufferParam.attributeBuffers[type];
             s32 location = mAttributeLocation[type];
             void* ptr = buffer.ptr;
-            /*
-            if (ptr && buffer.stride == 0 && type == FFL_ATTRIBUTE_BUFFER_TYPE_COLOR)
-            {
-                u8* ptrU8 = reinterpret_cast<u8*>(ptr);
-                RIO_LOG("color stride 0: %d, %d, %d, %d\n", ptrU8[0], ptrU8[1], ptrU8[2], ptrU8[3]);
-            }
-            */
-            if (ptr && location != -1 && buffer.stride > 0) //only color's stride is 0
+
+            if (ptr && location != -1) // only color's stride is 0
             {
                 u32 stride = buffer.stride;
                 u32 vbo_handle = mVBOHandle[type];
@@ -788,6 +785,18 @@ void Shader::draw_(const FFLDrawParam& draw_param)
                     RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_BYTE, true, stride, nullptr));
                     break;
                 case FFL_ATTRIBUTE_BUFFER_TYPE_COLOR:
+                    if (stride == 0 && size == 4) // If color's stride is 0, its value is constant.
+                    {
+                        RIO_GL_CALL(glDisableVertexAttribArray(location)); // Attribute will not be used.
+                        // Dereference the first value as u8.
+                        const u8* color = reinterpret_cast<u8*>(ptr);
+                        if (color[0] == 0) // Only possibilities for first component are 0 or 1 (read above).
+                            mShader.setUniform(2, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_DEFAULT_2
+                        else
+                            mShader.setUniform(1, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_DEFAULT_1
+                        break; // Break out of the switch case.
+                    }
+                    mShader.setUniform(0, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_COLOR
                     RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_UNSIGNED_BYTE, true, stride, nullptr));
                     break;
                 default:
@@ -795,8 +804,7 @@ void Shader::draw_(const FFLDrawParam& draw_param)
                 }
             }
 
-            else if (location != -1)
-                // Disable the attribute to avoid using uninitialized data
+            else if (location != -1) // Disable attributes without corresponding VS inputs.
                 RIO_GL_CALL(glDisableVertexAttribArray(location));
         }
 #endif
