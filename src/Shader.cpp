@@ -256,14 +256,9 @@ Shader::Shader()
     , mCallback()
     , mpCharInfo(nullptr)
     , mSpecularMode(FFL_SPECULAR_MODE_ANISO)
-#ifndef DEFAULT_SHADER_FOR_BODY
-    , mIsBodyUsingDefaultShader(false)
-#endif
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
     rio::MemUtil::set(mPixelUniformLocation, u8(-1), sizeof(mPixelUniformLocation));
-    rio::MemUtil::set(mBodyVertexUniformLocation, u8(-1), sizeof(mBodyVertexUniformLocation));
-    rio::MemUtil::set(mBodyPixelUniformLocation, u8(-1), sizeof(mBodyPixelUniformLocation));
     mSamplerLocation = -1;
     rio::MemUtil::set(mAttributeLocation, u8(-1), sizeof(mAttributeLocation));
 }
@@ -289,8 +284,6 @@ Shader::~Shader()
 
 void Shader::initialize()
 {
-    mBodyShader.load("FFLBodyShader");
-
     mShader.load("FFLShader", rio::Shader::MODE_UNIFORM_REGISTER);
 
     mVertexUniformLocation[VERTEX_UNIFORM_IT]   = mShader.getVertexUniformLocation("u_it");
@@ -317,21 +310,6 @@ void Shader::initialize()
     mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]             = mShader.getFragmentUniformLocation("u_parameter_mode");
 
     mSamplerLocation = mShader.getFragmentSamplerLocation("s_texture");
-
-
-    // FFLBodyShader
-    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_PROJ]     = mBodyShader.getVertexUniformLocation("proj");
-    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_VIEW]     = mBodyShader.getVertexUniformLocation("view");
-    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_WORLD]    = mBodyShader.getVertexUniformLocation("world");
-    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_LIGHT_DIR] = mBodyShader.getVertexUniformLocation("lightDir");
-
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_BASE]       = mBodyShader.getFragmentUniformLocation("base");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_AMBIENT]    = mBodyShader.getFragmentUniformLocation("ambient");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]    = mBodyShader.getFragmentUniformLocation("diffuse");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SPECULAR]   = mBodyShader.getFragmentUniformLocation("specular");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM]        = mBodyShader.getFragmentUniformLocation("rim");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM_SP_POWER] = mBodyShader.getFragmentUniformLocation("rimSP_power");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SP_POWER]   = mBodyShader.getFragmentUniformLocation("SP_power");
 
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_POSITION]  = mShader.getVertexAttribLocation("a_position");
     // 2D planes (faceline/mask) do not have anything but position and texcoord
@@ -472,27 +450,6 @@ void Shader::setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx
     mShader.setUniformColumnMajor(it, mVertexUniformLocation[VERTEX_UNIFORM_IT], u32(-1));
 }
 
-void Shader::setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const {
-#ifndef DEFAULT_SHADER_FOR_BODY
-    if (mIsBodyUsingDefaultShader)
-#endif
-        return setViewUniform(model_mtx, view_mtx, proj_mtx);
-#ifndef DEFAULT_SHADER_FOR_BODY
-    // otherwise use body shader
-    mBodyShader.setUniform(proj_mtx, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_PROJ], u32(-1));
-
-    rio::Matrix44f view44;
-    view44.fromMatrix34(view_mtx);
-
-    mBodyShader.setUniform(view44, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_VIEW], u32(-1));
-
-    rio::Matrix44f model44;
-    model44.fromMatrix34(model_mtx);
-
-    mBodyShader.setUniform(model44, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_WORLD], u32(-1));
-#endif
-}
-
 void Shader::applyAlphaTest(bool enable, rio::Graphics::CompareFunc func, f32 ref) const
 {
 #if RIO_IS_CAFE
@@ -581,6 +538,19 @@ void Shader::setModulate_(const FFLModulateParam& modulateParam)
     bindTexture_(modulateParam);
 }
 
+void Shader::setModulatePantsMaterial(PantsColor pantsColor)
+{
+    const FFLModulateParam modulateParam = {
+        FFL_MODULATE_MODE_CONSTANT,
+        static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS),
+        &cPantsColors[pantsColor],
+        nullptr, // no color G
+        nullptr, // no color B
+        nullptr  // no texture
+    };
+    setModulate_(modulateParam);
+}
+
 void Shader::setMaterial_(const FFLModulateType modulateType)
 {
     if (modulateType >= CUSTOM_MATERIAL_PARAM_SIZE)
@@ -590,99 +560,19 @@ void Shader::setMaterial_(const FFLModulateType modulateType)
     mShader.setUniform(getColorUniform(cMaterialParam[modulateType].diffuse), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_DIFFUSE]);
     mShader.setUniform(getColorUniform(cMaterialParam[modulateType].specular), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_SPECULAR]);
     mShader.setUniform(cMaterialParam[modulateType].specularPower, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_SPECULAR_POWER]);
-}
 
-void Shader::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
-{
-#ifndef DEFAULT_SHADER_FOR_BODY
-    mIsBodyUsingDefaultShader = false; // read by setViewUniformBody
-#endif
-
-    setCulling(FFL_CULL_MODE_BACK);
-
-    // FAVORITE COLOR
-    const FFLColor favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
-
-    // always use default shader for no light enable
-    if (!light_enable)
+    if (modulateType == CUSTOM_MATERIAL_PARAM_BODY
+        || modulateType == CUSTOM_MATERIAL_PARAM_PANTS)
     {
-#ifndef DEFAULT_SHADER_FOR_BODY
-        mIsBodyUsingDefaultShader = true; // read by setViewUniformBody
-#endif
-        // don't feel like implementing light_enable in the shader itself so i will just do this
-        bind(light_enable, pCharInfo);
-        setBodyMaterialDefaultShader_(favoriteColor, false);
-        return;
+        // body uses different rim color
+        mShader.setUniform(getColorUniform(cRimColorBody), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
+        // set parameter/basically rim light enable
+        mShader.setUniform(1, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_DEFAULT_1
     }
-
-
-#ifdef DEFAULT_SHADER_FOR_BODY
-    bind(light_enable, pCharInfo);
-    setBodyMaterialDefaultShader_(favoriteColor, false);
-#else
-    mBodyShader.bind();
-
-    setBodyMaterialBodyShader_(favoriteColor, false);
-#endif
-}
-
-void Shader::setBodyShaderPantsMaterial(PantsColor pantsColor)
-{
-    const FFLColor& color = cPantsColors[pantsColor];
-#ifndef DEFAULT_SHADER_FOR_BODY
-    if (mIsBodyUsingDefaultShader)
-        setBodyMaterialDefaultShader_(color, true);
     else
-        setBodyMaterialBodyShader_(color, true);
-#else
-    setBodyMaterialDefaultShader_(color, true);
-#endif
+        // set default rim color otherwise
+        mShader.setUniform(getColorUniform(cRimColor), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
 }
-
-void Shader::setBodyMaterialDefaultShader_(const FFLColor& pColor, bool usePantsMaterial)
-{
-    FFLModulateType modulateType;
-    if (usePantsMaterial)
-        modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS);
-    else
-        modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY);
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        modulateType,
-        &pColor,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
-    setMaterial_(modulateParam.type);
-    // body uses different rim color
-    mShader.setUniform(getColorUniform(cRimColorBody), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
-    // set parameter/basically rim light enable
-    mShader.setUniform(1, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_DEFAULT_1
-}
-
-#ifndef DEFAULT_SHADER_FOR_BODY
-void Shader::setBodyMaterialBodyShader_(const FFLColor& pColor, bool usePantsMaterial)
-{
-    mBodyShader.setUniform(cLightDir, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_LIGHT_DIR], u32(-1));
-
-
-    mBodyShader.setUniform(pColor.r, pColor.g, pColor.b, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_BASE]);
-
-    mBodyShader.setUniform(3.0f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SP_POWER]);
-
-    mBodyShader.setUniform(0.69804f, 0.69804f, 0.69804f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_AMBIENT]);
-    if (usePantsMaterial)
-        mBodyShader.setUniform(0.65098f, 0.65098f, 0.65098f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]);
-    else
-        mBodyShader.setUniform(0.29804f, 0.29804f, 0.29804f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]);
-
-    mBodyShader.setUniform(cRimColorBody.r, cRimColorBody.b, cRimColorBody.b, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM]);
-    mBodyShader.setUniform(2.0f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM_SP_POWER]);
-    mBodyShader.setUniform(0.16863f, 0.16863f, 0.16863f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SPECULAR]);
-}
-#endif
 
 void Shader::draw_(const FFLDrawParam& draw_param)
 {

@@ -701,6 +701,29 @@ void ShaderSwitch::setModulate_(const FFLModulateParam& modulateParam)
 
 #define SWITCH_MATERIAL_PARAM_PANTS_GRAY CUSTOM_MATERIAL_PARAM_PANTS
 #define SWITCH_MATERIAL_PARAM_PANTS_GOLD CUSTOM_MATERIAL_PARAM_PANTS + 1
+void ShaderSwitch::setModulatePantsMaterial(PantsColor pantsColor)
+{
+    FFLColor color = cPantsColors[PANTS_COLOR_GRAY];
+    s32 pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GRAY;
+    // NOTE: switch color only supports these two and only by index
+    if (pantsColor == PANTS_COLOR_GOLD)
+    {
+        color = cPantsColors[PANTS_COLOR_GOLD];
+        pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GOLD;
+    }
+
+    const FFLModulateType modulateType = static_cast<FFLModulateType>(pantsMaterialParam);
+
+    const FFLModulateParam modulateParam = {
+        FFL_MODULATE_MODE_CONSTANT,
+        modulateType,
+        &color,
+        nullptr, // no color G
+        nullptr, // no color B
+        nullptr  // no texture
+    };
+    setModulate_(modulateParam);
+}
 
 // Use a shortcut to resolve Ver3/FFL hair color to nn::mii CommonColor.
 static s32 getHairCommonColorFromVer3_(s32 index)
@@ -791,52 +814,6 @@ void ShaderSwitch::setMaterial_(const FFLModulateType modulateType)
     mShader.setUniform(drawParamMaterial.rimLight.power, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_POWER]);
 
     mShader.setUniform(drawParamMaterial.rimLight.width, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_WIDTH]);
-}
-
-void ShaderSwitch::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
-{
-    bind(light_enable, pCharInfo);
-
-    setCulling(FFL_CULL_MODE_BACK);
-
-    const FFLColor& favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
-
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY);
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        // CUSTOM MODULATE TYPE FOR BODY
-        modulateType,
-        &favoriteColor,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
-}
-
-void ShaderSwitch::setBodyShaderPantsMaterial(PantsColor pantsColor)
-{
-    FFLColor color = cPantsColors[PANTS_COLOR_GRAY];
-    s32 pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GRAY;
-    // NOTE: switch color only supports these two and only by index
-    if (pantsColor == PANTS_COLOR_GOLD)
-    {
-        color = cPantsColors[PANTS_COLOR_GOLD];
-        pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GOLD;
-    }
-
-
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(pantsMaterialParam);
-
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        modulateType,
-        &color,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
 }
 
 void ShaderSwitch::draw_(const FFLDrawParam& draw_param)

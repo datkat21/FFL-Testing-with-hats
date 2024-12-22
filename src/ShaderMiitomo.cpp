@@ -610,6 +610,19 @@ void ShaderMiitomo::setModulate_(const FFLModulateParam& modulateParam)
     bindTexture_(modulateParam);
 }
 
+void ShaderMiitomo::setModulatePantsMaterial(PantsColor pantsColor)
+{
+    const FFLModulateParam modulateParam = {
+        FFL_MODULATE_MODE_CONSTANT,
+        static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS),
+        &cPantsColors[pantsColor],
+        nullptr, // no color G
+        nullptr, // no color B
+        nullptr  // no texture
+    };
+    setModulate_(modulateParam);
+}
+
 void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
 {
     // doesn't necessarily set material but tweaks uniforms based on draw type
@@ -630,54 +643,6 @@ void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
             mShader.setUniform(false, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_ALPHA_TEST]);
             break;
     }
-}
-
-void ShaderMiitomo::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
-{
-    if (!light_enable)
-    {
-        mIsUsingMaskShader = true;
-        return mpMaskShader->bindBodyShader(light_enable, pCharInfo);
-    }
-    bind(light_enable, pCharInfo);
-    //RIO_GL_CALL(glBindVertexArray(vao));
-
-    setCulling(FFL_CULL_MODE_BACK);
-
-    // set body uniforms
-
-    const FFLColor& favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
-
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY);
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        // CUSTOM MODULATE TYPE FOR setModulate
-        modulateType,
-        &favoriteColor,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
-}
-
-void ShaderMiitomo::setBodyShaderPantsMaterial(PantsColor pantsColor)
-{
-    if (mIsUsingMaskShader)
-        return mpMaskShader->setBodyShaderPantsMaterial(pantsColor);
-    const FFLColor& color = cPantsColors[pantsColor];
-
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS);
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        // CUSTOM MODULATE TYPE FOR setModulate
-        modulateType,
-        &color,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
 }
 
 void ShaderMiitomo::draw_(const FFLDrawParam& draw_param)

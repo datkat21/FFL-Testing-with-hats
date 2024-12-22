@@ -883,10 +883,32 @@ void RootTask::drawMiiBody(Model* pModel, PantsColor pantsColor,
 
         // Bind shader and set body material.
         IShader* pShader = pModel->getShader();
-        pShader->bindBodyShader(lightEnable, pCharInfo);
+        pShader->bind(lightEnable, pCharInfo);
+
 #ifndef USE_OLD_MODELS
-        if ((i % 2) == 1) // is it the second mesh (pants)?
-            pShader->setBodyShaderPantsMaterial(pantsColor);
+        bool isPantsModel = ((i % 2) == 1); // is it the second mesh?
+
+        if (isPantsModel)
+            // we would be able to use the same setModulate method
+            // if only the switch shader just let you use arbitrary
+            // colors but no it NEEDS the index of the pants colorhHHHHHHHHHHHHHHg
+            pShader->setModulatePantsMaterial(pantsColor);
+        else
+        {
+#endif // USE_OLD_MODELS
+            const FFLColor modulateColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
+            const FFLModulateParam modulateParam = {
+                FFL_MODULATE_MODE_CONSTANT, // no texture
+                CUSTOM_MATERIAL_PARAM_BODY, // decides which material is bound
+                &modulateColor, // constant color (R)
+                nullptr, // no color G
+                nullptr, // no color B
+                nullptr  // no texture
+            };
+
+            pShader->setModulate(modulateParam);
+#ifndef USE_OLD_MODELS
+        }
 #endif
 
         // make new matrix for body
@@ -897,7 +919,7 @@ void RootTask::drawMiiBody(Model* pModel, PantsColor pantsColor,
         // apply original model matrix (rotation)
         modelMtxBody.setMul(model_mtx, modelMtxBody);
 
-        pShader->setViewUniformBody(modelMtxBody, view_mtx, proj_mtx);
+        pShader->setViewUniform(modelMtxBody, view_mtx, proj_mtx);
 
         rio::RenderState render_state;
         render_state.setCullingMode(rio::Graphics::CULLING_MODE_BACK);

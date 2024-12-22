@@ -24,11 +24,13 @@ public:
 
     void bind(bool light_enable, FFLiCharInfo* charInfo) override;
 
-    void bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo) override;
-    void setBodyShaderPantsMaterial(PantsColor pantsColor) override;
-
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
-    void setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
+
+    void setModulate(const FFLModulateParam& modulateParam) override
+    {
+        setModulate_(modulateParam);
+    }
+    void setModulatePantsMaterial(PantsColor pantsColor) override;
 
     void setSpecularMode(const FFLiDefaultShaderSpecularMode specularMode)
     {
@@ -61,9 +63,6 @@ protected:
     void setMaterial_(const FFLModulateType modulateType);
 
     void setBodyMaterialDefaultShader_(const FFLColor& pColor, bool usePantsMaterial);
-#ifndef DEFAULT_SHADER_FOR_BODY
-    void setBodyMaterialBodyShader_(const FFLColor& pColor, bool usePantsMaterial);
-#endif
 
     void draw_(const FFLDrawParam& draw_param);
     static void drawCallback_(void* p_obj, const FFLDrawParam* draw_param);
@@ -102,34 +101,10 @@ protected:
         PIXEL_UNIFORM_MAX
     };
 
-    enum BodyVertexUniform
-    {
-        BODY_VERTEX_UNIFORM_PROJ = 0,
-        BODY_VERTEX_UNIFORM_VIEW,
-        BODY_VERTEX_UNIFORM_WORLD, // model matrix
-        BODY_VERTEX_UNIFORM_LIGHT_DIR,
-        BODY_VERTEX_UNIFORM_MAX
-    };
-
-    enum BodyPixelUniform
-    {
-        BODY_PIXEL_UNIFORM_BASE = 0,
-        BODY_PIXEL_UNIFORM_AMBIENT,
-        BODY_PIXEL_UNIFORM_DIFFUSE,
-        BODY_PIXEL_UNIFORM_SPECULAR,
-        BODY_PIXEL_UNIFORM_RIM,
-        BODY_PIXEL_UNIFORM_RIM_SP_POWER,
-        BODY_PIXEL_UNIFORM_SP_POWER,
-        BODY_PIXEL_UNIFORM_MAX
-    };
-
     rio::Shader             mShader;
-    rio::Shader             mBodyShader;
     s32                     mVertexUniformLocation[VERTEX_UNIFORM_MAX];
     s32                     mPixelUniformLocation[PIXEL_UNIFORM_MAX];
     s32                     mSamplerLocation;
-    s32                     mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_MAX];
-    s32                     mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_MAX];
     s32                     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_MAX];
 #if RIO_IS_CAFE
     GX2AttribStream         mAttribute[FFL_ATTRIBUTE_BUFFER_TYPE_MAX];
@@ -142,7 +117,4 @@ protected:
     rio::TextureSampler2D   mSampler;
     FFLiCharInfo*           mpCharInfo;
     FFLiDefaultShaderSpecularMode mSpecularMode;
-#ifndef DEFAULT_SHADER_FOR_BODY
-    bool                    mIsBodyUsingDefaultShader;
-#endif
 };
