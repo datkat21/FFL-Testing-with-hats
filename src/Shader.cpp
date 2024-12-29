@@ -104,9 +104,9 @@ void gramSchmidtOrthonormalizeMtx34(rio::BaseMtx34f* mat)
 
     // Extract and normalize the second column
     rio::BaseVec3f c1 = {
-            mat->m[0][1],
-            mat->m[1][1],
-            mat->m[2][1]
+        mat->m[0][1],
+        mat->m[1][1],
+        mat->m[2][1]
     };
     rio::BaseVec3f c1Normalized = c1;
     safeNormalizeVec3(&c1Normalized);
@@ -640,16 +640,18 @@ void Shader::draw_(const FFLDrawParam& draw_param)
 #elif RIO_IS_WIN
 
         GLuint indexBufferHandle;
-        glGenBuffers(1, &indexBufferHandle);  // Generate a new buffer
+        RIO_GL_CALL(glGenBuffers(1, &indexBufferHandle));  // Generate a new buffer
 
         for (int type = FFL_ATTRIBUTE_BUFFER_TYPE_POSITION; type <= FFL_ATTRIBUTE_BUFFER_TYPE_COLOR; ++type)
         {
+
             const FFLAttributeBuffer& buffer = draw_param.attributeBufferParam.attributeBuffers[type];
             s32 location = mAttributeLocation[type];
             void* ptr = buffer.ptr;
 
             if (ptr && location != -1) // only color's stride is 0
             {
+
                 u32 stride = buffer.stride;
                 u32 vbo_handle = mVBOHandle[type];
                 u32 size = buffer.size;

@@ -11,6 +11,7 @@
 #include <nn/ffl/FFLiMiiData.h>
 
 #include <RenderRequest.h>
+#include <Types.h> // enums for RootTask
 
 #define FFLICHARINFO_SIZE sizeof(FFLiCharInfo)
 
@@ -40,6 +41,7 @@ private:
     void handleGLTFRequest(RenderRequest* renderRequest);
 #endif
 
+    void loadResourceFiles_();
     void createModel_();
     //void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
     bool createModel_(RenderRequest* buf, int socket_handle);

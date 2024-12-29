@@ -16,7 +16,7 @@
 *.dll
 
 # Fortran module files
-#*.mod  # mfs who added this really f*cking hate go.mod
+#*.mod  # go
 *.smod
 
 # Compiled Static libraries

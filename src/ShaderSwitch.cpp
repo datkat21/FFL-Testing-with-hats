@@ -845,7 +845,7 @@ void ShaderSwitch::draw_(const FFLDrawParam& draw_param)
 #elif RIO_IS_WIN
 
         GLuint indexBufferHandle;
-        glGenBuffers(1, &indexBufferHandle);  // Generate a new buffer
+        RIO_GL_CALL(glGenBuffers(1, &indexBufferHandle));  // Generate a new buffer
 
         for (int type = FFL_ATTRIBUTE_BUFFER_TYPE_POSITION; type <= FFL_ATTRIBUTE_BUFFER_TYPE_COLOR; ++type)
         {

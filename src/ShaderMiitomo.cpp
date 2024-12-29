@@ -107,9 +107,9 @@ void gramSchmidtOrthonormalizeMtx34(rio::BaseMtx34f* mat)
 
     // Extract and normalize the second column
     rio::BaseVec3f c1 = {
-            mat->m[0][1],
-            mat->m[1][1],
-            mat->m[2][1]
+        mat->m[0][1],
+        mat->m[1][1],
+        mat->m[2][1]
     };
     rio::BaseVec3f c1Normalized = c1;
     safeNormalizeVec3(&c1Normalized);
@@ -141,6 +141,7 @@ void gramSchmidtOrthonormalizeMtx34(rio::BaseMtx34f* mat)
     mat->m[1][2] = c2New.y;
     mat->m[2][2] = c2New.z;
 }
+
 
 const float cAlpha = 1.00f;
 
@@ -665,7 +666,7 @@ void ShaderMiitomo::draw_(const FFLDrawParam& draw_param)
 #elif RIO_IS_WIN
 
         GLuint indexBufferHandle;
-        glGenBuffers(1, &indexBufferHandle);  // Generate a new buffer
+        RIO_GL_CALL(glGenBuffers(1, &indexBufferHandle));  // Generate a new buffer
 
         for (int type = FFL_ATTRIBUTE_BUFFER_TYPE_POSITION; type <= FFL_ATTRIBUTE_BUFFER_TYPE_COLOR; ++type)
         {

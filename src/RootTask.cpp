@@ -4,6 +4,7 @@
 #include <EnumStrings.h>
 #include <Model.h>
 #include <RootTask.h>
+#include <Types.h>
 
 #include <filedevice/rio_FileDeviceMgr.h>
 #include <gfx/rio_Projection.h>
@@ -45,6 +46,7 @@ RootTask::RootTask()
 #ifdef RIO_USE_OSMESA // off screen rendering
     mpServerOnly = "1"; // force it truey
 #endif
+    rio::MemUtil::set(mpBodyModels, 0, sizeof(mpBodyModels));
 }
 
 #if RIO_IS_WIN && defined(_WIN32)
@@ -125,7 +127,11 @@ void RootTask::setupSocket_()
 
             mpServerOnly = "1"; // force server only when using systemd socket
             return; // Exit the function as the socket is already set up
-       }
+        }
+        else
+        {
+            RIO_LOG("\033[1mLISTEN_FDS was passed in as %s but sd_listen_fds(0) returned %d so systemd socket will not be used.\033[0m\n", getenv("LISTEN_FDS"), n_fds);
+        }
     }
 #endif
 
@@ -209,20 +215,10 @@ void RootTask::setupSocket_()
 }
 #endif
 
-void RootTask::prepare_()
+void RootTask::loadResourceFiles_()
 {
-    mInitialized = false;
-
-    FFLInitDesc init_desc = {
-        .fontRegion = FFL_FONT_REGION_JP_US_EU,
-        ._c = false,
-        ._10 = true
-    };
     // Initialize mResourceDesc with zeroes.
     rio::MemUtil::set(&mResourceDesc, 0, sizeof(FFLResourceDesc));
-
-
-#ifndef TEST_FFL_DEFAULT_RESOURCE_LOADING
 
 #if RIO_IS_CAFE
     FSInit();
@@ -288,6 +284,21 @@ void RootTask::prepare_()
             }
         }
     }
+}
+
+void RootTask::prepare_()
+{
+    mInitialized = false;
+
+    FFLInitDesc init_desc = {
+        .fontRegion = FFL_FONT_REGION_JP_US_EU,
+        ._c = false,
+        ._10 = true
+    };
+
+#ifndef TEST_FFL_DEFAULT_RESOURCE_LOADING
+
+    loadResourceFiles_();
 
     FFLResult result = FFLInitResEx(&init_desc, &mResourceDesc);
 #else
@@ -303,13 +314,13 @@ void RootTask::prepare_()
     }
 
     RIO_ASSERT(FFLIsAvailable());
-
-    FFLInitResGPUStep();
+    FFLInitResGPUStep(); // No-op on Win but still needed
 
     initializeShaders_();
 
-    // Get window instance
-    const rio::Window* const window = rio::Window::instance();
+    // Create projection matrices.
+
+    const rio::Window* window = rio::Window::instance();
     // Set projection matrix
     {
         // Calculate the aspect ratio based on the window dimensions
@@ -1182,10 +1193,6 @@ void RootTask::handleRenderRequest(char* buf)
                       &projMtx,&aspectHeightFactor,
                       &isCameraPosAbsolute, &willDrawBody, pCharInfo);
 
-    if (renderRequest->drawStageMode == DRAW_STAGE_XLU_DEPTH_MASK)
-        // Do not draw body in this mode since it
-        // would have been cleared out anyway
-        willDrawBody = false;
 
     // Update camera position
     const rio::Vector3f cameraPosInitial = mCamera.pos();
@@ -1345,7 +1352,7 @@ void RootTask::handleRenderRequest(char* buf)
     // Render the first frame to the buffer
     if (drawStages == DRAW_STAGE_MODE_ALL
         || drawStages == DRAW_STAGE_MODE_OPA_ONLY
-        || drawStages == DRAW_STAGE_XLU_DEPTH_MASK)
+        || drawStages == DRAW_STAGE_MODE_XLU_DEPTH_MASK)
         mpModel->drawOpa(view_mtx, projMtx);
     RIO_LOG("drawOpa rendered to the buffer.\n");
 
@@ -1373,9 +1380,10 @@ void RootTask::handleRenderRequest(char* buf)
     // in case there are elements of the mask that go in the body region
     if (drawStages == DRAW_STAGE_MODE_ALL
         || drawStages == DRAW_STAGE_MODE_XLU_ONLY
-        || drawStages == DRAW_STAGE_XLU_DEPTH_MASK)
+        || drawStages == DRAW_STAGE_MODE_XLU_DEPTH_MASK)
     {
-        if (drawStages == DRAW_STAGE_XLU_DEPTH_MASK)
+        if (drawStages == DRAW_STAGE_MODE_XLU_DEPTH_MASK
+            || drawStages == DRAW_STAGE_MODE_XLU_ONLY)
         {
             // Use faceline color as background color.
             const FFLColor facelineColor = FFLGetFacelineColor(pCharInfo->parts.facelineColor);
@@ -1385,6 +1393,8 @@ void RootTask::handleRenderRequest(char* buf)
             renderBuffer.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR, { facelineColor.r, facelineColor.g, facelineColor.b, fBackgroundColor.a });
             // ^^ use alpha from original background color
         }
+        else if (drawStages == DRAW_STAGE_MODE_XLU_ONLY)
+            renderBuffer.clear(rio::RenderBuffer::CLEAR_FLAG_DEPTH_STENCIL, fBackgroundColor);
 
         // Bind renderbuffer again
         renderBuffer.bind();

@@ -8,7 +8,7 @@
 #include <nn/ffl/FFLiMiiData.h>
 #include <nn/ffl/FFLiMiiDataCore.h>
 #include <nn/ffl/detail/FFLiCrc.h>
-#include <RenderRequest.h>
+#include <Types.h>
 
 #include <mii_ext_MiiPort.h>
 
@@ -253,6 +253,7 @@ FFLResult pickupCharInfoFromData(FFLiCharInfo* pCharInfo, const void* data, u32 
             break;
         default:
             // uh oh, we can't detect it
+            RIO_LOG("pickupCharInfoFromData: Unknown type for data size %d\n, returning error.", dataLength);
             return FFL_RESULT_ERROR;
             break;
     }
