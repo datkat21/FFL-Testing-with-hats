@@ -7,7 +7,7 @@ I keep telling myself that, after a rewrite, it can be moved into its own repo, 
     * I don't think the server portion will work on a Wii U due to use of hardcoded OpenGL calls here, so don't try.
     * Get to the point where it shows you spinny Mii heads.
     * ... But if you are running on a VPS/headless system, see step 4.
-2. The service requires two parts: the renderer, which is in ffl_testing_2_debug64, and the web server. You'll need to run either the Python or the Go web server.
+2. The service requires two parts: the renderer, which is in ffl_testing_2, and the web server. You'll need to run either the Python or the Go web server.
     * Python
         - Needs Flask, also note that it's more limited in features and performance
         - Run `server-impl/ffl-testing-web-server-old.py`
@@ -18,7 +18,7 @@ I keep telling myself that, after a rewrite, it can be moved into its own repo, 
     - If you are hosting this, **always use the SERVER_ONLY=1 environment variable when running.**
         * Hides the window, doesn't swap buffers, and pauses when idle.
     - If you are running this on a VPS, build with **OSMesa support** so that you don't have to run an X11 server.
-        * Build and also apply optimizations: `CXXFLAGS="-O3 -march=native" DEFS="-DRIO_USE_OSMESA" make`
+        * Build and also pass in optimizations into CMake: `-DCMAKE_CXX_FLAGS="-O3 -march=native" -DRIO_USE_OSMESA=1"`
         * Note that OSMesa does **NOT support hardware rendering**, and should only be used if you don't have a GPU! If you do, you'll need to constantly run Xvfb or something.
 
 <details>
@@ -51,36 +51,48 @@ Sample using [the FFL decomp](https://github.com/aboood40091/ffl) and [RIO frame
 
 https://github.com/user-attachments/assets/cdc358e4-0b1f-4b93-b7fd-f61fa4d215e1
 
+* Note that it's a known issue for Mii textures to look corrupted on Wii U. This does not happen with the original decompilation, only the RIO branch.
+
 ## Running
 1. Clone the repo, _recursively_.
     ```
     git clone --recursive https://github.com/ariankordi/FFL-Testing
     ```
+If you forgot or want to update, then after `git pull`, do this: `git submodule update --init`
+
 2. Install requirements.
 
-    This project needs GLFW3, zlib, and OpenGL dev libraries. The commands below will install them.
+    This project needs GLFW3 and zlib. The commands below will install them.
 
     * Ubuntu/Debian: `sudo apt install libglfw3-dev zlib1g-dev libgl1-mesa-dev`
     * Fedora/RHEL: `sudo dnf install glfw-devel zlib-devel mesa-libGL-devel`
     * Arch/Manjaro: `sudo pacman -S glew glfw zlib` (⚠️ UNTESTED)
-    * MSYS2 MINGW64 (Windows): `pacman -S mingw-w64-x86_64-glfw mingw-w64-x86_64-zlib`
-        - Make sure to also install the basics: `pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-pkg-config`
-        - **Use `mingw32-make` instead of `make`**
-        - As of 2024-06-02, this doesn't copy DLLs from MinGW64's environment to yours so you can launch the program in the command line, you can't click on the exe to run it.
-        - _Also note that it should build with MSVC, but I don't have a cxxproj for you to use / this should be ported to CMake at some point..._
+    * Windows MSYS2 MINGW64: `pacman -S mingw-w64-x86_64-glfw mingw-w64-x86_64-zlib`
+        - Make sure to also install the basics: `pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pkg-config` (untested)
+    * Windows MSVC/Visual Studio: Use vcpkg. [Follow Microsoft's tutorial](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-powershell)...
+        - ... and then: `vcpkg install glfw3 zlib`
+        - Don't forget to pass `CMAKE_TOOLCHAIN_FILE` when you use vcpkg with CMake. [Read here for more info: https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration)
 
-    If you are building with WUT, you need to install `ppc-zlib`.
-3. Build using the makefile.
+3. Build using the CMake.
 
-    If you don't already have them, you will also need: git, g++, make, pkg-config.
+    If you don't already have them, you will also need: git, g++, cmake, pkg-config.
     ```
-    make -j4
+    cmake -S . -B build  # Configure project.
+    cmake --build build  # Compile to "build".
     ```
-    * To build with WUT, use: `make wut -j4`.
+    Here are some additional things to know.
+    * To list options, use `cmake -LH`.
+        - To apply an option: `cmake -S . -B build` **`-DRIO_GLES=1 -DNO_GLTF=1`**, etc.
+    * Settings:
+        - Build type: `cmake -S . -B build` **`-DCMAKE_BUILD_TYPE=Release`**
+        - CXXFLAGS/Optimizations: `cmake -S . -B build` **`-DCMAKE_CXX_FLAGS="-O3 -march=native"`**
+        - Jobs: `cmake --build build` **`-j4`** (4 = num of jobs/cores)
 
-    * This also supports OpenGL ES 3.0, for mobile devices or using ANGLE. To build targeting that, define this as an environment variable: ``DEFS="-DRIO_GLES"``
-    * To build for Emscripten, use ``make -f Makefile.emscripten -j4``
-      - Make sure FFLResHigh.dat is in the current working directory. After this builds, open the html file.
+    * Clean:
+        - Either delete build (be careful!), or
+        - `cmake --build build --target clean`
+    * (On Visual Studio: As long as you have vcpkg configured and everything installed, it should? just work by loading the folder)
+
 3. Obtain the resource file, FFLResHigh.dat.
     * This contains the meshes and textures needed to render Mii characters and is absolutely required to get anywhere with this.
     * You can get it from many sources:
@@ -95,7 +107,7 @@ https://github.com/user-attachments/assets/cdc358e4-0b1f-4b93-b7fd-f61fa4d215e1
         - In the Kadokawa breach, there is a Wii U tool called FFLUtility, located here: `dwango/projects/マルチデバイス/品証/WiiU/Tool/FFL/downloadimage/FFLUtilityJP_p01` - if you decrypt it with dev keys, then in `fs/content/nonproduct/miicapture/resource/`, you will find `FFLResPoster.dat`. This is a copy of FFLResHigh.dat with extremely high quality (512px) textures. If you successfully find this, share the love and enjoy.
     * Place that file in the root of this repo.
         - This file contains models and textures needed to render Miis and this program will not work without it.
-4. Run `ffl_testing_2_debug64`, and pray that it works.
+4. Run `ffl_testing_2`, and pray that it works.
     * If it crashes with a segfault or shows you a blank screen, make sure you have `FFLResHigh.dat` and it can open it.
 
 ### Showing your own Miis
