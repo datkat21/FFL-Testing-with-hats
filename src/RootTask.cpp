@@ -5,6 +5,7 @@
 #include <Model.h>
 #include <RootTask.h>
 #include <Types.h>
+#include <BodyTypeStrings.h>
 
 #include <filedevice/rio_FileDeviceMgr.h>
 #include <gfx/rio_Projection.h>
@@ -367,28 +368,38 @@ void RootTask::prepare_()
     mMiiCounter = 0;
     createModel_();
 
-    // load (just male for now) body model
-    // the male and female bodies are like identical
-    // from the torso up (only perspective we use)
-#ifndef USE_OLD_MODELS
-    const std::string bodyPathPrefix = "mii_static_bodyn";
-#else
-    const std::string bodyPathPrefix = "mii_static_body";
-#endif
+    // load body models
+    loadBodyModels_();
+
+    mInitialized = true;
+}
+
+void RootTask::loadBodyModels_()
+{
     for (u32 i = 0; i < FFL_GENDER_MAX; i++)
     {
-        std::string bodyPath = bodyPathPrefix + std::to_string(i);
-        const char* bodyPathC = bodyPath.c_str();
+        const BodyType bodyType = BODY_TYPE_WIIU_MIIBODYMIDDLE;
+        const char* bodyTypeString = cBodyTypeStrings[bodyType];
+        const char* genderString = cBodyGenderStrings[i];
+
+        char bodyPathC[64];
+        // make sure that will not overfloowwwww
+        //RIO_ASSERT((strlen(bodyTypeString) + strlen(genderString) + strlen(cBodyFileNameFormat)) < 64);
+
+        snprintf(bodyPathC, sizeof(bodyPathC), cBodyFileNameFormat, bodyTypeString, genderString);
 
         RIO_LOG("loading body model: %s\n", bodyPathC);
         const rio::mdl::res::Model* resModel = rio::mdl::res::ModelCacher::instance()->loadModel(bodyPathC, bodyPathC);
 
         RIO_ASSERT(resModel);
+        if (resModel == nullptr)
+        {
+            fprintf(stderr, "Body model not found: %s. Exiting.\n", bodyPathC);
+            exit(EXIT_FAILURE);
+        }
 
-        mpBodyModels[i] = new rio::mdl::Model(resModel);
+        mpBodyModels[bodyType][i] = new rio::mdl::Model(resModel);
     }
-
-    mInitialized = true;
 }
 
 // amount of mii indexes to cycle through
@@ -772,10 +783,6 @@ static void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio
     rio::NativeTextureFormat nativeFormat = texture->getNativeTexture().surface.nativeFormat;
 
 #if RIO_IS_WIN
-/*
-    glReadBuffer(GL_COLOR_ATTACHMENT0 + 0);
-    glReadPixels(0, 0, width, height, nativeFormat.format, nativeFormat.type, readBuffer);
-*/
     // map a pixel buffer object (DMA?)
     GLuint pbo;
     RIO_GL_CALL(glGenBuffers(1, &pbo));
@@ -821,122 +828,19 @@ static void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio
     RIO_LOG("Wrote %d bytes out to socket.\n", bufferSize);
 }
 
-// scale vec3 for body
-static const rio::Vector3f calculateScaleFactors(f32 build, f32 height)
+#include <BodyModel.h>
+
+rio::mdl::Model* RootTask::getBodyModel_(Model* pModel)
 {
-    rio::Vector3f scaleFactors;
-    // referenced in anonymous function in nn::mii::detail::VariableIconBodyImpl::CalculateWorldMatrix
-    // also in ffl_app.rpx: FUN_020ec380 (FFLUtility), FUN_020737b8 (mii maker US)
-#ifndef USE_HEIGHT_LIMIT_SCALE_FACTORS
-    // ScaleApply?
-                    // 0.47 / 128.0 = 0.003671875
-    scaleFactors.x = (build * (height * 0.003671875f + 0.4f)) / 128.0f +
-                    // 0.23 / 128.0 = 0.001796875
-                    height * 0.001796875f + 0.4f;
-                    // 0.77 / 128.0 = 0.006015625
-    scaleFactors.y = (height * 0.006015625f) + 0.5f;
+    const BodyType bodyType = BODY_TYPE_WIIU_MIIBODYMIDDLE;
 
-    /* the following set is found in ffl_app.rpx (FFLUtility)
-     * Q:/sugar/program/ffl_application/src/mii/body/Scale.cpp
-     * when an input is set to 1 (enum ::mii::body::ScaleMode?)
-     * it may be for limiting scale so that the pants don't show
-     * this may be what is used in wii u mii maker bottom screen icons but otherwise the above factors seem more relevant
-    */
-#else
-    // ScaleLimit?
-
-    // NOTE: even in wii u mii maker this still shows a few
-    // pixels of the pants, but here without proper body scaling
-    // this won't actually let you get away w/o pants
-    f32 heightFactor = height / 128.0f;
-    scaleFactors.y = heightFactor * 0.55 + 0.6;
-    scaleFactors.x = heightFactor * 0.3 + 0.6;
-    scaleFactors.x = ((heightFactor * 0.6 + 0.8) - scaleFactors.x) *
-                        (build / 128.0f) + scaleFactors.x;
-#endif
-
-    // z is always set to x for either set
-    scaleFactors.z = scaleFactors.x;
-
-    return scaleFactors;
-}
-
-static const f32 cBodyScaleFactor =
-#ifndef USE_OLD_MODELS
-                                    7.0f;
-#else
-                                    8.715f; // thought it was 7.0?
-#endif
-static const f32 cBodyHeadYTranslation = (6.6766f // skl_root
-                                        + 4.1f); // head
-static const rio::Vector3f cBodyHeadRotation = { (0.002f + -0.005f), 0.000005f, -0.001f }; // MiiBodyMiddle "head" rotation
-
-// draws mii body based on charinfo's build/height
-// shader sets favorite and pants color
-void RootTask::drawMiiBody(Model* pModel, PantsColor pantsColor,
-    rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx,
-    rio::BaseMtx44f& proj_mtx, const rio::Vector3f scaleFactors)
-{
-
-    const bool lightEnable = pModel->getLightEnable();
     FFLiCharInfo* pCharInfo = pModel->getCharInfo();
+    const FFLGender gender = pCharInfo->gender;
 
     // Select body model.
-    RIO_ASSERT(pCharInfo->gender < FFL_GENDER_MAX);
-    const rio::mdl::Model* model = mpBodyModels[pCharInfo->gender]; // Based on gender.
-
-    const rio::mdl::Mesh* meshes = model->meshes(); // Body and pants mesh.
-
-    // Render each mesh in order
-    for (u32 i = 0; i < model->numMeshes(); i++)
-    {
-        const rio::mdl::Mesh& mesh = meshes[i];
-
-        // Bind shader and set body material.
-        IShader* pShader = pModel->getShader();
-        pShader->bind(lightEnable, pCharInfo);
-
-#ifndef USE_OLD_MODELS
-        bool isPantsModel = ((i % 2) == 1); // is it the second mesh?
-
-        if (isPantsModel)
-            // we would be able to use the same setModulate method
-            // if only the switch shader just let you use arbitrary
-            // colors but no it NEEDS the index of the pants colorhHHHHHHHHHHHHHHg
-            pShader->setModulatePantsMaterial(pantsColor);
-        else
-        {
-#endif // USE_OLD_MODELS
-            const FFLColor modulateColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
-            const FFLModulateParam modulateParam = {
-                FFL_MODULATE_MODE_CONSTANT, // no texture
-                CUSTOM_MATERIAL_PARAM_BODY, // decides which material is bound
-                &modulateColor, // constant color (R)
-                nullptr, // no color G
-                nullptr, // no color B
-                nullptr  // no texture
-            };
-
-            pShader->setModulate(modulateParam);
-#ifndef USE_OLD_MODELS
-        }
-#endif
-
-        // make new matrix for body
-        rio::Matrix34f modelMtxBody = rio::Matrix34f::ident;//model_mtx;
-
-        // apply scale factors before anything else
-        modelMtxBody.applyScaleLocal(scaleFactors);
-        // apply original model matrix (rotation)
-        modelMtxBody.setMul(model_mtx, modelMtxBody);
-
-        pShader->setViewUniform(modelMtxBody, view_mtx, proj_mtx);
-
-        rio::RenderState render_state;
-        render_state.setCullingMode(rio::Graphics::CULLING_MODE_BACK);
-        render_state.applyCullingAndPolygonModeAndPolygonOffset();
-        mesh.draw();
-    }
+    RIO_ASSERT(gender < FFL_GENDER_MAX);
+    rio::mdl::Model* model = mpBodyModels[bodyType][gender]; // Based on gender.
+    return model;
 }
 
 
@@ -1018,7 +922,7 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
             // this is an ATTEMPT??? to simulate that
             // via interpolation which is... meh
 
-            const float scaleFactorY = (static_cast<float>(pCharInfo->height) * 0.006015625f) + 0.5f;
+            const float scaleFactorY = BodyModel::calcBodyScale(pCharInfo->build, pCharInfo->height).y;
 
             // These camera parameters look right when the character is tallest
             const rio::Vector3f posStart = { 0.0f, 30.0f, 550.0f };
@@ -1190,7 +1094,7 @@ void RootTask::handleRenderRequest(char* buf)
 
     const ViewType viewType = static_cast<ViewType>(renderRequest->viewType);
     setViewTypeParams(viewType, &mCamera,
-                      &projMtx,&aspectHeightFactor,
+                      &projMtx, &aspectHeightFactor,
                       &isCameraPosAbsolute, &willDrawBody, pCharInfo);
 
 
@@ -1201,27 +1105,26 @@ void RootTask::handleRenderRequest(char* buf)
     const rio::Vector3f cameraRotate = convertVec3iToRadians3f(renderRequest->cameraRotate);
     const rio::Vector3f modelRotate = convertVec3iToRadians3f(renderRequest->modelRotate);
 
-    rio::Vector3f scaleFactors;
 
     rio::Vector3f position = calculateCameraOrbitPosition(radius, cameraRotate);
     position.y += cameraPosInitial.y;
     const rio::Vector3f upVector = calculateUpVector(cameraRotate);
 
-    f32 headYTranslateFinal = 0.0f;
+    BodyModel bodyModel(getBodyModel_(mpModel));
+    PantsColor pantsColor = static_cast<PantsColor>(renderRequest->pantsColor % PANTS_COLOR_MAX);
 
     if (willDrawBody)
     {
-        scaleFactors = calculateScaleFactors(static_cast<f32>(pCharInfo->build), static_cast<f32>(pCharInfo->height));
-        headYTranslateFinal = cBodyHeadYTranslation * scaleFactors.y * cBodyScaleFactor;
+        // Initializes scale factors:
+        bodyModel.initialize(mpModel, pantsColor);
 
-        position.y += headYTranslateFinal;
+        rio::Vector3f translate = bodyModel.getHeadTranslation();
+        // Translate camera position up:
+        position.setAdd(position, translate);
 
         if (!isCameraPosAbsolute)
-            mCamera.at() = {
-                mCamera.at().x,
-                mCamera.at().y + headYTranslateFinal,
-                mCamera.at().z
-            };
+            // Translate at, if camera is NOT absolute
+            mCamera.at().setAdd(mCamera.at(), translate);
     }
 
     mCamera.pos() = position;
@@ -1237,9 +1140,7 @@ void RootTask::handleRenderRequest(char* buf)
 
     if (willDrawBody)
     {
-        rio::Matrix34f bodyHeadMatrix;
-        // apply head rotation, and translation
-        bodyHeadMatrix.makeRT(cBodyHeadRotation, { 0.0f, headYTranslateFinal, 0.0f });
+        rio::Matrix34f bodyHeadMatrix = bodyModel.getHeadModelMatrix();
         // translate head to its location on the body
         model_mtx.setMul(model_mtx, bodyHeadMatrix);
     }
@@ -1367,10 +1268,7 @@ void RootTask::handleRenderRequest(char* buf)
             // change favorite color after drawing opa
             pCharInfo->favoriteColor = static_cast<FFLFavoriteColor>(renderRequest->clothesColor);
 
-        //drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);
-        PantsColor pantsColor = static_cast<PantsColor>(renderRequest->pantsColor % PANTS_COLOR_MAX);
-        drawMiiBody(mpModel, pantsColor, rotationMtx,
-                    view_mtx, projMtx, scaleFactors);
+        bodyModel.draw(rotationMtx, view_mtx, projMtx);
         // restore original favorite color tho
         pCharInfo->favoriteColor = originalFavoriteColor;
     }
@@ -1552,26 +1450,17 @@ void RootTask::calc_()
     rio::BaseMtx34f view_mtx;
     mCamera.getMatrix(&view_mtx);
 
-    FFLiCharInfo* pCharInfo = &reinterpret_cast<FFLiCharModel*>(mpModel->getCharModel())->charInfo;
-    const rio::Vector3f scaleFactors = calculateScaleFactors(static_cast<f32>(pCharInfo->build), static_cast<f32>(pCharInfo->height));
-
-    rio::Matrix34f bodyHeadMatrix;
-    // apply head rotation, and translation
-    bodyHeadMatrix.makeRT(cBodyHeadRotation, { 0.0f,
-        cBodyHeadYTranslation * scaleFactors.y * cBodyScaleFactor,
-    0.0f });
+    BodyModel bodyModel(getBodyModel_(mpModel));
+    bodyModel.initialize(mpModel, PANTS_COLOR_GRAY);
 
     rio::Matrix34f rotationMtx = model_mtx;
 
     //model_mtx.setMul(rio::Matrix34f::ident, rotationMtx);
-    model_mtx.setMul(model_mtx, bodyHeadMatrix);
-
+    model_mtx.setMul(model_mtx, bodyModel.getHeadModelMatrix());
     mpModel->setMtxRT(model_mtx);
 
     mpModel->drawOpa(view_mtx, *mProjMtxIconBody);
-
-    drawMiiBody(mpModel, PANTS_COLOR_GRAY, rotationMtx,
-                view_mtx,* mProjMtxIconBody, scaleFactors);
+    bodyModel.draw(rotationMtx, view_mtx, *mProjMtxIconBody);
     mpModel->drawXlu(view_mtx, *mProjMtxIconBody);
 }
 
@@ -1672,8 +1561,10 @@ void RootTask::exit_()
     for (int type = 0; type < SHADER_TYPE_MAX; type++)
         delete mpShaders[type];
     // delete body models that were initialized earlier
-    for (u32 i = 0; i < FFL_GENDER_MAX; i++)
-        delete mpBodyModels[i];
+    for (u32 i = 0; i < BODY_TYPE_MAX; i++)
+        for (u32 g = 0; g < FFL_GENDER_MAX; g++)
+            if (mpBodyModels[i][g] != nullptr)
+                delete mpBodyModels[i][g];
 
     mInitialized = false;
 }

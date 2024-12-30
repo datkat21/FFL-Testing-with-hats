@@ -6,9 +6,10 @@ struct RenderRequest {
     uint8_t  modelFlag;      // FFLModelType + nose flatten @ bit 4
     // completely changes the response type:
     uint8_t  responseFormat; // indicates if response is gltf or tga
-    // NOTE: arbitrary resolutions CRASH THE BACKEND
+
+    // note that arbitrary resolutions CRASH THE BACKEND
     uint16_t resolution;     // resolution for render buffer
-    // texture resolution can control whether mipmap is enabled (1 << 30)
+    // texture resolution controls mipmap enable (1 << 30)
     int16_t  texResolution;  // FFLResolution/u32, negative = mipmap
     uint8_t  viewType;       // camera
     uint8_t  resourceType;   // FFLResourceType
@@ -20,8 +21,6 @@ struct RenderRequest {
     int16_t  cameraRotate[3];
     int16_t  modelRotate[3];
     uint8_t  backgroundColor[4]; // passed to clearcolor
-    //uint8_t      clothesColor[4]; // fourth color is NOT alpha
-    // but if fourth byte in clothesColor is 0xFF then it is treated as a color instead of an index
 
     uint8_t  aaMethod;       // TODO: TO BE USED SOON? POTENTIALLY?
     uint8_t  drawStageMode;  // opa, xlu, all

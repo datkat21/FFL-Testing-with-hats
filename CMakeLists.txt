@@ -155,6 +155,7 @@ set(SRC_FILES
     src/Model.cpp
     src/RootTask.cpp
     src/DataUtils.cpp
+    src/BodyModel.cpp
 
     src/Shader.cpp
     src/ShaderSwitch.cpp

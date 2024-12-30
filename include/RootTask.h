@@ -42,6 +42,7 @@ private:
 #endif
 
     void loadResourceFiles_();
+    void loadBodyModels_();
     void createModel_();
     //void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
     bool createModel_(RenderRequest* buf, int socket_handle);
@@ -78,11 +79,7 @@ private:
     void setupSocket_();
 #endif
 
-    // NOTE: bc of the amount of arguments, consider putting this in mpModel
-    void drawMiiBody(Model* pModel, PantsColor pantsColor,
-    rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx,
-    rio::BaseMtx44f& proj_mtx, const rio::Vector3f scaleFactors);
-
+    rio::mdl::Model* getBodyModel_(Model* pModel);
     void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
 
 private:
@@ -99,7 +96,7 @@ private:
     f32                 mCounter;
     s32                 mMiiCounter;
     Model*              mpModel;
-    rio::mdl::Model*    mpBodyModels[FFL_GENDER_MAX];
+    rio::mdl::Model*    mpBodyModels[BODY_TYPE_MAX][FFL_GENDER_MAX];
     const char*         mpServerOnly;
     const char*         mpNoSpin;
 };

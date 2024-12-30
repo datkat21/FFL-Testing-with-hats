@@ -41,7 +41,7 @@ void main()
 
     v_texCoord = a_texCoord;
     // 法線も変換
-    //v_normal = mat3(u_mv) * a_normal;
+    //v_normal = mat3(inverse(u_mv)) * a_normal;
     v_normal = normalize(u_it * a_normal);
 //#elif defined(FFL_COORDINATE_MODE_NONE)
 //    // 頂点座標を変換
