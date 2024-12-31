@@ -842,10 +842,12 @@ rio::mdl::Model* RootTask::getBodyModel_(Model* pModel, BodyType type)
     RIO_ASSERT(type > -1); // make sure it does not stay -1
 
     FFLiCharInfo* pCharInfo = pModel->getCharInfo();
-    const FFLGender gender = pCharInfo->gender;
+    FFLGender genderTmp = pCharInfo->gender;
+
+    // Clamp the value of gender.
+    const FFLGender gender = static_cast<FFLGender>(genderTmp % FFL_GENDER_MAX);
 
     // Select body model.
-    RIO_ASSERT(gender < FFL_GENDER_MAX);
     rio::mdl::Model* model = mpBodyModels[type][gender]; // Based on gender.
 
     RIO_ASSERT(model); // make sure it is not null
