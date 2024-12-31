@@ -574,6 +574,9 @@ void ShaderMiitomo::setModulateMode_(FFLModulateMode mode)
 
 void ShaderMiitomo::setModulate_(const FFLModulateParam& modulateParam)
 {
+    if (mIsUsingMaskShader)
+        return mpMaskShader->setModulate(modulateParam);
+
     setModulateMode_(modulateParam.mode);
     setMaterial_(modulateParam.type);
 
@@ -639,11 +642,12 @@ void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
             [[fallthrough]];
         case FFL_MODULATE_TYPE_SHAPE_GLASS:
             mShader.setUniform(true, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_ALPHA_TEST]);
-            [[fallthrough]];
+            break;
         default:
             mShader.setUniform(false, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_ALPHA_TEST]);
             break;
     }
+    mShader.setUniform(mLightEnable, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
 }
 
 void ShaderMiitomo::draw_(const FFLDrawParam& draw_param)
