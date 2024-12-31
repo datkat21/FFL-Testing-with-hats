@@ -216,7 +216,8 @@ bool Model::initializeCpu_()
     start = std::chrono::high_resolution_clock::now();
 #endif
     mInitializeCpuResult = FFLInitCharModelCPUStep(mpCharModel, &mCharModelSource, &mCharModelDesc);
-    if (mInitializeCpuResult != FFL_RESULT_OK) {
+    if (mInitializeCpuResult != FFL_RESULT_OK)
+    {
         RIO_LOG("FFLInitCharModelCPUStep returned: %i\n", mInitializeCpuResult);
         return false;
     }

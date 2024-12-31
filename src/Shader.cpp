@@ -1,5 +1,3 @@
-#include "nn/ffl/FFLDrawParam.h"
-#include "nn/ffl/FFLModulateParam.h"
 #include <Shader.h>
 
 #include <gpu/rio_RenderState.h>
@@ -62,9 +60,11 @@ const rio::BaseVec4f& getColorUniform(const FFLColor& color)
     return reinterpret_cast<const rio::BaseVec4f&>(color.r);
 }
 
-void safeNormalizeVec3(rio::BaseVec3f* vec) {
+void safeNormalizeVec3(rio::BaseVec3f* vec)
+{
     float magnitude = std::sqrt(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
-    if (magnitude != 0.0f) {
+    if (magnitude != 0.0f)
+    {
         vec->x /= magnitude;
         vec->y /= magnitude;
         vec->z /= magnitude;
@@ -74,13 +74,18 @@ void safeNormalizeVec3(rio::BaseVec3f* vec) {
     vec->y = std::fmax(std::fmin(vec->y, 1.0f), -1.0f);
     vec->z = std::fmax(std::fmin(vec->z, 1.0f), -1.0f);
 
-    if (vec->x == 1.0f || vec->x == -1.0f) {
+    if (vec->x == 1.0f || vec->x == -1.0f)
+    {
         vec->y = 0.0f;
         vec->z = 0.0f;
-    } else if (vec->y == 1.0f || vec->y == -1.0f) {
+    }
+    else if (vec->y == 1.0f || vec->y == -1.0f)
+    {
         vec->x = 0.0f;
         vec->z = 0.0f;
-    } else if (vec->z == 1.0f || vec->z == -1.0f) {
+    }
+    else if (vec->z == 1.0f || vec->z == -1.0f)
+    {
         vec->x = 0.0f;
         vec->y = 0.0f;
     }
@@ -99,9 +104,9 @@ void gramSchmidtOrthonormalizeMtx34(rio::BaseMtx34f* mat)
 
     // Extract and normalize the second column
     rio::BaseVec3f c1 = {
-            mat->m[0][1],
-            mat->m[1][1],
-            mat->m[2][1]
+        mat->m[0][1],
+        mat->m[1][1],
+        mat->m[2][1]
     };
     rio::BaseVec3f c1Normalized = c1;
     safeNormalizeVec3(&c1Normalized);
@@ -251,14 +256,9 @@ Shader::Shader()
     , mCallback()
     , mpCharInfo(nullptr)
     , mSpecularMode(FFL_SPECULAR_MODE_ANISO)
-#ifndef DEFAULT_SHADER_FOR_BODY
-    , mIsBodyUsingDefaultShader(false)
-#endif
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
     rio::MemUtil::set(mPixelUniformLocation, u8(-1), sizeof(mPixelUniformLocation));
-    rio::MemUtil::set(mBodyVertexUniformLocation, u8(-1), sizeof(mBodyVertexUniformLocation));
-    rio::MemUtil::set(mBodyPixelUniformLocation, u8(-1), sizeof(mBodyPixelUniformLocation));
     mSamplerLocation = -1;
     rio::MemUtil::set(mAttributeLocation, u8(-1), sizeof(mAttributeLocation));
 }
@@ -284,8 +284,6 @@ Shader::~Shader()
 
 void Shader::initialize()
 {
-    mBodyShader.load("FFLBodyShader");
-
     mShader.load("FFLShader", rio::Shader::MODE_UNIFORM_REGISTER);
 
     mVertexUniformLocation[VERTEX_UNIFORM_IT]   = mShader.getVertexUniformLocation("u_it");
@@ -308,43 +306,33 @@ void Shader::initialize()
     mPixelUniformLocation[PIXEL_UNIFORM_MODE]                       = mShader.getFragmentUniformLocation("u_mode");
     mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]                  = mShader.getFragmentUniformLocation("u_rim_color");
     mPixelUniformLocation[PIXEL_UNIFORM_RIM_POWER]                  = mShader.getFragmentUniformLocation("u_rim_power");
+    // Custom uniform to set values previously handled by v_color if the color attribute is constant (stride = 0).
+    mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]             = mShader.getFragmentUniformLocation("u_parameter_mode");
 
     mSamplerLocation = mShader.getFragmentSamplerLocation("s_texture");
 
-
-    // FFLBodyShader
-    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_PROJ]     = mBodyShader.getVertexUniformLocation("proj");
-    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_VIEW]     = mBodyShader.getVertexUniformLocation("view");
-    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_WORLD]    = mBodyShader.getVertexUniformLocation("world");
-    mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_LIGHT_DIR] = mBodyShader.getVertexUniformLocation("lightDir");
-
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_BASE]       = mBodyShader.getFragmentUniformLocation("base");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_AMBIENT]    = mBodyShader.getFragmentUniformLocation("ambient");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]    = mBodyShader.getFragmentUniformLocation("diffuse");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SPECULAR]   = mBodyShader.getFragmentUniformLocation("specular");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM]        = mBodyShader.getFragmentUniformLocation("rim");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM_SP_POWER] = mBodyShader.getFragmentUniformLocation("rimSP_power");
-    mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SP_POWER]   = mBodyShader.getFragmentUniformLocation("SP_power");
-
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_POSITION]  = mShader.getVertexAttribLocation("a_position");
-    // hair does not have texcoord
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD]  = mShader.getVertexAttribLocation("a_texCoord");
-
-    // 2D planes (faceline/mask) do not have any of these
+    // 2D planes (faceline/mask) do not have anything but position and texcoord
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_NORMAL]    = mShader.getVertexAttribLocation("a_normal");
+    // hair does not have texcoord
+    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TEXCOORD] = mShader.getVertexAttribLocation("a_texCoord");
     /* NOTE: "color" is not meant as an actual color... it is
      * only here as parameters to control the anisotropic effect
      * color.r - aniso specular blend, param 1 to calculateSpecularBlend
                  (switch SampleShader: "specularMix" in vertex shader)
      * color.g - aniso specular strength, param 4 to calculateSpecularColor
                  (for blinn they force it to 1.0)
-     * color.b - unused?
+     * color.b - unused and set to 0
      * color.a - rim lighting width "rimWidth", param 3 into calculateRimColor
                  (when rim lighting is not active, usually the reason is that A is 0 here)
 
      * color's stride is 0 and size is 4 on everything else, suggesting it is constant
+
+     * in the FFL resource on Wii U, all shapes where color's stride is 0 use the value: <1, 1, 0, 1>
+     * ... EXCEPT for where R is 0 in: hair type 34/beanie, and hair
+     *              for hat meshes: 18, 23, 34, 39, 45, 57, 114, 127
      */
-    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("a_color"); // default <1, 1, 0, 1>
+    mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("a_color");
     // tangent is only set on hair, size and stride are 0 on everything else
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT]   = mShader.getVertexAttribLocation("a_tangent");
 
@@ -462,27 +450,6 @@ void Shader::setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx
     mShader.setUniformColumnMajor(it, mVertexUniformLocation[VERTEX_UNIFORM_IT], u32(-1));
 }
 
-void Shader::setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const {
-#ifndef DEFAULT_SHADER_FOR_BODY
-    if (mIsBodyUsingDefaultShader)
-#endif
-        return setViewUniform(model_mtx, view_mtx, proj_mtx);
-#ifndef DEFAULT_SHADER_FOR_BODY
-    // otherwise use body shader
-    mBodyShader.setUniform(proj_mtx, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_PROJ], u32(-1));
-
-    rio::Matrix44f view44;
-    view44.fromMatrix34(view_mtx);
-
-    mBodyShader.setUniform(view44, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_VIEW], u32(-1));
-
-    rio::Matrix44f model44;
-    model44.fromMatrix34(model_mtx);
-
-    mBodyShader.setUniform(model44, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_WORLD], u32(-1));
-#endif
-}
-
 void Shader::applyAlphaTest(bool enable, rio::Graphics::CompareFunc func, f32 ref) const
 {
 #if RIO_IS_CAFE
@@ -541,7 +508,8 @@ void Shader::setModulateMode_(FFLModulateMode mode)
 
 void Shader::setModulate_(const FFLModulateParam& modulateParam)
 {
-    setModulateMode_(modulateParam.mode);
+    setModulateMode_(modulateParam.mode); // Modulate mode
+    setMaterial_(modulateParam.type); // Material shader uniforms
 
     // if you want to change colors based on modulateParam.type
     // FFL_MODULATE_TYPE_SHAPE_HAIR
@@ -570,6 +538,19 @@ void Shader::setModulate_(const FFLModulateParam& modulateParam)
     bindTexture_(modulateParam);
 }
 
+void Shader::setModulatePantsMaterial(PantsColor pantsColor)
+{
+    const FFLModulateParam modulateParam = {
+        FFL_MODULATE_MODE_CONSTANT,
+        static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS),
+        &cPantsColors[pantsColor],
+        nullptr, // no color G
+        nullptr, // no color B
+        nullptr  // no texture
+    };
+    setModulate_(modulateParam);
+}
+
 void Shader::setMaterial_(const FFLModulateType modulateType)
 {
     if (modulateType >= CUSTOM_MATERIAL_PARAM_SIZE)
@@ -579,102 +560,19 @@ void Shader::setMaterial_(const FFLModulateType modulateType)
     mShader.setUniform(getColorUniform(cMaterialParam[modulateType].diffuse), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_DIFFUSE]);
     mShader.setUniform(getColorUniform(cMaterialParam[modulateType].specular), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_SPECULAR]);
     mShader.setUniform(cMaterialParam[modulateType].specularPower, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_SPECULAR_POWER]);
-}
 
-void Shader::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
-{
-#ifndef DEFAULT_SHADER_FOR_BODY
-    mIsBodyUsingDefaultShader = false; // read by setViewUniformBody
-#endif
-
-    setCulling(FFL_CULL_MODE_BACK);
-
-    // FAVORITE COLOR
-    const FFLColor favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
-
-    // always use default shader for no light enable
-    if (!light_enable)
+    if (modulateType == CUSTOM_MATERIAL_PARAM_BODY
+        || modulateType == CUSTOM_MATERIAL_PARAM_PANTS)
     {
-#ifndef DEFAULT_SHADER_FOR_BODY
-        mIsBodyUsingDefaultShader = true; // read by setViewUniformBody
-#endif
-        // don't feel like implementing light_enable in the shader itself so i will just do this
-        bind(light_enable, pCharInfo);
-        setBodyMaterialDefaultShader_(favoriteColor, false);
-        return;
+        // body uses different rim color
+        mShader.setUniform(getColorUniform(cRimColorBody), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
+        // set parameter/basically rim light enable
+        mShader.setUniform(1, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_DEFAULT_1
     }
-
-
-#ifdef DEFAULT_SHADER_FOR_BODY
-    bind(light_enable, pCharInfo);
-    setBodyMaterialDefaultShader_(favoriteColor, false);
-#else
-    mBodyShader.bind();
-
-    setBodyMaterialBodyShader_(favoriteColor, false);
-#endif
-}
-
-void Shader::setBodyShaderPantsMaterial(PantsColor pantsColor)
-{
-    const FFLColor& color = cPantsColors[pantsColor];
-#ifndef DEFAULT_SHADER_FOR_BODY
-    if (mIsBodyUsingDefaultShader)
-        setBodyMaterialDefaultShader_(color, true);
     else
-        setBodyMaterialBodyShader_(color, true);
-#else
-    setBodyMaterialDefaultShader_(color, true);
-#endif
+        // set default rim color otherwise
+        mShader.setUniform(getColorUniform(cRimColor), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
 }
-
-void Shader::setBodyMaterialDefaultShader_(const FFLColor& pColor, bool usePantsMaterial)
-{
-    FFLModulateType modulateType;
-    if (usePantsMaterial)
-        modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS);
-    else
-        modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY);
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        modulateType,
-        &pColor,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
-    setMaterial_(modulateParam.type);
-    // body uses different rim color
-    mShader.setUniform(getColorUniform(cRimColorBody), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
-    // found that color attribute needs to be set? idk if this works very friendly?
-#if RIO_IS_WIN
-    // TODO: needs opengl and may not be reliable for opengl es
-    RIO_GL_CALL(glVertexAttrib4f(mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR], 1.0f, 1.0f, 0.0f, 1.0f));
-#endif
-}
-
-#ifndef DEFAULT_SHADER_FOR_BODY
-void Shader::setBodyMaterialBodyShader_(const FFLColor& pColor, bool usePantsMaterial)
-{
-    mBodyShader.setUniform(cLightDir, mBodyVertexUniformLocation[BODY_VERTEX_UNIFORM_LIGHT_DIR], u32(-1));
-
-
-    mBodyShader.setUniform(pColor.r, pColor.g, pColor.b, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_BASE]);
-
-    mBodyShader.setUniform(3.0f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SP_POWER]);
-
-    mBodyShader.setUniform(0.69804f, 0.69804f, 0.69804f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_AMBIENT]);
-    if (usePantsMaterial)
-        mBodyShader.setUniform(0.65098f, 0.65098f, 0.65098f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]);
-    else
-        mBodyShader.setUniform(0.29804f, 0.29804f, 0.29804f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_DIFFUSE]);
-
-    mBodyShader.setUniform(cRimColorBody.r, cRimColorBody.b, cRimColorBody.b, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM]);
-    mBodyShader.setUniform(2.0f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_RIM_SP_POWER]);
-    mBodyShader.setUniform(0.16863f, 0.16863f, 0.16863f, u32(-1), mBodyPixelUniformLocation[BODY_PIXEL_UNIFORM_SPECULAR]);
-}
-#endif
 
 void Shader::draw_(const FFLDrawParam& draw_param)
 {
@@ -684,7 +582,8 @@ void Shader::draw_(const FFLDrawParam& draw_param)
     setMaterial_(modulateType);
 
     // moved from setMaterial_ to here, set material specular mode
-    if (modulateType < CUSTOM_MATERIAL_PARAM_SIZE) {
+    if (modulateType < CUSTOM_MATERIAL_PARAM_SIZE)
+    {
         // blinn as default...
         FFLiDefaultShaderSpecularMode materialSpecularMode = FFL_SPECULAR_MODE_BLINN;
         if (mSpecularMode != FFL_SPECULAR_MODE_BLINN) // if the default is not blinn,
@@ -741,22 +640,18 @@ void Shader::draw_(const FFLDrawParam& draw_param)
 #elif RIO_IS_WIN
 
         GLuint indexBufferHandle;
-        glGenBuffers(1, &indexBufferHandle);  // Generate a new buffer
+        RIO_GL_CALL(glGenBuffers(1, &indexBufferHandle));  // Generate a new buffer
 
         for (int type = FFL_ATTRIBUTE_BUFFER_TYPE_POSITION; type <= FFL_ATTRIBUTE_BUFFER_TYPE_COLOR; ++type)
         {
+
             const FFLAttributeBuffer& buffer = draw_param.attributeBufferParam.attributeBuffers[type];
             s32 location = mAttributeLocation[type];
             void* ptr = buffer.ptr;
-            /*
-            if (ptr && buffer.stride == 0 && type == FFL_ATTRIBUTE_BUFFER_TYPE_COLOR)
+
+            if (ptr && location != -1) // only color's stride is 0
             {
-                u8* ptrU8 = reinterpret_cast<u8*>(ptr);
-                RIO_LOG("color stride 0: %d, %d, %d, %d\n", ptrU8[0], ptrU8[1], ptrU8[2], ptrU8[3]);
-            }
-            */
-            if (ptr && location != -1 && buffer.stride > 0) //only color's stride is 0
-            {
+
                 u32 stride = buffer.stride;
                 u32 vbo_handle = mVBOHandle[type];
                 u32 size = buffer.size;
@@ -782,6 +677,18 @@ void Shader::draw_(const FFLDrawParam& draw_param)
                     RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_BYTE, true, stride, nullptr));
                     break;
                 case FFL_ATTRIBUTE_BUFFER_TYPE_COLOR:
+                    if (stride == 0 && size == 4) // If color's stride is 0, its value is constant.
+                    {
+                        RIO_GL_CALL(glDisableVertexAttribArray(location)); // Attribute will not be used.
+                        // Dereference the first value as u8.
+                        const u8* color = reinterpret_cast<u8*>(ptr);
+                        if (color[0] == 0) // Only possibilities for first component are 0 or 1 (read above).
+                            mShader.setUniform(2, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_DEFAULT_2
+                        else
+                            mShader.setUniform(1, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_DEFAULT_1
+                        break; // Break out of the switch case.
+                    }
+                    mShader.setUniform(0, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PARAMETER_MODE]); // FFL_PARAMETER_MODE_COLOR
                     RIO_GL_CALL(glVertexAttribPointer(location, 4, GL_UNSIGNED_BYTE, true, stride, nullptr));
                     break;
                 default:
@@ -789,8 +696,7 @@ void Shader::draw_(const FFLDrawParam& draw_param)
                 }
             }
 
-            else if (location != -1)
-                // Disable the attribute to avoid using uninitialized data
+            else if (location != -1) // Disable attributes without corresponding VS inputs.
                 RIO_GL_CALL(glDisableVertexAttribArray(location));
         }
 #endif

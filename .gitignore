@@ -16,7 +16,7 @@
 *.dll
 
 # Fortran module files
-#*.mod  # mfs who added this really f*cking hate go.mod
+#*.mod  # go
 *.smod
 
 # Compiled Static libraries
@@ -45,7 +45,7 @@ __pycache__/
 *$py.class
 
 # binaries
-ffl_testing_2_debug*
+ffl_testing_2*
 # mlc
 sys/
 usr/
@@ -54,15 +54,20 @@ FFLRes*.dat
 # renderdoc captures
 *.cap
 # misc
-*swp
+*.swp
+*.kate-swp
 .DS_Store
-
-# should be temporary
-nwf body png/*raw
-test/*
 
 # visual studio
 .vs
 FFL-Testing/
 *.pdb
 *.user
+
+# CMake
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+build
+#Makefile
+cmake_install.cmake

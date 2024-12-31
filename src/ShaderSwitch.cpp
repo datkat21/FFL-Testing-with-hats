@@ -1,4 +1,3 @@
-#include "nn/ffl/FFLDrawParam.h"
 #include <ShaderSwitch.h>
 
 #include <gpu/rio_RenderState.h>
@@ -472,7 +471,6 @@ void ShaderSwitch::initialize()
     // NOTE: i_Parameter is another name for the color attribute
     // only one used is specular mix/blend in r component, only for hair
     mAttributeLocation[FFL_ATTRIBUTE_BUFFER_TYPE_COLOR]     = mShader.getVertexAttribLocation("i_Parameter");
-
 #if RIO_IS_CAFE
     GX2InitAttribStream(
         &(mAttribute[FFL_ATTRIBUTE_BUFFER_TYPE_POSITION]),
@@ -631,9 +629,47 @@ void ShaderSwitch::setModulateMode_(FFLModulateMode mode)
     mShader.setUniform(s32(mode), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MODULATE_TYPE]);
 }
 
+void ShaderSwitch::setDrawType_(const FFLModulateParam& modulateParam)
+{
+    // set draw type shader uniform here
+    #define DRAW_TYPE_NORMAL   0
+    #define DRAW_TYPE_FACELINE 1
+    #define DRAW_TYPE_HAIR     2
+    int drawType;
+
+    switch (modulateParam.type)
+    {
+    case FFL_MODULATE_TYPE_SHAPE_HAIR:
+        // takes specular blend/mix into account
+        // meaning a_color.r / i_Parameter.r
+        drawType = DRAW_TYPE_HAIR;
+        // without that, certain highlights/shadows
+        // will not appear as they do on switch
+        break;
+        // NOTE: the shader will take alpha into account if
+        // you set draw type uniform to this, and the faceline
+        // texture would need to be drawn with alpha background
+        // color. if you dont apply this then most faceline
+        // textures will be fine except ones with beards
+    case FFL_MODULATE_TYPE_SHAPE_FACELINE:
+        if (modulateParam.pTexture2D)
+        {
+            drawType = DRAW_TYPE_FACELINE;
+            break;
+        }
+        [[fallthrough]];
+    default:
+        drawType = DRAW_TYPE_NORMAL;
+        break;
+    }
+    mShader.setUniform(s32(drawType), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_DRAW_TYPE]);
+}
+
 void ShaderSwitch::setModulate_(const FFLModulateParam& modulateParam)
 {
     setModulateMode_(modulateParam.mode);
+    setDrawType_(modulateParam);
+    setMaterial_(modulateParam.type);
 
     // if you want to change colors based on modulateParam.type
     // FFL_MODULATE_TYPE_SHAPE_HAIR
@@ -665,8 +701,45 @@ void ShaderSwitch::setModulate_(const FFLModulateParam& modulateParam)
 
 #define SWITCH_MATERIAL_PARAM_PANTS_GRAY CUSTOM_MATERIAL_PARAM_PANTS
 #define SWITCH_MATERIAL_PARAM_PANTS_GOLD CUSTOM_MATERIAL_PARAM_PANTS + 1
+void ShaderSwitch::setModulatePantsMaterial(PantsColor pantsColor)
+{
+    FFLColor color = cPantsColors[PANTS_COLOR_GRAY];
+    s32 pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GRAY;
+    // NOTE: switch color only supports these two and only by index
+    if (pantsColor == PANTS_COLOR_GOLD)
+    {
+        color = cPantsColors[PANTS_COLOR_GOLD];
+        pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GOLD;
+    }
 
-void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
+    const FFLModulateType modulateType = static_cast<FFLModulateType>(pantsMaterialParam);
+
+    const FFLModulateParam modulateParam = {
+        FFL_MODULATE_MODE_CONSTANT,
+        modulateType,
+        &color,
+        nullptr, // no color G
+        nullptr, // no color B
+        nullptr  // no texture
+    };
+    setModulate_(modulateParam);
+}
+
+// Use a shortcut to resolve Ver3/FFL hair color to nn::mii CommonColor.
+static s32 getHairCommonColorFromVer3_(s32 index)
+{
+    // HACK: ver3 hair color 0 maps to common color 8
+    if (index == 0)
+        return 8;
+    else
+    {
+        s32 commonColor = index & FFLI_NN_MII_COMMON_COLOR_MASK;
+        RIO_ASSERT(commonColor >= 0 && commonColor <= 100);
+        return commonColor;
+    }
+}
+
+void ShaderSwitch::setMaterial_(const FFLModulateType modulateType)
 {
     // we need to get favorite/faceline/hair/beard color from somewhere so
     //FFLiCharInfo* mpCharInfo = &reinterpret_cast<FFLiCharModel*>(mpCharModel)->charInfo;
@@ -674,8 +747,11 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
     //RIO_LOG("[Shader::setMaterial_] your mii's favorite color id is: %d\n", charModel->mpCharInfo->favoriteColor);
 
     DrawParamMaterial drawParamMaterial;
-    int commonColor;
-    switch (modulateParam.type) {
+    s32 commonColor; // set by hair and beard
+
+    //const FFLModulateType modulateType = modulateParam.type;
+    switch (modulateType)
+    {
         case FFL_MODULATE_TYPE_SHAPE_NOSELINE:
         case FFL_MODULATE_TYPE_SHAPE_MASK:
             drawParamMaterial = cMaskMaterial;
@@ -707,22 +783,12 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
             break;
 
         case FFL_MODULATE_TYPE_SHAPE_HAIR:
-            // HACK: ver3 hair color 0 maps to common color 8
-            if (mpCharInfo->parts.hairColor == 0)
-                commonColor = 8;
-            else
-                commonColor = mpCharInfo->parts.hairColor & FFLI_NN_MII_COMMON_COLOR_MASK;
-            RIO_ASSERT(commonColor >= 0 && commonColor <= 100);
+            commonColor = getHairCommonColorFromVer3_(mpCharInfo->parts.hairColor);
             drawParamMaterial = cHairMaterials[commonColor];
             //RIO_LOG("hair color: %d, specular factor B: %f\n", commonColor, drawParamMaterial.specular.factorB);
             break;
         case FFL_MODULATE_TYPE_SHAPE_BEARD:
-            // HACK: same as above
-            if (mpCharInfo->parts.beardColor == 0)
-                commonColor = 8;
-            else
-                commonColor = mpCharInfo->parts.beardColor & FFLI_NN_MII_COMMON_COLOR_MASK;
-            RIO_ASSERT(commonColor >= 0 && commonColor <= 100);
+            commonColor = getHairCommonColorFromVer3_(mpCharInfo->parts.beardColor);
             drawParamMaterial = cBeardMaterials[commonColor];
             break;
         default:
@@ -748,93 +814,12 @@ void ShaderSwitch::setMaterial_(const FFLModulateParam& modulateParam)
     mShader.setUniform(drawParamMaterial.rimLight.power, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_POWER]);
 
     mShader.setUniform(drawParamMaterial.rimLight.width, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_WIDTH]);
-
-
-    // set draw type here
-    #define DRAW_TYPE_NORMAL   0
-    #define DRAW_TYPE_FACELINE 1
-    #define DRAW_TYPE_HAIR     2
-    int drawType;
-
-    switch (modulateParam.type) {
-        case FFL_MODULATE_TYPE_SHAPE_HAIR:
-            // takes specular blend/mix into account
-            // meaning a_color.r / i_Parameter.r
-            drawType = DRAW_TYPE_HAIR;
-            // without that, certain highlights/shadows
-            // will not appear as they do on switch
-            break;
-        // NOTE: the shader will take alpha into account if
-        // you set draw type uniform to this, and the faceline
-        // texture would need to be drawn with alpha background
-        // color. if you dont apply this then most faceline
-        // textures will be fine except ones with beards
-        case FFL_MODULATE_TYPE_SHAPE_FACELINE:
-            if (modulateParam.pTexture2D)
-            {
-                drawType = DRAW_TYPE_FACELINE;
-                break;
-            }
-        default:
-            drawType = DRAW_TYPE_NORMAL;
-            break;
-    }
-    mShader.setUniform(s32(drawType), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_DRAW_TYPE]);
-}
-
-void ShaderSwitch::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
-{
-    bind(light_enable, pCharInfo);
-
-    setCulling(FFL_CULL_MODE_BACK);
-
-    const FFLColor& favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
-
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY);
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        // CUSTOM MODULATE TYPE FOR BODY
-        modulateType,
-        &favoriteColor,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
-    setMaterial_(modulateParam);
-}
-
-void ShaderSwitch::setBodyShaderPantsMaterial(PantsColor pantsColor)
-{
-    FFLColor color = cPantsColors[PANTS_COLOR_GRAY];
-    s32 pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GRAY;
-    // NOTE: switch color only supports these two and only by index
-    if (pantsColor == PANTS_COLOR_GOLD)
-    {
-        color = cPantsColors[PANTS_COLOR_GOLD];
-        pantsMaterialParam = SWITCH_MATERIAL_PARAM_PANTS_GOLD;
-    }
-
-
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(pantsMaterialParam);
-
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        modulateType,
-        &color,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
-    setMaterial_(modulateParam);
 }
 
 void ShaderSwitch::draw_(const FFLDrawParam& draw_param)
 {
     setCulling(draw_param.cullMode);
     setModulate_(draw_param.modulateParam);
-    setMaterial_(draw_param.modulateParam);
 
     // HACK: INJECT SWITCH GLASS NORMALS
     // the switch shader does a reflection on the glasses
@@ -860,7 +845,7 @@ void ShaderSwitch::draw_(const FFLDrawParam& draw_param)
 #elif RIO_IS_WIN
 
         GLuint indexBufferHandle;
-        glGenBuffers(1, &indexBufferHandle);  // Generate a new buffer
+        RIO_GL_CALL(glGenBuffers(1, &indexBufferHandle));  // Generate a new buffer
 
         for (int type = FFL_ATTRIBUTE_BUFFER_TYPE_POSITION; type <= FFL_ATTRIBUTE_BUFFER_TYPE_COLOR; ++type)
         {

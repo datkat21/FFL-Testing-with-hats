@@ -5,6 +5,7 @@
 #include <Model.h>
 #include <RootTask.h>
 #include <Hat.h>
+#include <Types.h>
 
 #include <filedevice/rio_FileDeviceMgr.h>
 #include <gfx/rio_Projection.h>
@@ -48,6 +49,7 @@ RootTask::RootTask()
 #ifdef RIO_USE_OSMESA   // off screen rendering
     mpServerOnly = "1"; // force it truey
 #endif
+    rio::MemUtil::set(mpBodyModels, 0, sizeof(mpBodyModels));
 }
 
 #if RIO_IS_WIN && defined(_WIN32)
@@ -76,34 +78,35 @@ RootTask::RootTask()
 #include <filesystem>
 #include <fstream>
 
+#define STORE_DATA_FOLDER_PATH "place_ffsd_files_here"
+
 // read Mii data from a folder
 void RootTask::fillStoreDataArray_()
 {
     // Path to the folder
-    const std::string folderPath = "place_ffsd_files_here";
+    const std::string folderPath = STORE_DATA_FOLDER_PATH;
     // Check if the folder exists
-    if (std::filesystem::exists(folderPath) && std::filesystem::is_directory(folderPath))
+    if (!std::filesystem::exists(folderPath) || !std::filesystem::is_directory(folderPath))
+        return; // folder is not usable, skip this
+    for (const auto& entry : std::filesystem::directory_iterator(folderPath))
     {
-        for (const auto &entry : std::filesystem::directory_iterator(folderPath))
-        {
-            if (entry.is_regular_file() && entry.file_size() >= sizeof(charInfoStudio) && entry.path().filename().string().at(0) != '.')
-            {
-                // Read the file content
-                std::ifstream file(entry.path(), std::ios::binary);
-                if (file.is_open())
-                {
-                    std::vector<char> data;
-                    data.resize(entry.file_size());
-                    file.read(&data[0], entry.file_size());
-                    // if (file.gcount() == sizeof(FFLStoreData)) {
-                    mStoreDataArray.push_back(data);
-                    //}
-                    file.close();
-                }
-            }
-        }
-        RIO_LOG("Loaded %zu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
+        if (!entry.is_regular_file()
+            || entry.file_size() < sizeof(charInfoStudio)
+            || entry.path().filename().string().at(0) == '.')
+            continue; // skip: dotfiles, not regular/too small files
+
+        // Read the file content
+        std::ifstream file(entry.path(), std::ios::binary);
+        if (!file.is_open())
+            continue;
+        std::vector<char> data;
+        data.resize(entry.file_size());
+        file.read(&data[0], entry.file_size());
+        //if (file.gcount() == sizeof(FFLStoreData))
+        mStoreDataArray.push_back(data);
+        file.close();
     }
+    RIO_LOG("Loaded %zu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
 }
 
 int server_fd, new_socket;
@@ -126,14 +129,18 @@ void RootTask::setupSocket_()
             RIO_LOG("\033[1mUsing systemd socket activation, socket fd: %d\033[0m\n", server_fd);
 
             mpServerOnly = "1"; // force server only when using systemd socket
-            return;             // Exit the function as the socket is already set up
+            return; // Exit the function as the socket is already set up
+        }
+        else
+        {
+            RIO_LOG("\033[1mLISTEN_FDS was passed in as %s but sd_listen_fds(0) returned %d so systemd socket will not be used.\033[0m\n", getenv("LISTEN_FDS"), n_fds);
         }
     }
 #endif
 
 #ifdef _WIN32
     WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0)
     {
         perror("WSAStartup failed");
         exit(EXIT_FAILURE);
@@ -148,7 +155,7 @@ void RootTask::setupSocket_()
     }
 
     // Forcefully attaching socket to the port
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&opt), sizeof(opt)))
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt)))
     {
         perror("setsockopt");
         exit(EXIT_FAILURE);
@@ -211,16 +218,10 @@ void RootTask::setupSocket_()
 }
 #endif
 
-void RootTask::prepare_()
+void RootTask::loadResourceFiles_()
 {
-    mInitialized = false;
-
-    FFLInitDesc init_desc = {
-        .fontRegion = FFL_FONT_REGION_JP_US_EU,
-        ._c = false,
-        ._10 = true};
-
-#ifndef TEST_FFL_DEFAULT_RESOURCE_LOADING
+    // Initialize mResourceDesc with zeroes.
+    rio::MemUtil::set(&mResourceDesc, 0, sizeof(FFLResourceDesc));
 
 #if RIO_IS_CAFE
     FSInit();
@@ -239,13 +240,10 @@ void RootTask::prepare_()
 
                 u8 *buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
                 if (buffer == nullptr)
-                {
                     RIO_LOG("Skipping loading FFL_RESOURCE_TYPE_MIDDLE (%s failed to load)\n", resPath.c_str());
-                    // I added a line that skips the resource if the size is zero
-                    mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = 0;
-                }
                 else
                 {
+                    RIO_LOG("FFL_RESOURCE_TYPE_MIDDLE successfully loaded from: %s\n", arg.path.c_str());
                     mResourceDesc.pData[FFL_RESOURCE_TYPE_MIDDLE] = buffer;
                     mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = arg.read_size;
                 }
@@ -262,15 +260,16 @@ void RootTask::prepare_()
             bool resLoaded = false;
 
             // Try two different paths
-            for (const auto &resPath : resPaths)
+            for (const std::string& resPath : resPaths)
             {
                 rio::FileDevice::LoadArg arg;
                 arg.path = resPath;
                 arg.alignment = 0x2000;
 
-                u8 *buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
+                u8* buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
                 if (buffer != nullptr)
                 {
+                    RIO_LOG("FFL_RESOURCE_TYPE_HIGH successfully loaded from: %s\n", arg.path.c_str());
                     mResourceDesc.pData[FFL_RESOURCE_TYPE_HIGH] = buffer;
                     mResourceDesc.size[FFL_RESOURCE_TYPE_HIGH] = arg.read_size;
                     resLoaded = true;
@@ -278,9 +277,7 @@ void RootTask::prepare_()
                     break;
                 }
                 else
-                {
                     RIO_LOG("NativeFileDevice failed to load: %s\n", arg.path.c_str());
-                }
             }
 
             if (!resLoaded)
@@ -290,6 +287,21 @@ void RootTask::prepare_()
             }
         }
     }
+}
+
+void RootTask::prepare_()
+{
+    mInitialized = false;
+
+    FFLInitDesc init_desc = {
+        .fontRegion = FFL_FONT_REGION_JP_US_EU,
+        ._c = false,
+        ._10 = true
+    };
+
+#ifndef TEST_FFL_DEFAULT_RESOURCE_LOADING
+
+    loadResourceFiles_();
 
     FFLResult result = FFLInitResEx(&init_desc, &mResourceDesc);
 #else
@@ -305,27 +317,19 @@ void RootTask::prepare_()
     }
 
     RIO_ASSERT(FFLIsAvailable());
-
-    FFLInitResGPUStep();
+    FFLInitResGPUStep(); // No-op on Win but still needed
 
     initializeShaders_();
 
-    // Get window instance
-    const rio::Window *const window = rio::Window::instance();
+    // Create projection matrices.
+
+    const rio::Window* window = rio::Window::instance();
     // Set projection matrix
     {
         // Calculate the aspect ratio based on the window dimensions
         f32 aspect = f32(window->getWidth()) / f32(window->getHeight());
         // Calculate the field of view (fovy) based on the given parameters
-        f32 fovy;
-        if (f32(window->getWidth()) < f32(window->getHeight()))
-        {
-            fovy = 2 * atan2f(43.2f / aspect, 500.0f);
-        }
-        else
-        {
-            fovy = 2 * atan2f(43.2f, 500.0f);
-        }
+        f32 fovy = 2 * atan2f(43.2f / aspect, 500.0f);
         // C_MTXPerspective(Mtx44 m, f32 fovy, f32 aspect, f32 near, f32 far)
         // PerspectiveProjection(f32 near, f32 far, f32 fovy, f32 aspect)
         // RFLiMakeIcon: C_MTXPerspective(projMtx, fovy, aspect, 500.0f, 700.0f)
@@ -424,13 +428,13 @@ void RootTask::createModel_()
     if (!mStoreDataArray.empty())
     {
         // Use the custom Mii data array
-        RenderRequest fakeRenderRequest;
-        fakeRenderRequest.dataLength = static_cast<u16>(mStoreDataArray[mMiiCounter].size());
-        fakeRenderRequest.verifyCRC16 = false;
-        rio::MemUtil::copy(fakeRenderRequest.data, &mStoreDataArray[mMiiCounter][0], fakeRenderRequest.dataLength);
-        if (pickupCharInfoFromRenderRequest(&charInfo, &fakeRenderRequest) != FFL_RESULT_OK)
+        if (FFLResult result = pickupCharInfoFromData(&charInfo,
+            &mStoreDataArray[mMiiCounter][0],
+            static_cast<u32>(mStoreDataArray[mMiiCounter].size()),
+            true // verifyCRC16
+        ); result != FFL_RESULT_OK)
         {
-            RIO_LOG("pickupCharInfoFromRenderRequest failed on Mii counter: %d\n", mMiiCounter);
+            RIO_LOG("pickupCharInfoFromData failed on Mii counter: %d with result %s\n", mMiiCounter, FFLResultToString(result));
             mpModel = nullptr;
             mCounter = 0.0f;
             mMiiCounter = (mMiiCounter + 1) % maxMiis;
@@ -460,26 +464,29 @@ void RootTask::createModel_()
 // of max miis (6 for default/guest miis)
 mMiiCounter = (mMiiCounter + 1) % maxMiis;
 
-Model::InitArgStoreData arg = {
-    .desc = {
-        .resolution = FFLResolution(768),
-        .allExpressionFlag = {.flags = {1 << 0, 0, 0}},
-        .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
-        .resourceType = FFL_RESOURCE_TYPE_HIGH,
-    },
-    .source = modelSource};
+    Model::InitArgStoreData arg = {
+        .desc = {
+            .resolution = static_cast<FFLResolution>(FFL_RESOLUTION_TEX_256 | FFL_RESOLUTION_MIP_MAP_ENABLE_MASK),
+            .allExpressionFlag = { .flags = { 1 << 0, 0, 0 } },
+            .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
+            .resourceType = FFL_RESOURCE_TYPE_HIGH,
+        },
+        .source = modelSource
+    };
 
-mpModel = new Model();
-ShaderType shaderType = SHADER_TYPE_WIIU; //(mMiiCounter-1) % (SHADER_TYPE_MAX);
-if (!mpModel->initialize(arg, *mpShaders[shaderType]))
-{
-    delete mpModel;
-    mpModel = nullptr;
-} /*else {
-    mpModel->setScale({ 1.f, 1.f, 1.f });
-    //mpModel->setScale({ 1 / 16.f, 1 / 16.f, 1 / 16.f });
-}*/
-mCounter = 0.0f;
+    mpModel = new Model();
+    ShaderType shaderType = SHADER_TYPE_WIIU;//(mMiiCounter-1) % (SHADER_TYPE_MAX);
+    if (!mpModel->initialize(arg, *mpShaders[shaderType]))
+    {
+        delete mpModel;
+        mpModel = nullptr;
+    }
+    /*else
+    {
+        mpModel->setScale({ 1.f, 1.f, 1.f });
+        //mpModel->setScale({ 1 / 16.f, 1 / 16.f, 1 / 16.f });
+    }*/
+    mCounter = 0.0f;
 }
 
 FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo *pCharInfo, RenderRequest *buf)
@@ -612,24 +619,24 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo *pCharInfo, RenderRequest
 const std::string socketErrorPrefix = "ERROR: ";
 
 // create model for render request
-bool RootTask::createModel_(RenderRequest *buf, int socket_handle)
+bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
 {
     FFLiCharInfo charInfo;
 
     std::string errMsg;
 
-    FFLResult pickupResult = pickupCharInfoFromRenderRequest(&charInfo, buf);
+    FFLResult pickupResult = pickupCharInfoFromData(&charInfo,
+                                                    buf->data,
+                                                    buf->dataLength,
+                                                    buf->verifyCRC16);
 
     if (pickupResult != FFL_RESULT_OK)
     {
-        if (pickupResult == FFL_RESULT_FILE_INVALID)
-        { // crc16 fail
+        if (pickupResult == FFL_RESULT_FILE_INVALID) // crc16 fail
             errMsg = "Data CRC16 verification failed.\n";
-        }
         else
-        {
-            errMsg = "Unknown data type (pickupCharInfoFromRenderRequest failed)\n";
-        }
+            errMsg = "Unknown data type (pickupCharInfoFromData failed)\n";
+
         RIO_LOG("%s", errMsg.c_str());
         errMsg = socketErrorPrefix + errMsg;
         send(socket_handle, errMsg.c_str(), static_cast<int>(errMsg.length()), 0);
@@ -655,15 +662,16 @@ bool RootTask::createModel_(RenderRequest *buf, int socket_handle)
             send(socket_handle, errMsg.c_str(), static_cast<int>(errMsg.length()), 0);
             return false;
         }
-        /*
-                if (FFLiIsNullMiiID(&charInfo.creatorID)) {
-                    errMsg = "FFLiIsNullMiiID returned true (this data will not work on a real console)\n";
-                    RIO_LOG("%s", errMsg.c_str());
-                    errMsg = socketErrorPrefix + errMsg;
-                    send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
-                    return false;
-                }
-        */
+/*
+        if (FFLiIsNullMiiID(&charInfo.creatorID))
+        {
+            errMsg = "FFLiIsNullMiiID returned true (this data will not work on a real console)\n";
+            RIO_LOG("%s", errMsg.c_str());
+            errMsg = socketErrorPrefix + errMsg;
+            send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
+            return false;
+        }
+*/
     }
 
     // NOTE NOTE: MAKE SURE TO CHECK NULL MII ID TOO
@@ -695,12 +703,10 @@ bool RootTask::createModel_(RenderRequest *buf, int socket_handle)
     { // if it is negative...
         texResolution = static_cast<FFLResolution>(
             static_cast<u32>(buf->texResolution * -1) // remove negative
-            | FFL_RESOLUTION_MIP_MAP_ENABLE_MASK);    // enable mipmap
+            | FFL_RESOLUTION_MIP_MAP_ENABLE_MASK); // enable mipmap
     }
     else
-    {
         texResolution = static_cast<FFLResolution>(buf->texResolution);
-    }
 
 #ifdef FFL_ENABLE_NEW_MASK_ONLY_FLAG
     // Enable special mode that will not initialize shapes.
@@ -748,7 +754,9 @@ bool RootTask::createModel_(RenderRequest *buf, int socket_handle)
         charInfo.parts.glassScale += 1;
     if (!mpModel->initialize(arg, *mpShaders[whichShader]))
     {
-        errMsg = "FFLInitCharModelCPUStep FAILED while initializing model: " + std::string(FFLResultToString(mpModel->getInitializeCpuResult())) + "\n";
+        errMsg = "FFLInitCharModelCPUStep FAILED while initializing model: "
+        + std::string(FFLResultToString(mpModel->getInitializeCpuResult()))
+        + "\n";
         RIO_LOG("%s", errMsg.c_str());
         errMsg = socketErrorPrefix + errMsg;
         send(socket_handle, errMsg.c_str(), static_cast<int>(errMsg.length()), 0);
@@ -763,7 +771,7 @@ bool RootTask::createModel_(RenderRequest *buf, int socket_handle)
 
 #define TGA_HEADER_SIZE 18
 
-static void copyAndSendRenderBufferToSocket(rio::RenderBuffer &renderBuffer, rio::Texture2D *texture, int socket, int ssaaFactor)
+static void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio::Texture2D* texture, int socket, int ssaaFactor)
 {
     // does operations on the renderbuffer assuming it is already bound
 #ifdef TRY_SCALING
@@ -937,9 +945,7 @@ static void copyAndSendRenderBufferToSocket(rio::RenderBuffer &renderBuffer, rio
         RIO_GL_CALL(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
     }
     else
-    {
         RIO_ASSERT(!readBuffer && "why is readBuffer nullptr...???");
-    }
 
     // Unbind the PBO
     RIO_GL_CALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, 0));
@@ -1011,34 +1017,53 @@ static const rio::Vector3f cBodyHeadRotation = {(0.002f + -0.005f), 0.000005f, -
 
 // draws mii body based on charinfo's build/height
 // shader sets favorite and pants color
-void RootTask::drawMiiBody(Model *pModel, PantsColor pantsColor, uint8_t bodyType,
-                           rio::Matrix34f &model_mtx, rio::BaseMtx34f &view_mtx,
-                           rio::BaseMtx44f &proj_mtx, const rio::Vector3f scaleFactors)
+void RootTask::drawMiiBody(Model* pModel, PantsColor pantsColor,
+    rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx,
+    rio::BaseMtx44f& proj_mtx, const rio::Vector3f scaleFactors)
 {
 
     const bool lightEnable = pModel->getLightEnable();
     FFLiCharInfo *pCharInfo = pModel->getCharInfo();
 
-    // SELECT BODY MODEL
+    // Select body model.
     RIO_ASSERT(pCharInfo->gender < FFL_GENDER_MAX);
+    const rio::mdl::Model* model = mpBodyModels[pCharInfo->gender]; // Based on gender.
 
-    int i = bodyType * 2;
-
-    const rio::mdl::Model *model = mpBodyModels[pCharInfo->gender + i];
-
-    const rio::mdl::Mesh *const meshes = model->meshes();
+    const rio::mdl::Mesh* meshes = model->meshes(); // Body and pants mesh.
 
     // Render each mesh in order
     for (u32 i = 0; i < model->numMeshes(); i++)
     {
         const rio::mdl::Mesh &mesh = meshes[i];
 
-        // BIND SHADER
-        IShader *pShader = pModel->getShader();
-        pShader->bindBodyShader(lightEnable, pCharInfo);
+        // Bind shader and set body material.
+        IShader* pShader = pModel->getShader();
+        pShader->bind(lightEnable, pCharInfo);
+
 #ifndef USE_OLD_MODELS
-        if ((i % 2) == 1) // is it the second mesh (pants)?
-            pShader->setBodyShaderPantsMaterial(pantsColor);
+        bool isPantsModel = ((i % 2) == 1); // is it the second mesh?
+
+        if (isPantsModel)
+            // we would be able to use the same setModulate method
+            // if only the switch shader just let you use arbitrary
+            // colors but no it NEEDS the index of the pants colorhHHHHHHHHHHHHHHg
+            pShader->setModulatePantsMaterial(pantsColor);
+        else
+        {
+#endif // USE_OLD_MODELS
+            const FFLColor modulateColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
+            const FFLModulateParam modulateParam = {
+                FFL_MODULATE_MODE_CONSTANT, // no texture
+                CUSTOM_MATERIAL_PARAM_BODY, // decides which material is bound
+                &modulateColor, // constant color (R)
+                nullptr, // no color G
+                nullptr, // no color B
+                nullptr  // no texture
+            };
+
+            pShader->setModulate(modulateParam);
+#ifndef USE_OLD_MODELS
+        }
 #endif
 
         // make new matrix for body
@@ -1049,7 +1074,7 @@ void RootTask::drawMiiBody(Model *pModel, PantsColor pantsColor, uint8_t bodyTyp
         // apply original model matrix (rotation)
         modelMtxBody.setMul(model_mtx, modelMtxBody);
 
-        pShader->setViewUniformBody(modelMtxBody, view_mtx, proj_mtx);
+        pShader->setViewUniform(modelMtxBody, view_mtx, proj_mtx);
 
         rio::RenderState render_state;
         render_state.setCullingMode(rio::Graphics::CULLING_MODE_BACK);
@@ -1125,18 +1150,18 @@ void RootTask::drawMiiHat(Model *pModel, uint8_t &hatType,
 
 // configures camera, proj mtx, uses height from charinfo...
 // ... to handle the view type appropriately
-void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera *pCamera, rio::BaseMtx44f *projMtx, float *aspectHeightFactor, bool *isCameraPosAbsolute, bool *willDrawBody, FFLiCharInfo *pCharInfo)
+void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo)
 {
     switch (viewType)
     {
-    case VIEW_TYPE_FACE_ONLY:
-        *willDrawBody = false;
-        [[fallthrough]]; // goal is actually same view as face
-                         // both cdn-mii 2.0.0 and 1.0.0 do this
-    case VIEW_TYPE_FACE:
-    {
-        // if it has body then use the matrix we just defined
-        *projMtx = *mProjMtxIconBody;
+        case VIEW_TYPE_FACE_ONLY:
+            *willDrawBody = false;
+            [[fallthrough]]; // goal is actually same view as face
+                             // both cdn-mii 2.0.0 and 1.0.0 do this
+        case VIEW_TYPE_FACE:
+        {
+            // if it has body then use the matrix we just defined
+            *projMtx = *mProjMtxIconBody;
 
         // RIO_LOG("x = %i, y = %i, z = %i\n", renderRequest->cameraRotate.x, renderRequest->cameraRotate.y, renderRequest->cameraRotate.z);
         /*
@@ -1267,7 +1292,7 @@ static rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3])
 }
 
 // Calculate position based on spherical coordinates
-static rio::Vector3f calculateCameraOrbitPosition(f32 radius, const rio::Vector3f &radians)
+static rio::Vector3f calculateCameraOrbitPosition(f32 radius, const rio::Vector3f& radians)
 {
     return {
         radius * -std::sin(radians.y) * std::cos(radians.x),
@@ -1276,7 +1301,7 @@ static rio::Vector3f calculateCameraOrbitPosition(f32 radius, const rio::Vector3
 }
 
 // Calculate up vector based on z rotation
-static rio::Vector3f calculateUpVector(const rio::Vector3f &radians)
+static rio::Vector3f calculateUpVector(const rio::Vector3f& radians)
 {
     rio::Vector3f up;
     up.x = std::sin(radians.z);
@@ -1285,7 +1310,7 @@ static rio::Vector3f calculateUpVector(const rio::Vector3f &radians)
     return up;
 }
 
-void RootTask::handleRenderRequest(char *buf)
+void RootTask::handleRenderRequest(char* buf)
 {
     if (mpModel == nullptr)
     {
@@ -1295,6 +1320,7 @@ void RootTask::handleRenderRequest(char *buf)
         closesocket(new_socket);
         return;
     }
+    RIO_LOG("handleRenderRequest: socket handle: %d\n", new_socket);
 
     // hopefully renderrequest is proper
     RenderRequest *renderRequest = reinterpret_cast<RenderRequest *>(buf);
@@ -1377,6 +1403,7 @@ void RootTask::handleRenderRequest(char *buf)
                       &projMtx, &aspectHeightFactor,
                       &isCameraPosAbsolute, &willDrawBody, pCharInfo);
 
+
     // Update camera position
     const rio::Vector3f cameraPosInitial = mCamera.pos();
     const f32 radius = cameraPosInitial.z;
@@ -1390,7 +1417,7 @@ void RootTask::handleRenderRequest(char *buf)
     position.y += cameraPosInitial.y;
     const rio::Vector3f upVector = calculateUpVector(cameraRotate);
 
-    f32 headYTranslateFinal;
+    f32 headYTranslateFinal = 0.0f;
 
     if (willDrawBody)
     {
@@ -1528,7 +1555,9 @@ void RootTask::handleRenderRequest(char *buf)
     DrawStageMode drawStages = static_cast<DrawStageMode>(renderRequest->drawStageMode);
 
     // Render the first frame to the buffer
-    if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_OPA_ONLY)
+    if (drawStages == DRAW_STAGE_MODE_ALL
+        || drawStages == DRAW_STAGE_MODE_OPA_ONLY
+        || drawStages == DRAW_STAGE_MODE_XLU_DEPTH_MASK)
         mpModel->drawOpa(view_mtx, projMtx);
     RIO_LOG("drawOpa rendered to the buffer.\n");
 
@@ -1538,11 +1567,10 @@ void RootTask::handleRenderRequest(char *buf)
         FFLFavoriteColor originalFavoriteColor = pCharInfo->favoriteColor;
         if (renderRequest->clothesColor >= 0
             // verify favorite color is in range here bc it is NOT verified in drawMiiBodyREAL
-            && renderRequest->clothesColor < FFL_FAVORITE_COLOR_MAX)
-        {
+            && renderRequest->clothesColor < FFL_FAVORITE_COLOR_MAX
+        )
             // change favorite color after drawing opa
             pCharInfo->favoriteColor = static_cast<FFLFavoriteColor>(renderRequest->clothesColor);
-        }
 
         // drawMiiBodyFAKE(renderTextureColor, renderTextureDepth, favoriteColorIndex);
         PantsColor pantsColor = static_cast<PantsColor>(renderRequest->pantsColor % PANTS_COLOR_MAX);
@@ -1569,12 +1597,32 @@ void RootTask::handleRenderRequest(char *buf)
         pCharInfo->favoriteColor = originalFavoriteColor;
     }
 
-    renderBuffer.bind();
 
     // draw xlu mask only after body is drawn
     // in case there are elements of the mask that go in the body region
-    if (drawStages == DRAW_STAGE_MODE_ALL || drawStages == DRAW_STAGE_MODE_XLU_ONLY)
+    if (drawStages == DRAW_STAGE_MODE_ALL
+        || drawStages == DRAW_STAGE_MODE_XLU_ONLY
+        || drawStages == DRAW_STAGE_MODE_XLU_DEPTH_MASK)
+    {
+        if (drawStages == DRAW_STAGE_MODE_XLU_DEPTH_MASK
+            || drawStages == DRAW_STAGE_MODE_XLU_ONLY)
+        {
+            // Use faceline color as background color.
+            const FFLColor facelineColor = FFLGetFacelineColor(pCharInfo->parts.facelineColor);
+            // Clear color but not depth. This punches out
+            // depth for DrawOpa, intended for overlaying
+            // this image over a DrawOpa image.
+            renderBuffer.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR, { facelineColor.r, facelineColor.g, facelineColor.b, fBackgroundColor.a });
+            // ^^ use alpha from original background color
+        }
+        else if (drawStages == DRAW_STAGE_MODE_XLU_ONLY)
+            renderBuffer.clear(rio::RenderBuffer::CLEAR_FLAG_DEPTH_STENCIL, fBackgroundColor);
+
+        // Bind renderbuffer again
+        renderBuffer.bind();
+
         mpModel->drawXlu(view_mtx, projMtx);
+    }
     RIO_LOG("drawXlu rendered to the buffer.\n");
 
     // copyAndSendRenderBufferToSocket(renderBuffer, &renderTextureColor, new_socket);
@@ -1621,6 +1669,7 @@ void RootTask::handleRenderRequest(char *buf)
     }
 
     closesocket(new_socket);
+    RIO_LOG("Closed socket %d.\n", new_socket);
 }
 
 void RootTask::calc_()
@@ -1634,7 +1683,7 @@ void RootTask::calc_()
     bool hasSocketRequest = false;
 
     if (mSocketIsListening &&
-        (new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) > 0)
+        (new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) > 0)
     {
         int read_bytes =
             recv(new_socket, buf, RENDERREQUEST_SIZE, 0);
@@ -1833,19 +1882,14 @@ void RootTask::exit_()
 
     rio::MemUtil::free(mResourceDesc.pData[FFL_RESOURCE_TYPE_HIGH]);
     if (mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] != 0)
-    {
-        rio::MemUtil::free(mResourceDesc.pData[FFL_RESOURCE_TYPE_MIDDLE]);
-    }
+      rio::MemUtil::free(mResourceDesc.pData[FFL_RESOURCE_TYPE_MIDDLE]);
 
     delete mProjMtxIconBody;
     // delete all shaders that were initialized
     for (int type = 0; type < SHADER_TYPE_MAX; type++)
-    {
         delete mpShaders[type];
-    }
     // delete body models that were initialized earlier
     for (u32 i = 0; i < FFL_GENDER_MAX; i++)
-    {
         delete mpBodyModels[i];
     }
     // delete body models that were initialized earlier

@@ -19,7 +19,7 @@ def main():
     export_as_gltf = True if len(sys.argv) > 5 else False
     """
     if len(sys.argv) < 5:
-        print(f"Usage: {sys.argv[0]} <path to storedata> <resolution> <host> <port> <output file ('-' for stdout)> [expression] [export_as_gltf]")
+        print(f"Usage: {sys.argv[0]} <path to storedata> <resolution> <host> <port> <output file ('-' for stdout)> [expression] [response_format: 1=gltf, 2=tga]")
         return
 
     fflstoredata_file = sys.argv[1]
@@ -28,7 +28,7 @@ def main():
     port = int(sys.argv[4])
     output_file = sys.argv[5]
     expression = int(sys.argv[6]) if len(sys.argv) > 6 else 0
-    export_as_gltf = True if len(sys.argv) > 7 else False
+    response_format = int(sys.argv[7]) if len(sys.argv) > 7 else 0
 
     fflstoredata = read_fflstoredata(fflstoredata_file)
 
@@ -51,13 +51,13 @@ def main():
     # Ensure fflstoredata is exactly 96 bytes
     #fflstoredata = fflstoredata[:96] + b'\x00' * (96 - len(fflstoredata))
 
-    struct_format = '96sHB?HhBBBBIIIhhhhhhBBBBBB???bBBB3x'
+    struct_format = '96sHBBHhBBBBIIIhhhhhhBBBBBB???bBBB3x'
     packed_data = struct.pack(
         struct_format,
         fflstoredata,         # data: 96s
         data_length,          # dataLength: H (uint16_t)
         1 << 0,  # 1 << 5,               # modelType: B (uint8_t)
-        export_as_gltf,       # exportAsGLTF: ? (bool)
+        response_format,      # responseFormat: B (uint8_t)
         resolution,           # resolution: H (uint16_t)
         tex_resolution,       # texResolution: h (int16_t)
         view_type,            # viewType: B (uint8_t)

@@ -63,9 +63,11 @@ inline void GX2InitAttribStream(
 #endif // RIO_IS_CAFE
 
 
-void safeNormalizeVec3(rio::BaseVec3f* vec) {
+void safeNormalizeVec3(rio::BaseVec3f* vec)
+{
     float magnitude = std::sqrt(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
-    if (magnitude != 0.0f) {
+    if (magnitude != 0.0f)
+    {
         vec->x /= magnitude;
         vec->y /= magnitude;
         vec->z /= magnitude;
@@ -75,13 +77,18 @@ void safeNormalizeVec3(rio::BaseVec3f* vec) {
     vec->y = std::fmax(std::fmin(vec->y, 1.0f), -1.0f);
     vec->z = std::fmax(std::fmin(vec->z, 1.0f), -1.0f);
 
-    if (vec->x == 1.0f || vec->x == -1.0f) {
+    if (vec->x == 1.0f || vec->x == -1.0f)
+    {
         vec->y = 0.0f;
         vec->z = 0.0f;
-    } else if (vec->y == 1.0f || vec->y == -1.0f) {
+    }
+    else if (vec->y == 1.0f || vec->y == -1.0f)
+    {
         vec->x = 0.0f;
         vec->z = 0.0f;
-    } else if (vec->z == 1.0f || vec->z == -1.0f) {
+    }
+    else if (vec->z == 1.0f || vec->z == -1.0f)
+    {
         vec->x = 0.0f;
         vec->y = 0.0f;
     }
@@ -100,9 +107,9 @@ void gramSchmidtOrthonormalizeMtx34(rio::BaseMtx34f* mat)
 
     // Extract and normalize the second column
     rio::BaseVec3f c1 = {
-            mat->m[0][1],
-            mat->m[1][1],
-            mat->m[2][1]
+        mat->m[0][1],
+        mat->m[1][1],
+        mat->m[2][1]
     };
     rio::BaseVec3f c1Normalized = c1;
     safeNormalizeVec3(&c1Normalized);
@@ -134,6 +141,7 @@ void gramSchmidtOrthonormalizeMtx34(rio::BaseMtx34f* mat)
     mat->m[1][2] = c2New.y;
     mat->m[2][2] = c2New.z;
 }
+
 
 const float cAlpha = 1.00f;
 
@@ -207,7 +215,8 @@ ShaderMiitomo::~ShaderMiitomo()
 
 #if RIO_IS_WIN
 
-static void loadTextureFromPath(const char* filePathChar, rio::TextureFormat format, s32 width, s32 height, GLuint textureHandle) {
+static void loadTextureFromPath(const char* filePathChar, rio::TextureFormat format, s32 width, s32 height, GLuint textureHandle)
+{
     // Use rio::FileDeviceMgr to load the file
     rio::FileDevice::LoadArg arg;
     const std::string filePath = std::string(filePathChar);
@@ -216,7 +225,8 @@ static void loadTextureFromPath(const char* filePathChar, rio::TextureFormat for
     // not the native file device so it will be in fs/content/
     const u8* data = rio::FileDeviceMgr::instance()->tryLoad(arg);
 
-    if (data == nullptr) {
+    if (data == nullptr)
+    {
         RIO_LOG("NativeFileDevice failed to load when trying to load LUT for ShaderMiitomo: %s\n", filePath.c_str());
         return;
     }
@@ -294,13 +304,15 @@ void ShaderMiitomo::initialize()
 
 #if RIO_IS_WIN
 
-    for (int i = 0; i < LUT_FRESNEL_TYPE_MAX; i++) {
+    for (int i = 0; i < LUT_FRESNEL_TYPE_MAX; i++)
+    {
         sLUTFresTextures[i] = new rio::Texture2D(cLUTTextureFormat, cLUTWidth, cLUTHeight, cLUTNumMips);
         loadTextureFromPath(cLUTFresnelFileNames[i], cLUTTextureFormat, cLUTWidth, cLUTHeight, sLUTFresTextures[i]->getNativeTextureHandle());
 
         //mLUTFresSampler[i].linkTexture2D(sLUTFresTextures[i]);
     }
-    for (int i = 0; i < LUT_SPECULAR_TYPE_MAX; i++) {
+    for (int i = 0; i < LUT_SPECULAR_TYPE_MAX; i++)
+    {
         sLUTSpecTextures[i] = new rio::Texture2D(cLUTTextureFormat, cLUTWidth, cLUTHeight, cLUTNumMips);
         loadTextureFromPath(cLUTSpecularFileNames[i], cLUTTextureFormat, cLUTWidth, cLUTHeight, sLUTSpecTextures[i]->getNativeTextureHandle());
 
@@ -407,6 +419,18 @@ void ShaderMiitomo::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 
     mShader.setUniform(light_enable, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
 
+    mShader.setUniform(cHSLightGroundColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_GROUND_COLOR], u32(-1));
+    mShader.setUniform(cHSLightSkyColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_SKY_COLOR], u32(-1));
+
+
+    mShader.setUniform(cDirLightColor0, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR0], u32(-1));
+    mShader.setUniform(cDirLightColor1, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR1], u32(-1));
+
+    mShader.setUniform(cLightDirAndType0, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE0], u32(-1));
+    mShader.setUniform(cLightDirAndType1, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE1], u32(-1));
+    mShader.setUniform(cDirLightCount, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COUNT], u32(-1));
+
+    mShader.setUniform(cLightColor, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_COLOR]);
 }
 
 void ShaderMiitomo::setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const
@@ -551,6 +575,7 @@ void ShaderMiitomo::setModulateMode_(FFLModulateMode mode)
 void ShaderMiitomo::setModulate_(const FFLModulateParam& modulateParam)
 {
     setModulateMode_(modulateParam.mode);
+    setMaterial_(modulateParam.type);
 
     // if you want to change colors based on modulateParam.type
     // FFL_MODULATE_TYPE_SHAPE_HAIR
@@ -586,32 +611,32 @@ void ShaderMiitomo::setModulate_(const FFLModulateParam& modulateParam)
     bindTexture_(modulateParam);
 }
 
+void ShaderMiitomo::setModulatePantsMaterial(PantsColor pantsColor)
+{
+    const FFLModulateParam modulateParam = {
+        FFL_MODULATE_MODE_CONSTANT,
+        static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS),
+        &cPantsColors[pantsColor],
+        nullptr, // no color G
+        nullptr, // no color B
+        nullptr  // no texture
+    };
+    setModulate_(modulateParam);
+}
+
 void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
 {
-    if (modulateType == FFL_MODULATE_TYPE_SHAPE_NOSELINE) {
-        //mShader.setUniform(0.00f, 0.00f, 0.00f, mVertexUniformLocation[VERTEX_UNIFORM_EYE_PT], u32(-1));
-        mShader.setUniform(false, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
-        return;
-    }
-
-    mShader.setUniform(mLightEnable, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
-
-    mShader.setUniform(cHSLightGroundColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_GROUND_COLOR], u32(-1));
-    mShader.setUniform(cHSLightSkyColor, mVertexUniformLocation[VERTEX_UNIFORM_HS_LIGHT_SKY_COLOR], u32(-1));
-
-
-    mShader.setUniform(cDirLightColor0, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR0], u32(-1));
-    mShader.setUniform(cDirLightColor1, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR1], u32(-1));
-
-    mShader.setUniform(cLightDirAndType0, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE0], u32(-1));
-    mShader.setUniform(cLightDirAndType1, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE1], u32(-1));
-    mShader.setUniform(cDirLightCount, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COUNT], u32(-1));
-
-    mShader.setUniform(cLightColor, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_COLOR]);
-
-    switch (modulateType) {
-        case FFL_MODULATE_TYPE_SHAPE_MASK:
+    // doesn't necessarily set material but tweaks uniforms based on draw type
+    switch (modulateType)
+    {
         case FFL_MODULATE_TYPE_SHAPE_NOSELINE:
+        {
+            //mShader.setUniform(0.00f, 0.00f, 0.00f, mVertexUniformLocation[VERTEX_UNIFORM_EYE_PT], u32(-1));
+            mShader.setUniform(false, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
+            return; // no other uniforms are set
+        }
+        case FFL_MODULATE_TYPE_SHAPE_MASK:
+            [[fallthrough]];
         case FFL_MODULATE_TYPE_SHAPE_GLASS:
             mShader.setUniform(true, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_ALPHA_TEST]);
             [[fallthrough]];
@@ -621,61 +646,10 @@ void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
     }
 }
 
-void ShaderMiitomo::bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo)
-{
-    if (!light_enable)
-    {
-        mIsUsingMaskShader = true;
-        return mpMaskShader->bindBodyShader(light_enable, pCharInfo);
-    }
-    bind(light_enable, pCharInfo);
-    //RIO_GL_CALL(glBindVertexArray(vao));
-
-    setCulling(FFL_CULL_MODE_BACK);
-
-    // set body uniforms
-
-    const FFLColor& favoriteColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
-
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_BODY);
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        // CUSTOM MODULATE TYPE FOR setModulate
-        modulateType,
-        &favoriteColor,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
-    setMaterial_(modulateType);
-}
-
-void ShaderMiitomo::setBodyShaderPantsMaterial(PantsColor pantsColor)
-{
-    if (mIsUsingMaskShader)
-        return mpMaskShader->setBodyShaderPantsMaterial(pantsColor);
-    const FFLColor& color = cPantsColors[pantsColor];
-
-    const FFLModulateType modulateType = static_cast<FFLModulateType>(CUSTOM_MATERIAL_PARAM_PANTS);
-    const FFLModulateParam modulateParam = {
-        FFL_MODULATE_MODE_CONSTANT,
-        // CUSTOM MODULATE TYPE FOR setModulate
-        modulateType,
-        &color,
-        nullptr, // no color G
-        nullptr, // no color B
-        nullptr  // no texture
-    };
-    setModulate_(modulateParam);
-    setMaterial_(modulateType);
-}
-
 void ShaderMiitomo::draw_(const FFLDrawParam& draw_param)
 {
     setCulling(draw_param.cullMode);
     setModulate_(draw_param.modulateParam);
-    setMaterial_(draw_param.modulateParam.type);
 
     if (draw_param.primitiveParam.pIndexBuffer != nullptr)
     {
@@ -692,7 +666,7 @@ void ShaderMiitomo::draw_(const FFLDrawParam& draw_param)
 #elif RIO_IS_WIN
 
         GLuint indexBufferHandle;
-        glGenBuffers(1, &indexBufferHandle);  // Generate a new buffer
+        RIO_GL_CALL(glGenBuffers(1, &indexBufferHandle));  // Generate a new buffer
 
         for (int type = FFL_ATTRIBUTE_BUFFER_TYPE_POSITION; type <= FFL_ATTRIBUTE_BUFFER_TYPE_COLOR; ++type)
         {

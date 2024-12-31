@@ -35,6 +35,7 @@ var (
 	db               *sql.DB
 	upstreamTCP      string
 	useXForwardedFor bool
+	loggingEnabled   bool
 )
 
 // RenderRequest is the equivalent struct in Go for handling the render request data.
@@ -140,10 +141,11 @@ var modelTypes = map[string]int{
 }
 
 var drawStageModes = map[string]int{
-	"all":       0,
-	"opa_only":  1,
-	"xlu_only":  2,
-	"mask_only": 3,
+	"all":            0,
+	"opa_only":       1,
+	"xlu_only":       2,
+	"mask_only":      3,
+	"xlu_depth_mask": 4,
 }
 
 func isConnectionRefused(err error) bool {
@@ -168,6 +170,7 @@ func main() {
 	flag.StringVar(&upstreamAddr, "upstream", "localhost:12346", "Upstream TCP server address")
 	flag.BoolVar(&useXForwardedFor, "use-x-forwarded-for", false, "Use X-Forwarded-For header for client IP")
 	flag.StringVar(&corsOrigin, "cors", "", "CORS origin to allow. Set to * to allow all origins. Leave blank to disable CORS header.")
+	flag.BoolVar(&loggingEnabled, "enable-benchmarking", false, "Log how much time each request is taking.")
 
 	flag.Parse()
 
@@ -216,20 +219,22 @@ func main() {
 		log.Println("now listening on", host)
 	}
 
+	handler := logRequest(http.DefaultServeMux)
+
 	if certFile != "" && keyFile != "" {
 		if udsListener != nil {
 			// listen on unix socket
-			err = http.ServeTLS(*udsListener, nil, certFile, keyFile)
+			err = http.ServeTLS(*udsListener, handler, certFile, keyFile)
 		} else {
-			err = http.ListenAndServeTLS(host, certFile, keyFile, nil)
+			err = http.ListenAndServeTLS(host, certFile, keyFile, handler)
 		}
 	} else {
 		// no handler because we defined HandleFunc
 		if udsListener != nil {
 			// listen on unix socket
-			err = http.Serve(*udsListener, nil)
+			err = http.Serve(*udsListener, handler)
 		} else {
-			err = http.ListenAndServe(host, nil)
+			err = http.ListenAndServe(host, handler)
 		}
 	}
 	// this will only be reached when either function returns
@@ -424,6 +429,21 @@ func colorQueryParameters(query string) string {
 }
 
 // END ACCESS LOG SECTION
+
+func beginTimeMeasure() *time.Time {
+	if !loggingEnabled {
+		return nil
+	}
+	time := time.Now()
+	return &time
+}
+func logTimeSincePrintfln(inTime *time.Time, printString string) {
+	if inTime == nil {
+		return
+	}
+	ms := time.Since(*inTime).Milliseconds()
+	log.Printf(printString+"\n", ms)
+}
 
 // fetchDataFromDB fetches the data from the database for a given NNID
 func fetchDataFromDB(nnid string) ([]byte, error) {
@@ -1026,6 +1046,9 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	// Copying store data into the request data buffer
 	copy(renderRequest.Data[:], storeData)
 
+	// Time taken for sendRenderRequest to respond
+	durationSendRequest := beginTimeMeasure()
+
 	var bufferData []byte
 	var reader io.Reader
 	// Send the render request and receive the initial buffer and reader
@@ -1034,9 +1057,11 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		handleRenderRequestError(w, bufferData, err)
 		return
 	}
+
 	fullReader := bufio.NewReader(io.MultiReader(bytes.NewReader(bufferData), reader)) // use bufio to allow discard
 
 	if responseFormat == 1 { // gltf
+		logTimeSincePrintfln(durationSendRequest, "Time for streamRenderRequest (glTF export): %d ms")
 		// Read size from GLB header
 		var glbHeader GLBHeader
 		if err := binary.Read(bytes.NewReader(bufferData), binary.LittleEndian, &glbHeader); err != nil {
@@ -1067,6 +1092,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 		return // done copying the gltf response
 	} else {
+		logTimeSincePrintfln(durationSendRequest, "Time for sendRenderRequest: %d ms")
 	}
 
 	// If no error, interpret initial buffer as TGA header
@@ -1086,6 +1112,8 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logTimeSincePrintfln(durationSendRequest, "Time from send to image read full: %d ms")
+
 	// Create an image directly using the read data
 	img := &image.NRGBA{
 		Pix: imageData,
@@ -1096,6 +1124,8 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ssaaFactor != 1 {
+		// Start measuring time for scaling the image
+		startScaling := beginTimeMeasure()
 		// Scale down image by the ssaaFactor
 		width := int(tgaHeader.Width) / ssaaFactor
 		height := int(tgaHeader.Height) / ssaaFactor
@@ -1105,6 +1135,9 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		draw.ApproxBiLinear.Scale(scaledImg, scaledImg.Bounds(), img, img.Bounds(), draw.Over, nil)
 		// replace the image with the scaled version
 		img = scaledImg
+
+		// Time taken for sendRenderRequest to respond
+		logTimeSincePrintfln(startScaling, "Time to scale the image: %d ms")
 	}
 
 	if responseFormat == 2 { // tga
@@ -1134,10 +1167,13 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		return // done copying the tga response
 	}
 	// otherwise encode as png
+	startEncoding := beginTimeMeasure()
 
 	// Sending the image as a PNG response
 	header.Set("Content-Type", "image/png")
+
 	png.Encode(w, img)
+	logTimeSincePrintfln(startEncoding, "Time to encode PNG: %d ms")
 }
 
 // Expression constants

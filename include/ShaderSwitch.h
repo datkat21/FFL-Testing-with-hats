@@ -18,13 +18,13 @@ public:
 
     void bind(bool light_enable, FFLiCharInfo* charInfo) override;
 
-    void bindBodyShader(bool light_enable, FFLiCharInfo* pCharInfo) override;
-    void setBodyShaderPantsMaterial(PantsColor pantsColor) override;
-
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
-    void setViewUniformBody(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override {
-        setViewUniform(model_mtx, view_mtx, proj_mtx);
-    };
+
+    void setModulate(const FFLModulateParam& modulateParam) override
+    {
+        setModulate_(modulateParam);
+    }
+    void setModulatePantsMaterial(PantsColor pantsColor) override;
 
     void applyAlphaTestEnable() const override
     {
@@ -48,8 +48,9 @@ private:
     void setConstColor_(u32 ps_loc, const FFLColor& color);
     void setModulateMode_(FFLModulateMode mode);
     void setModulate_(const FFLModulateParam& modulateParam);
+    void setDrawType_(const FFLModulateParam& modulateParam);
 
-    void setMaterial_(const FFLModulateParam& modulateParam);
+    void setMaterial_(const FFLModulateType modulateType);
 
     void draw_(const FFLDrawParam& draw_param);
     static void drawCallback_(void* p_obj, const FFLDrawParam* draw_param);

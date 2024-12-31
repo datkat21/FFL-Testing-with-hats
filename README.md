@@ -78,6 +78,8 @@ Sample using [the FFL decomp](https://github.com/aboood40091/ffl) and [RIO frame
 
 https://github.com/user-attachments/assets/cdc358e4-0b1f-4b93-b7fd-f61fa4d215e1
 
+* Note that it's a known issue for Mii textures to look corrupted on Wii U. This does not happen with the original decompilation, only the RIO branch.
+
 ## Running
 
 1. Clone the repo, _recursively_.

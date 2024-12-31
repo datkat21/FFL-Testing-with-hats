@@ -10,6 +10,7 @@
 #include <nn/ffl/FFLiMiiData.h>
 
 #include <RenderRequest.h>
+#include <Types.h> // enums for RootTask
 
 #define FFLICHARINFO_SIZE sizeof(FFLiCharInfo)
 
@@ -49,6 +50,7 @@ private:
     void handleGLTFRequest(RenderRequest *renderRequest);
 #endif
 
+    void loadResourceFiles_();
     void createModel_();
     // void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
     bool createModel_(RenderRequest *buf, int socket_handle);
@@ -59,23 +61,23 @@ private:
         {
             switch (type)
             {
-            case SHADER_TYPE_WIIU:
-                mpShaders[type] = new Shader();
-                break;
-            case SHADER_TYPE_WIIU_BLINN:
-            {
-                Shader *s = new Shader();
-                s->setSpecularMode(FFL_SPECULAR_MODE_BLINN);
-                mpShaders[type] = s;
-                break;
-            }
-            case SHADER_TYPE_SWITCH:
-                mpShaders[type] = new ShaderSwitch();
-                break;
-            case SHADER_TYPE_MIITOMO:
-                // miitomo shader needs wii u shader to draw mask
-                mpShaders[type] = new ShaderMiitomo(mpShaders[SHADER_TYPE_WIIU]);
-                break;
+                case SHADER_TYPE_WIIU:
+                    mpShaders[type] = new Shader();
+                    break;
+                case SHADER_TYPE_WIIU_BLINN:
+                {
+                    Shader* s = new Shader();
+                    s->setSpecularMode(FFL_SPECULAR_MODE_BLINN);
+                    mpShaders[type] = s;
+                    break;
+                }
+                case SHADER_TYPE_SWITCH:
+                    mpShaders[type] = new ShaderSwitch();
+                    break;
+                case SHADER_TYPE_MIITOMO:
+                    // miitomo shader needs wii u shader to draw mask
+                    mpShaders[type] = new ShaderMiitomo(mpShaders[SHADER_TYPE_WIIU]);
+                    break;
             }
             mpShaders[type]->initialize();
         }
