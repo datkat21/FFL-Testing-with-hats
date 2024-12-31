@@ -50,7 +50,7 @@ type RenderRequest struct {
 	ResourceType    uint8
 	ShaderType      uint8
 	Expression      uint8
-	ExpressionFlag  FFLAllExpressionFlag //uint32 // used if there are multiple
+	ExpressionFlag  FFLAllExpressionFlag //uint32  // used if there are multiple
 	CameraRotate    [3]int16
 	ModelRotate     [3]int16
 	BackgroundColor [4]uint8
@@ -62,16 +62,11 @@ type RenderRequest struct {
 	LightEnable          bool
 	ClothesColor         int8 // default: -1
 	PantsColor           uint8
-	InstanceCount        uint8 // UNUSED
-	InstanceRotationMode uint8 // UNUSED
-	// SetLightDirection bool
-	// LightDirection    [3]int32
-
-	// Custom
-	HatType  uint8
-	HatColor uint8
-	BodyType uint8
-	// _        [1]byte // padding for alignment
+	BodyType             int8
+	InstanceCount        uint8
+	InstanceRotationMode uint8
+	LightDirection       [3]int16 // default/unset: -1
+	//_                    [3]byte // padding for alignment
 }
 
 const FFL_EXPRESSION_LIMIT = 70
@@ -130,8 +125,9 @@ var viewTypes = map[string]int{
 	"face_only":        1,
 	"all_body":         2,
 	"fflmakeicon":      3,
-	"variableiconbody": 4,
-	"all_body_sugar":   5,
+	"ffliconwithbody":  4,
+	"variableiconbody": 5,
+	"all_body_sugar":   6,
 }
 
 var modelTypes = map[string]int{
@@ -617,11 +613,17 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 	resourceTypeStr := query.Get("resourceType")
 	if resourceTypeStr == "" {
+		// TODO: should be -1 instead?
 		resourceTypeStr = "1"
 	}
 	shaderTypeStr := query.Get("shaderType")
 	if shaderTypeStr == "" {
+		// TODO: should server determine default (-1)?
 		shaderTypeStr = "0"
+	}
+	bodyTypeStr := query.Get("bodyType")
+	if bodyTypeStr == "" {
+		bodyTypeStr = "-1" // based on shader type
 	}
 	clothesColorStr := query.Get("clothesColor")
 	if clothesColorStr == "" {
@@ -812,7 +814,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// now try to parse it as a string
 		// this defaults to normal if it fails
-		expression = getExpressionInt(expressionStr)
+		expression = getMapToInt(expressionStr, expressionMap, FFL_EXPRESSION_NORMAL)
 	}
 
 	if expression > 18 && resourceType < 1 {
@@ -839,7 +841,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				// now try to parse it as a string
 				// this defaults to normal if it fails
-				expression = getExpressionInt(expressionStr)
+				expression = getMapToInt(expressionStr, expressionMap, FFL_EXPRESSION_NORMAL)
 			}
 			// set expression flag
 			// Bitwise OR to combine all the flags
@@ -851,7 +853,12 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	var clothesColor int
 	clothesColor, err = strconv.Atoi(clothesColorStr)
 	if err != nil {
-		clothesColor = getClothesColorInt(clothesColorStr)
+		clothesColor = getMapToInt(clothesColorStr, clothesColorMap, -1)
+	}
+	var pantsColor int
+	pantsColor, err = strconv.Atoi(pantsColorStr)
+	if err != nil {
+		pantsColor = getMapToInt(pantsColorStr, pantsColorMap, 0)
 	}
 
 	// Parsing and validating width
@@ -962,50 +969,13 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 	bgColor4u8 := [4]uint8{bgColor.R, bgColor.G, bgColor.B, bgColor.A}
 
-	/*shaderType := 0
-	if resourceType > 1 {
-		shaderType = 1
-	}*/
 	shaderType, err := strconv.Atoi(shaderTypeStr)
 	if err != nil {
-		http.Error(w, "shader type is not a number", http.StatusBadRequest)
-		return
+		shaderType = getMapToInt(shaderTypeStr, shaderTypeMap, 0)
 	}
-
-	pantsColorStr := query.Get("pantsColor")
-	if pantsColorStr == "" {
-		if shaderType == 0 || shaderType == 3 {
-			pantsColorStr = "red"
-		} else {
-			pantsColorStr = "gray"
-		}
-	}
-	var pantsColor int
-	pantsColor, err = strconv.Atoi(pantsColorStr)
+	bodyType, err := strconv.Atoi(bodyTypeStr)
 	if err != nil {
-		pantsColor = getPantsColorInt(pantsColorStr)
-	}
-
-	if bodyTypeStr == "" {
-		if shaderType == 0 || shaderType == 3 {
-			bodyTypeStr = "wiiu"
-		} else if shaderType == 1 {
-			bodyTypeStr = "switch"
-		} else if shaderType == 2 {
-			bodyTypeStr = "miitomo"
-		}
-	}
-
-	var bodyType int
-	bodyType, err = strconv.Atoi(bodyTypeStr)
-	if err != nil {
-		bodyType = getBodyTypeInt(bodyTypeStr)
-	}
-
-	// prevent crash lol!
-	if bodyType > 2 {
-		// prefer studio model because some ppl like it...
-		bodyType = 2
+		bodyType = getMapToInt(bodyTypeStr, bodyTypeMap, -1)
 	}
 
 	// Creating the render request
@@ -1024,9 +994,9 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		CameraRotate:    cameraRotateVec3i,
 		ModelRotate:     modelRotateVec3i,
 		BackgroundColor: bgColor4u8,
-		/*InstanceCount:   uint8(instanceCount),
-		InstanceRotationModeIsCamera: false,
-		*/
+		BodyType:        int8(bodyType),
+		InstanceCount:   uint8(instanceCount),
+		//InstanceRotationModeIsCamera: false,
 		DrawStageMode:  uint8(drawStageMode),
 		VerifyCharInfo: verifyCharInfo,
 		HatType:        uint8(hatType),
@@ -1199,6 +1169,23 @@ const (
 	FFL_EXPRESSION_FRUSTRATED            = 18
 )
 
+var shaderTypeMap = map[string]int{
+	//"default":     -1,
+	"wiiu":            0,
+	"switch":          1,
+	"miitomo":         2,
+	"wiiu_blinn":      3,
+	"ffliconwithbody": 4,
+}
+
+var bodyTypeMap = map[string]int{
+	"default":    -1,
+	"wiiu":       0,
+	"switch":     1,
+	"miitomo":    2,
+	"fflbodyres": 3,
+}
+
 // Map of expression strings to their respective flags
 // NOTE: Mii Studio expression parameters, which
 // this aims to be compatible with, use
@@ -1279,70 +1266,23 @@ var hatColorMap = map[string]int{
 }
 
 var pantsColorMap = map[string]int{
+	//"default": -1,
 	"gray": 0,
 	"blue": 1,
 	"red":  2,
 	"gold": 3,
+	"body": 4,
+	"none": 5,
 }
 
-var bodyTypeMap = map[string]int{
-	"wiiu":    0,
-	"switch":  1,
-	"miitomo": 2,
-}
-
-func getExpressionInt(input string) int {
+func getMapToInt(input string, theMap map[string]int, defaultValue int) int {
 	input = strings.ToLower(input)
-	if expression, exists := expressionMap[input]; exists {
-		return expression
+	if value, exists := theMap[input]; exists {
+		return value
 	}
 	// NOTE: mii studio rejects requests if the string doesn't match ..
 	// .. perhaps we should do the same
-	return FFL_EXPRESSION_NORMAL
-}
-
-func getPantsColorInt(input string) int {
-	input = strings.ToLower(input)
-	if colorIdx, exists := pantsColorMap[input]; exists {
-		return colorIdx
-	}
-	// NOTE: mii studio rejects requests if the string doesn't match ..
-	// .. perhaps we should do the same
-	return 0
-}
-
-func getClothesColorInt(input string) int {
-	input = strings.ToLower(input)
-	if colorIdx, exists := clothesColorMap[input]; exists {
-		return colorIdx
-	}
-	// NOTE: mii studio rejects requests if the string doesn't match ..
-	// .. perhaps we should do the same
-	return -1
-}
-
-func getHatColorInt(input string) int {
-	input = strings.ToLower(input)
-	if colorIdx, exists := hatColorMap[input]; exists {
-		return colorIdx
-	}
-	return -1
-}
-
-func getHatTypeInt(input string) int {
-	input = strings.ToLower(input)
-	if colorIdx, exists := hatTypeMap[input]; exists {
-		return colorIdx
-	}
-	return -1
-}
-
-func getBodyTypeInt(input string) int {
-	input = strings.ToLower(input)
-	if colorIdx, exists := bodyTypeMap[input]; exists {
-		return colorIdx
-	}
-	return -1
+	return defaultValue
 }
 
 // NOTE: BELOW IS IN nwf-mii-cemu-toy handlers.go

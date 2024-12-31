@@ -2,6 +2,24 @@
 #include <ShaderSwitch.h>
 #include <ShaderMiitomo.h>
 
+
+// for socket
+#if RIO_IS_WIN && defined(_WIN32)
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+#elif RIO_IS_WIN
+    #define closesocket close
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <fcntl.h>
+    #ifdef USE_SYSTEMD_SOCKET
+        #include <systemd/sd-daemon.h>
+    #endif // USE_SYSTEMD_SOCKET
+#endif // RIO_IS_WIN && defined(_WIN32)
+
 #include <gfx/rio_Camera.h>
 #include <gfx/mdl/rio_Model.h>
 #include <task/rio_Task.h>
@@ -45,12 +63,13 @@ private:
     void calc_() override;
     void exit_() override;
 
-    void handleRenderRequest(char *buf);
+    void handleRenderRequest(char* buf, Model* pModel, int socket);
 #ifndef NO_GLTF
     void handleGLTFRequest(RenderRequest *renderRequest);
 #endif
 
     void loadResourceFiles_();
+    void loadBodyModels_();
     void createModel_();
     // void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
     bool createModel_(RenderRequest *buf, int socket_handle);
@@ -71,6 +90,16 @@ private:
                     mpShaders[type] = s;
                     break;
                 }
+                case SHADER_TYPE_WIIU_FFLICONWITHBODY:
+                {
+                    Shader* s = new Shader();
+                    s->setLightAmbient({ 0.5f, 0.5f, 0.5f, 1.0f });
+                    s->setLightDiffuse({ 0.9f, 0.9f, 0.9f, 1.0f });
+                    s->setLightSpecular({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+                    mpShaders[type] = s;
+                    break;
+                }
                 case SHADER_TYPE_SWITCH:
                     mpShaders[type] = new ShaderSwitch();
                     break;
@@ -87,15 +116,8 @@ private:
     void setupSocket_();
 #endif
 
-    // NOTE: bc of the amount of arguments, consider putting this in mpModel
-    void drawMiiBody(Model *pModel, PantsColor pantsColor, uint8_t bodyType,
-                     rio::Matrix34f &model_mtx, rio::BaseMtx34f &view_mtx,
-                     rio::BaseMtx44f &proj_mtx, const rio::Vector3f scaleFactors);
-    void drawMiiHat(Model *pModel, uint8_t &hatType,
-                    rio::Matrix34f &model_mtx, rio::BaseMtx34f &view_mtx,
-                    rio::BaseMtx44f &proj_mtx, const rio::Vector3f scaleFactors);
-
-    void setViewTypeParams(ViewType viewType, rio::LookAtCamera *pCamera, rio::BaseMtx44f *projMtx, float *aspectHeightFactor, bool *isCameraPosAbsolute, bool *willDrawBody, FFLiCharInfo *pCharInfo);
+    rio::mdl::Model* getBodyModel_(Model* pModel, BodyType type);
+    void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
 
 private:
     bool mInitialized;
@@ -103,16 +125,20 @@ private:
 #if RIO_IS_WIN
     std::vector<std::vector<char>> mStoreDataArray;
 #endif
-    FFLResourceDesc mResourceDesc;
-    IShader *mpShaders[SHADER_TYPE_MAX];
-    rio::BaseMtx44f mProjMtx;
-    rio::BaseMtx44f *mProjMtxIconBody;
-    rio::LookAtCamera mCamera;
-    f32 mCounter;
-    s32 mMiiCounter;
-    Model *mpModel;
-    rio::mdl::Model *mpBodyModels[6];
-    rio::mdl::Model *mpHatModels[10];
-    const char *mpServerOnly;
-    const char *mpNoSpin;
+    FFLResourceDesc     mResourceDesc;
+    IShader*            mpShaders[SHADER_TYPE_MAX];
+    rio::BaseMtx44f     mProjMtx;
+    rio::BaseMtx44f*    mProjMtxIconBody;
+    rio::LookAtCamera   mCamera;
+    f32                 mCounter;
+    s32                 mMiiCounter;
+    Model*              mpModel;
+    rio::mdl::Model*    mpBodyModels[BODY_TYPE_MAX][FFL_GENDER_MAX];
+    const char*         mpServerOnly;
+    const char*         mpNoSpin;
+
+    // For server
+    int                 mServerFD;
+    int                 mServerSocket;
+    sockaddr_in         mServerAddress;
 };

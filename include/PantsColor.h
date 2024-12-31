@@ -5,10 +5,13 @@ enum PantsColor {
     PANTS_COLOR_BLUE,
     PANTS_COLOR_RED,
     PANTS_COLOR_GOLD,
+    PANTS_COLOR_COUNT = PANTS_COLOR_GOLD + 1,
+    PANTS_COLOR_SAME_AS_BODY,
+    PANTS_COLOR_NO_DRAW_PANTS,
     PANTS_COLOR_MAX
 };
 
-const FFLColor cPantsColors[PANTS_COLOR_MAX] =
+const FFLColor cPantsColors[PANTS_COLOR_COUNT] =
 {
     // gray - one of your own miis
     // nn::mii::detail::PantsNormalColor

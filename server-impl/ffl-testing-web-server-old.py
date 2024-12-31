@@ -103,7 +103,7 @@ class RenderRequest:
 
     def pack(self):
         return struct.pack(
-            '96sHB?HhBBBBIIIhhhhhhBBBBBB???bBBB3x',
+            '96sHB?HhBBBBIIIhhhhhhBBBBBB???bBbBBhhh',
             self.data,                 # data: 96s
             self.data_length,          # dataLength: H (uint16_t)
             1 << 0,                    # modelType: B (uint8_t)
@@ -132,8 +132,12 @@ class RenderRequest:
             self.light_enable,         # lightEnable: ? (bool)
             self.clothes_color,        # clothesColor: b (int8_t)
             self.pants_color,          # pantsColor: B (uint8_t)
+            -1,                        # bodyType: b (int8_t)
             0,                         # instanceCount: B (uint8_t)
-            0                          # instanceRotationMode: B (uint8_t)
+            0,                         # instanceRotationMode: B (uint8_t)
+            -1,                        # lightDirection.x: h (int16_t)
+            -1,                        # lightDirection.y: h (int16_t)
+            -1                         # lightDirection.z: h (int16_t)
         )
 
 """
@@ -269,6 +273,7 @@ def render_image():
                 'face_only',
                 'all_body',
                 'fflmakeicon',
+                'ffliconwithbody',
                 'variableiconbody'].index(type_, 0)
 
     mipmap_enable = mipmap_enable == '1'
