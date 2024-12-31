@@ -29,9 +29,9 @@ struct RenderRequest {
     bool     lightEnable;
     int8_t   clothesColor;   // favorite color, -1 for default
     uint8_t  pantsColor;     // corresponds to PantsColor
+    int8_t   bodyType;       // BodyType, -1 = default for shader
 
-    uint8_t  instanceCount;  // TODO
+    uint8_t  instanceCount;
     uint8_t  instanceRotationMode;
-    //bool          setLightDirection;
-    //int16_t       lightDirection[3];
+    int16_t  lightDirection[3]; // unset if all negative
 };

@@ -39,47 +39,49 @@ var (
 
 // RenderRequest is the equivalent struct in Go for handling the render request data.
 type RenderRequest struct {
-	Data                 [96]byte
-	DataLength           uint16
-	ModelFlag            uint8
-	ResponseFormat       uint8   // rgba, gltf, tga
-	Resolution           uint16
-	TexResolution        int16
-	ViewType             uint8
-	ResourceType         uint8
-	ShaderType           uint8
-	Expression           uint8
-	ExpressionFlag       FFLAllExpressionFlag //uint32  // used if there are multiple
-	CameraRotate         [3]int16
-	ModelRotate          [3]int16
-	BackgroundColor      [4]uint8
+	Data            [96]byte
+	DataLength      uint16
+	ModelFlag       uint8
+	ResponseFormat  uint8 // rgba, gltf, tga
+	Resolution      uint16
+	TexResolution   int16
+	ViewType        uint8
+	ResourceType    uint8
+	ShaderType      uint8
+	Expression      uint8
+	ExpressionFlag  FFLAllExpressionFlag //uint32  // used if there are multiple
+	CameraRotate    [3]int16
+	ModelRotate     [3]int16
+	BackgroundColor [4]uint8
 
-	AAMethod             uint8   // UNUSED
+	AAMethod             uint8 // UNUSED
 	DrawStageMode        uint8
 	VerifyCharInfo       bool
 	VerifyCRC16          bool
 	LightEnable          bool
-	ClothesColor         int8    // default: -1
+	ClothesColor         int8 // default: -1
 	PantsColor           uint8
-	InstanceCount        uint8   // UNUSED
-	InstanceRotationMode uint8   // UNUSED
-	_                    [3]byte // padding for alignment
-	//SetLightDirection bool
-	//LightDirection    [3]int32
+	BodyType             int8
+	InstanceCount        uint8
+	InstanceRotationMode uint8
+	LightDirection       [3]int16 // default/unset: -1
+	//_                    [3]byte // padding for alignment
 }
 
 const FFL_EXPRESSION_LIMIT = 70
+
 type FFLAllExpressionFlag struct {
 	Flags [3]uint32 // 0-96
 }
+
 func SetExpressionFlagIndex(ef *FFLAllExpressionFlag, index int, set bool) {
 	if index < 0 || index >= FFL_EXPRESSION_LIMIT {
 		fmt.Printf("FFLSetExpressionFlagIndex: input out of range: %d\n", index)
 		return // Do not set anything.
 	}
 
-	part := index / 32       // Determine which 32-bit block
-	bitIndex := index % 32   // Determine which bit within the block
+	part := index / 32     // Determine which 32-bit block
+	bitIndex := index % 32 // Determine which bit within the block
 
 	if set {
 		ef.Flags[part] |= (1 << bitIndex) // Set the bit
@@ -87,7 +89,6 @@ func SetExpressionFlagIndex(ef *FFLAllExpressionFlag, index int, set bool) {
 		ef.Flags[part] &^= (1 << bitIndex) // Clear the bit
 	}
 }
-
 
 // TGAHeader is put in front of render responses.
 // It indicates the width, height, and BPP of the render.
@@ -123,8 +124,9 @@ var viewTypes = map[string]int{
 	"face_only":        1,
 	"all_body":         2,
 	"fflmakeicon":      3,
-	"variableiconbody": 4,
-	"all_body_sugar":   5,
+	"ffliconwithbody":  4,
+	"variableiconbody": 5,
+	"all_body_sugar":   6,
 }
 
 var modelTypes = map[string]int{
@@ -435,7 +437,7 @@ func logTimeSincePrintfln(inTime *time.Time, printString string) {
 		return
 	}
 	ms := time.Since(*inTime).Milliseconds()
-	log.Printf(printString + "\n", ms)
+	log.Printf(printString+"\n", ms)
 }
 
 // fetchDataFromDB fetches the data from the database for a given NNID
@@ -610,11 +612,17 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 	resourceTypeStr := query.Get("resourceType")
 	if resourceTypeStr == "" {
+		// TODO: should be -1 instead?
 		resourceTypeStr = "1"
 	}
 	shaderTypeStr := query.Get("shaderType")
 	if shaderTypeStr == "" {
+		// TODO: should server determine default (-1)?
 		shaderTypeStr = "0"
+	}
+	bodyTypeStr := query.Get("bodyType")
+	if bodyTypeStr == "" {
+		bodyTypeStr = "-1" // based on shader type
 	}
 	clothesColorStr := query.Get("clothesColor")
 	if clothesColorStr == "" {
@@ -785,7 +793,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// now try to parse it as a string
 		// this defaults to normal if it fails
-		expression = getExpressionInt(expressionStr)
+		expression = getMapToInt(expressionStr, expressionMap, FFL_EXPRESSION_NORMAL)
 	}
 
 	if expression > 18 && resourceType < 1 {
@@ -812,7 +820,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				// now try to parse it as a string
 				// this defaults to normal if it fails
-				expression = getExpressionInt(expressionStr)
+				expression = getMapToInt(expressionStr, expressionMap, FFL_EXPRESSION_NORMAL)
 			}
 			// set expression flag
 			// Bitwise OR to combine all the flags
@@ -824,12 +832,12 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	var clothesColor int
 	clothesColor, err = strconv.Atoi(clothesColorStr)
 	if err != nil {
-		clothesColor = getClothesColorInt(clothesColorStr)
+		clothesColor = getMapToInt(clothesColorStr, clothesColorMap, -1)
 	}
 	var pantsColor int
 	pantsColor, err = strconv.Atoi(pantsColorStr)
 	if err != nil {
-		pantsColor = getPantsColorInt(pantsColorStr)
+		pantsColor = getMapToInt(pantsColorStr, pantsColorMap, 0)
 	}
 
 	// Parsing and validating width
@@ -940,14 +948,14 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 	bgColor4u8 := [4]uint8{bgColor.R, bgColor.G, bgColor.B, bgColor.A}
 
-	/*shaderType := 0
-	if resourceType > 1 {
-		shaderType = 1
-	}*/
+
 	shaderType, err := strconv.Atoi(shaderTypeStr)
 	if err != nil {
-		http.Error(w, "shader type is not a number", http.StatusBadRequest)
-		return
+		shaderType = getMapToInt(shaderTypeStr, shaderTypeMap, 0)
+	}
+	bodyType, err := strconv.Atoi(bodyTypeStr)
+	if err != nil {
+		bodyType = getMapToInt(bodyTypeStr, bodyTypeMap, -1)
 	}
 
 	// Creating the render request
@@ -966,9 +974,9 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		CameraRotate:    cameraRotateVec3i,
 		ModelRotate:     modelRotateVec3i,
 		BackgroundColor: bgColor4u8,
-		/*InstanceCount:   uint8(instanceCount),
-		InstanceRotationModeIsCamera: false,
-		*/
+		BodyType:        int8(bodyType),
+		InstanceCount:   uint8(instanceCount),
+		//InstanceRotationModeIsCamera: false,
 		DrawStageMode:  uint8(drawStageMode),
 		VerifyCharInfo: verifyCharInfo,
 		VerifyCRC16:    verifyCRC16,
@@ -1055,7 +1063,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 	// Create an image directly using the read data
 	img := &image.NRGBA{
-		Pix:    imageData,
+		Pix: imageData,
 		// NOTE: ig this assumes it could be not rgba
 		// but we are... composing rgba
 		Stride: int(tgaHeader.Width) * bytesPerPixel,
@@ -1087,7 +1095,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 		// size is deterministic so set it
 		imageDataSize := int(img.Rect.Dx()) * int(img.Rect.Dy()) * 4 // NRGBA
-		size := imageDataSize + 18 // tga header size
+		size := imageDataSize + 18                                   // tga header size
 		header.Set("Content-Length", strconv.Itoa(size))
 		header.Set("Content-Type", "image/tga")
 
@@ -1138,6 +1146,23 @@ const (
 	FFL_EXPRESSION_FRUSTRATED            = 18
 )
 
+var shaderTypeMap = map[string]int{
+	//"default":     -1,
+	"wiiu":            0,
+	"switch":          1,
+	"miitomo":         2,
+	"wiiu_blinn":      3,
+	"ffliconwithbody": 4,
+}
+
+var bodyTypeMap = map[string]int{
+	"default":    -1,
+	"wiiu":       0,
+	"switch":     1,
+	"miitomo":    2,
+	"fflbodyres": 3,
+}
+
 // Map of expression strings to their respective flags
 // NOTE: Mii Studio expression parameters, which
 // this aims to be compatible with, use
@@ -1187,40 +1212,23 @@ var clothesColorMap = map[string]int{
 }
 
 var pantsColorMap = map[string]int{
+	//"default": -1,
 	"gray": 0,
 	"blue": 1,
 	"red":  2,
 	"gold": 3,
+	"body": 4,
+	"none": 5,
 }
 
-func getExpressionInt(input string) int {
+func getMapToInt(input string, theMap map[string]int, defaultValue int) int {
 	input = strings.ToLower(input)
-	if expression, exists := expressionMap[input]; exists {
-		return expression
+	if value, exists := theMap[input]; exists {
+		return value
 	}
 	// NOTE: mii studio rejects requests if the string doesn't match ..
 	// .. perhaps we should do the same
-	return FFL_EXPRESSION_NORMAL
-}
-
-func getPantsColorInt(input string) int {
-	input = strings.ToLower(input)
-	if colorIdx, exists := pantsColorMap[input]; exists {
-		return colorIdx
-	}
-	// NOTE: mii studio rejects requests if the string doesn't match ..
-	// .. perhaps we should do the same
-	return 0
-}
-
-func getClothesColorInt(input string) int {
-	input = strings.ToLower(input)
-	if colorIdx, exists := clothesColorMap[input]; exists {
-		return colorIdx
-	}
-	// NOTE: mii studio rejects requests if the string doesn't match ..
-	// .. perhaps we should do the same
-	return -1
+	return defaultValue
 }
 
 // NOTE: BELOW IS IN nwf-mii-cemu-toy handlers.go

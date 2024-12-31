@@ -7,11 +7,12 @@
 
 #include <IShader.h>
 #include <Model.h>
+#include <Types.h>
 
 class BodyModel
 {
 public:
-    BodyModel(rio::mdl::Model* pBodyModel);
+    BodyModel(rio::mdl::Model* pBodyModel, BodyType type);
     ~BodyModel();
 
     void initialize(Model* pModel, PantsColor pantsColor);
@@ -40,5 +41,6 @@ private:
     rio::Vector3f          mBodyScale;
     IShader*               mpShader;
     FFLColor               mBodyColor; // aka favorite color
+    BodyType               mBodyType;
     PantsColor             mPantsColor;
 };

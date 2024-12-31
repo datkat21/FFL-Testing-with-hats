@@ -15,5 +15,5 @@ const char* cBodyGenderStrings[FFL_GENDER_MAX] = {
     "female" // FFL_GENDER_FEMALE
 };
 
-const char* cBodyFileNameFormat = "mii_static_body_%s_%s";
+const char* cBodyFileNameFormat = "body/mii_static_body_%s_%s";
                                          // body type_gender

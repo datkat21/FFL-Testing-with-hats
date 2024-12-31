@@ -2,6 +2,24 @@
 #include <ShaderSwitch.h>
 #include <ShaderMiitomo.h>
 
+
+// for socket
+#if RIO_IS_WIN && defined(_WIN32)
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+#elif RIO_IS_WIN
+    #define closesocket close
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <fcntl.h>
+    #ifdef USE_SYSTEMD_SOCKET
+        #include <systemd/sd-daemon.h>
+    #endif // USE_SYSTEMD_SOCKET
+#endif // RIO_IS_WIN && defined(_WIN32)
+
 #include <gfx/rio_Camera.h>
 #include <gfx/mdl/rio_Model.h>
 #include <task/rio_Task.h>
@@ -36,7 +54,7 @@ private:
     void calc_() override;
     void exit_() override;
 
-    void handleRenderRequest(char* buf);
+    void handleRenderRequest(char* buf, Model* pModel, int socket);
 #ifndef NO_GLTF
     void handleGLTFRequest(RenderRequest* renderRequest);
 #endif
@@ -63,6 +81,16 @@ private:
                     mpShaders[type] = s;
                     break;
                 }
+                case SHADER_TYPE_WIIU_FFLICONWITHBODY:
+                {
+                    Shader* s = new Shader();
+                    s->setLightAmbient({ 0.5f, 0.5f, 0.5f, 1.0f });
+                    s->setLightDiffuse({ 0.9f, 0.9f, 0.9f, 1.0f });
+                    s->setLightSpecular({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+                    mpShaders[type] = s;
+                    break;
+                }
                 case SHADER_TYPE_SWITCH:
                     mpShaders[type] = new ShaderSwitch();
                     break;
@@ -79,7 +107,7 @@ private:
     void setupSocket_();
 #endif
 
-    rio::mdl::Model* getBodyModel_(Model* pModel);
+    rio::mdl::Model* getBodyModel_(Model* pModel, BodyType type);
     void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
 
 private:
@@ -99,4 +127,9 @@ private:
     rio::mdl::Model*    mpBodyModels[BODY_TYPE_MAX][FFL_GENDER_MAX];
     const char*         mpServerOnly;
     const char*         mpNoSpin;
+
+    // For server
+    int                 mServerFD;
+    int                 mServerSocket;
+    sockaddr_in         mServerAddress;
 };

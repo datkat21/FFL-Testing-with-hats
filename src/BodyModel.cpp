@@ -1,27 +1,52 @@
 #include <BodyModel.h>
 #include <Types.h>
 
-static const f32 cBodyHeadYTranslation = (6.6766f // skl_root
+static const f32 cMiiBodyMiddleHeadYTranslation
+                                       = (6.6766f // skl_root
                                         + 4.1f); // head
-static const rio::Vector3f cBodyHeadRotation = { (0.002f + -0.005f), 0.000005f, -0.001f }; // MiiBodyMiddle "head" rotation
 
-static const f32 cBodyScaleFactor =
-#ifndef USE_OLD_MODELS
-                                    7.0f;
-#else
-                                    8.715f; // thought it was 7.0?
-#endif
+static const rio::Vector3f cMiiBodyMiddleBodyHeadRotation
+    = { (0.002f + -0.005f), 0.000005f, -0.001f };
+    // ^^ MiiBodyMiddle "head" rotation
 
-BodyModel::BodyModel(rio::mdl::Model* pBodyModel)
+static const f32 cMiiBodyMiddleScale = 7.0f;
+
+// Tables for properties of all body types supported.
+static const rio::Vector3f cBodyTypeHeadRotation[BODY_TYPE_MAX] = {
+    cMiiBodyMiddleBodyHeadRotation, // BODY_TYPE_WIIU_MIIBODYMIDDLE
+    { 0.0f, 0.0f, 0.0f },   // BODY_TYPE_SWITCH_MIIBODYHIGH
+    { 0.012f, 0.0f, 0.0f }, // BODY_TYPE_MIITOMO
+    { 0.0f, 0.0f, 0.0f }    // BODY_TYPE_FFLBODYRES
+};
+
+static const f32 cBodyTypeScaleFactors[BODY_TYPE_MAX] = {
+    cMiiBodyMiddleScale, // BODY_TYPE_WIIU_MIIBODYMIDDLE
+    cMiiBodyMiddleScale, // BODY_TYPE_SWITCH_MIIBODYHIGH
+    cMiiBodyMiddleScale, // BODY_TYPE_MIITOMO
+    8.715f               // BODY_TYPE_FFLBODYRES
+};
+
+static const f32 cBodyTypeHeadTranslation[BODY_TYPE_MAX] = {
+    cMiiBodyMiddleHeadYTranslation, // BODY_TYPE_WIIU_MIIBODYMIDDLE
+    6.7143f + 4.1f,                 // BODY_TYPE_SWITCH_MIIBODYHIGH
+    6.5f + 4.1f,                    // BODY_TYPE_MIITOMO
+    cMiiBodyMiddleHeadYTranslation  // BODY_TYPE_FFLBODYRES
+};
+
+BodyModel::BodyModel(rio::mdl::Model* pBodyModel, BodyType type)
     : mpModel(nullptr)
-    , mScale{ cBodyScaleFactor, cBodyScaleFactor, cBodyScaleFactor }
+    , mScale{ 1.0f, 1.0f, 1.0f }
     , mBodyScale{ 1.0f, 1.0f, 1.0f }
     , mpShader(nullptr)
     , mBodyColor{ 0.0f, 0.0f, 0.0f, 1.0f }
+    , mBodyType{ type }
     , mPantsColor(PANTS_COLOR_GRAY)
 {
     // ig you already know the gender by now
     mpBodyModel = pBodyModel;
+
+    const f32 s = cBodyTypeScaleFactors[type];
+    mScale = { s, s, s };
 }
 
 BodyModel::~BodyModel() { }
@@ -40,17 +65,16 @@ void BodyModel::initialize(Model* pModel, PantsColor pantsColor)
 
 rio::Vector3f BodyModel::getHeadRotation()
 {
-    return cBodyHeadRotation;
+    return cBodyTypeHeadRotation[mBodyType];
 }
 
 rio::Vector3f BodyModel::getHeadRelativeTranslation()
 {
-    return { 0.0f, cBodyHeadYTranslation, 0.0f };
+    return { 0.0f, cBodyTypeHeadTranslation[mBodyType], 0.0f };
 }
 
 rio::Vector3f BodyModel::getHeadTranslation()
 {
-    return { 0.0f, cBodyHeadYTranslation * mBodyScale.y * cBodyScaleFactor, 0.0f };
     rio::Vector3f translate;
     translate.setMul(getHeadRelativeTranslation(), mBodyScale);
     translate.setMul(translate, mScale);
@@ -90,17 +114,23 @@ void BodyModel::draw(rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::
         IShader* pShader = mpModel->getShader();
         pShader->bind(lightEnable, pCharInfo);
 
-#ifndef USE_OLD_MODELS
         bool isPantsModel = ((i % 2) == 1); // is it the second mesh?
 
-        if (isPantsModel)
+        if (isPantsModel
+            // if pants color is same as body then the
+            // same modulate/material AS the body is used
+            && mPantsColor != PANTS_COLOR_SAME_AS_BODY
+        )
+        {
+            if (mPantsColor == PANTS_COLOR_NO_DRAW_PANTS)
+                continue; // Break out of the loop
             // we would be able to use the same setModulate method
             // if only the switch shader just let you use arbitrary
             // colors but no it NEEDS the index of the pants colorhHHHHHHHHHHHHHHg
             pShader->setModulatePantsMaterial(mPantsColor);
+        }
         else
         {
-#endif // USE_OLD_MODELS
             const FFLColor modulateColor = FFLGetFavoriteColor(pCharInfo->favoriteColor);
             const FFLModulateParam modulateParam = {
                 FFL_MODULATE_MODE_CONSTANT, // no texture
@@ -112,9 +142,7 @@ void BodyModel::draw(rio::Matrix34f& model_mtx, rio::BaseMtx34f& view_mtx, rio::
             };
 
             pShader->setModulate(modulateParam);
-#ifndef USE_OLD_MODELS
         }
-#endif
 
         // make new matrix for body
         rio::Matrix34f modelMtxBody = rio::Matrix34f::ident;//model_mtx;

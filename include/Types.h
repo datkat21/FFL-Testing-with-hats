@@ -27,16 +27,17 @@ enum ShaderType {
        - it would have to be some TEV to GLSL sheeee
      */
     SHADER_TYPE_WIIU_BLINN, // same as wiiu but with mSpecularMode
-    //SHADER_TYPE_WIIU_FFLICONWITHBODY, // wiiu but "nwf lighting"
+    SHADER_TYPE_WIIU_FFLICONWITHBODY, // wiiu but "nwf lighting"
     SHADER_TYPE_MAX,
 };
 
 enum BodyType {
-    BODY_TYPE_WIIU_MIIBODYMIDDLE,
-    BODY_TYPE_SWITCH_MIIBODYHIGH,
-    BODY_TYPE_MIITOMO,    // Female body is custom from this
-    BODY_TYPE_FFLBODYRES, // AKA body in nwf.mii renders
-    BODY_TYPE_MAX
+    BODY_TYPE_DEFAULT_FOR_SHADER = -1, // Will be replaced
+    BODY_TYPE_WIIU_MIIBODYMIDDLE = 0,
+    BODY_TYPE_SWITCH_MIIBODYHIGH = 1,
+    BODY_TYPE_MIITOMO            = 2,  // Female body is custom
+    BODY_TYPE_FFLBODYRES         = 3,  // AKA body in nwf.mii
+    BODY_TYPE_MAX                = 4
 };
 
 // Map shader types to a default body type:
@@ -45,7 +46,7 @@ const BodyType cShaderTypeDefaultBodyType[SHADER_TYPE_MAX] = {
     BODY_TYPE_SWITCH_MIIBODYHIGH, // SHADER_TYPE_SWITCH
     BODY_TYPE_MIITOMO,            // SHADER_TYPE_MIITOMO
     BODY_TYPE_WIIU_MIIBODYMIDDLE, // SHADER_TYPE_WIIU_BLINN
-    //BODY_TYPE_FFLBODYRES,        // SHADER_TYPE_WIIU_FFLICONWITHBODY
+    BODY_TYPE_FFLBODYRES,         // SHADER_TYPE_WIIU_FFLICONWITHBODY
 };
 
 enum InstanceRotationMode {
@@ -60,8 +61,9 @@ enum ViewType {
     VIEW_TYPE_FACE_ONLY,  // head only
     VIEW_TYPE_ALL_BODY,
     VIEW_TYPE_FACE_ONLY_FFLMAKEICON,
+    VIEW_TYPE_FFLICONWITHBODY,
     // nn::mii::VariableIconBody::StoreCameraMatrix
-    VIEW_TYPE_NNMII_VARIABLEICONBODY_VIEW,
+    VIEW_TYPE_NNMII_VARIABLEICONBODY,
     VIEW_TYPE_ALL_BODY_SUGAR,
 };
 

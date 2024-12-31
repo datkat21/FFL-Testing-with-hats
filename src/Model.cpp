@@ -115,8 +115,12 @@ void Model::drawOpaNormal_()
     render_state.setDepthFunc(rio::Graphics::COMPARE_FUNC_LEQUAL);
     render_state.applyDepthAndStencilTest();
     mpShader->applyAlphaTestEnable();
-    render_state.setBlendEnable(false);
-    render_state.setBlendFactor(rio::Graphics::BLEND_MODE_ONE, rio::Graphics::BLEND_MODE_ZERO);
+    //render_state.setBlendEnable(false);
+    //render_state.setBlendFactor(rio::Graphics::BLEND_MODE_ONE, rio::Graphics::BLEND_MODE_ZERO);
+    render_state.setBlendEnable(true);
+    render_state.setBlendFactorSrcAlpha(rio::Graphics::BLEND_MODE_SRC_ALPHA);
+    render_state.setBlendFactorDstAlpha(rio::Graphics::BLEND_MODE_ONE);
+
     render_state.applyBlendAndFastZ();
 
     FFLDrawOpa(mpCharModel);
