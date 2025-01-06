@@ -23,7 +23,7 @@ public:
     virtual void setModulate(const FFLModulateParam& modulateParam) = 0;
     virtual void setModulatePantsMaterial(PantsColor pantsColor) = 0;
     virtual void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const = 0;
-    virtual void setLightDirection(rio::Vector3f direction) const = 0;
+    virtual void setLightDirection(rio::Vector3f direction) = 0;
     virtual void applyAlphaTest(bool enable, rio::Graphics::CompareFunc func, f32 ref) const = 0;
     virtual void applyAlphaTestEnable() const = 0;
     virtual void applyAlphaTestDisable() const = 0;

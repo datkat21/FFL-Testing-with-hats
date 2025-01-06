@@ -154,63 +154,63 @@ const FFLiDefaultShaderMaterial cMaterialParam[CUSTOM_MATERIAL_PARAM_SIZE] = {
         { 0.75f, 0.75f, 0.75f, 1.0f }, // diffuse
         { 0.30f, 0.30f, 0.30f, 1.0f }, // specular
         1.2f, // specularPower
-        FFL_SPECULAR_MODE_BLINN // specularMode
+        FFL_SPECULAR_MODE_NORMAL // specularMode
     },
     { // ShapeBeard
         { 1.0f, 1.0f, 1.0f, 1.0f }, // ambient
         { 0.7f, 0.7f, 0.7f, 1.0f }, // diffuse
         { 0.0f, 0.0f, 0.0f, 1.0f }, // specular
         40.0f, // specularPower
-        FFL_SPECULAR_MODE_BLINN // specularMode
+        FFL_SPECULAR_MODE_NORMAL // specularMode
     },
     { // ShapeNose
         { 0.90f, 0.85f, 0.85f, 1.0f }, // ambient
         { 0.75f, 0.75f, 0.75f, 1.0f }, // diffuse
         { 0.22f, 0.22f, 0.22f, 1.0f }, // specular
         1.5f, // specularPower
-        FFL_SPECULAR_MODE_BLINN // specularMode
+        FFL_SPECULAR_MODE_NORMAL // specularMode
     },
     { // ShapeForehead
         { 0.85f, 0.75f, 0.75f, 1.0f }, // ambient
         { 0.75f, 0.75f, 0.75f, 1.0f }, // diffuse
         { 0.30f, 0.30f, 0.30f, 1.0f }, // specular
         1.2f, // specularPower
-        FFL_SPECULAR_MODE_BLINN // specularMode
+        FFL_SPECULAR_MODE_NORMAL // specularMode
     },
     { // ShapeHair
         { 1.00f, 1.00f, 1.00f, 1.0f }, // ambient
         { 0.70f, 0.70f, 0.70f, 1.0f }, // diffuse
         { 0.35f, 0.35f, 0.35f, 1.0f }, // specular
         10.0f, // specularPower
-        FFL_SPECULAR_MODE_ANISO // specularMode
+        FFL_SPECULAR_MODE_ANISOTROPIC // specularMode
     },
     { // ShapeCap
         { 0.75f, 0.75f, 0.75f, 1.0f }, // ambient
         { 0.72f, 0.72f, 0.72f, 1.0f }, // diffuse
         { 0.30f, 0.30f, 0.30f, 1.0f }, // specular
         1.5f, // specularPower
-        FFL_SPECULAR_MODE_BLINN // specularMode
+        FFL_SPECULAR_MODE_NORMAL // specularMode
     },
     { // ShapeMask
         { 1.0f, 1.0f, 1.0f, 1.0f }, // ambient
         { 0.7f, 0.7f, 0.7f, 1.0f }, // diffuse
         { 0.0f, 0.0f, 0.0f, 1.0f }, // specular
         40.0f, // specularPower
-        FFL_SPECULAR_MODE_ANISO // specularMode
+        FFL_SPECULAR_MODE_ANISOTROPIC // specularMode
     },
     { // ShapeNoseline
         { 1.0f, 1.0f, 1.0f, 1.0f }, // ambient
         { 0.7f, 0.7f, 0.7f, 1.0f }, // diffuse
         { 0.0f, 0.0f, 0.0f, 1.0f }, // specular
         40.0f, // specularPower
-        FFL_SPECULAR_MODE_ANISO // specularMode
+        FFL_SPECULAR_MODE_ANISOTROPIC // specularMode
     },
     { // ShapeGlass
         { 1.0f, 1.0f, 1.0f, 1.0f }, // ambient
         { 0.7f, 0.7f, 0.7f, 1.0f }, // diffuse
         { 0.0f, 0.0f, 0.0f, 1.0f }, // specular
         40.0f, // specularPower
-        FFL_SPECULAR_MODE_ANISO // specularMode
+        FFL_SPECULAR_MODE_ANISOTROPIC // specularMode
     },
     // HACK: THESE COLLIDE!!!
     // but it's with textures which have no lighting
@@ -219,14 +219,14 @@ const FFLiDefaultShaderMaterial cMaterialParam[CUSTOM_MATERIAL_PARAM_SIZE] = {
         { 0.496733f, 0.496733f, 0.496733f, 1.0f }, // 0.29804
         { 0.2409f, 0.2409f, 0.2409f, 1.0f }, // 0.16863
         3.0f, // specularPower
-        FFL_SPECULAR_MODE_BLINN // specularMode
+        FFL_SPECULAR_MODE_NORMAL // specularMode
     },
     { // pants
         { 0.95622f, 0.95622f, 0.95622f, 1.0f }, // 0.69804
         { 1.084967f, 1.084967f, 1.084967f, 1.0f }, // 0.65098
         { 0.2409f, 0.2409f, 0.2409f, 1.0f }, // 0.16863
         3.0f, // specularPower
-        FFL_SPECULAR_MODE_BLINN // specularMode
+        FFL_SPECULAR_MODE_NORMAL // specularMode
     }
 };
 
@@ -234,9 +234,7 @@ const FFLColor cLightAmbient  = { 0.73f, 0.73f, 0.73f, 1.0f };
 const FFLColor cLightDiffuse  = { 0.60f, 0.60f, 0.60f, 1.0f };
 const FFLColor cLightSpecular = { 0.70f, 0.70f, 0.70f, 1.0f };
 
-const rio::BaseVec3f cLightDir = { -0.4531539381f, 0.4226179123f, 0.7848858833f }; // , 0.30943f
-// nwf light direction but doesn't seem to differ much
-//const rio::BaseVec3f cLightDir = { -0.455f, 0.348f, 0.5f };
+const rio::BaseVec3f cLightDirection = { -0.4531539381f, 0.4226179123f, 0.7848858833f }; // , 0.30943f
 
 const FFLColor cRimColor = { 0.3f, 0.3f, 0.3f, 1.0f };
 const FFLColor cRimColorBody = { 0.4f, 0.4f, 0.4f, 1.0f };
@@ -255,7 +253,8 @@ Shader::Shader()
 #endif
     , mCallback()
     , mpCharInfo(nullptr)
-    , mSpecularMode(FFL_SPECULAR_MODE_ANISO)
+    , mSpecularMode(FFL_SPECULAR_MODE_ANISOTROPIC)
+    , mLightDirection(cLightDirection)
     , mLightAmbient(cLightAmbient)
     , mLightDiffuse(cLightDiffuse)
     , mLightSpecular(cLightSpecular)
@@ -415,7 +414,7 @@ void Shader::bind(bool light_enable, FFLiCharInfo* pCharInfo)
         RIO_GL_CALL(glDisableVertexAttribArray(i));
 #endif
 
-    mShader.setUniform(cLightDir, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_DIR]);
+    mShader.setUniform(mLightDirection, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_DIR]);
     mShader.setUniform(light_enable, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
     mShader.setUniform(getColorUniform(mLightAmbient), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_AMBIENT]);
     mShader.setUniform(getColorUniform(mLightDiffuse), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_DIFFUSE]);
@@ -423,6 +422,19 @@ void Shader::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 
     mShader.setUniform(getColorUniform(cRimColor), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
     mShader.setUniform(cRimPower, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_POWER]);
+}
+
+void Shader::setLightDirection(const rio::Vector3f direction)
+{
+    rio::BaseVec3f newLightDirection = cLightDirection;
+    // only set each axis if it is non-negative
+    if (direction.x > -1)
+        newLightDirection.x = direction.x;
+    if (direction.y > -1)
+        newLightDirection.y = direction.y;
+    if (direction.z > -1)
+        newLightDirection.z = direction.z;
+    mLightDirection = newLightDirection;
 }
 
 #ifdef FFL_USE_ADJUST_MTX
@@ -588,13 +600,13 @@ void Shader::draw_(const FFLDrawParam& draw_param)
     if (modulateType < CUSTOM_MATERIAL_PARAM_SIZE)
     {
         // blinn as default...
-        FFLiDefaultShaderSpecularMode materialSpecularMode = FFL_SPECULAR_MODE_BLINN;
-        if (mSpecularMode != FFL_SPECULAR_MODE_BLINN) // if the default is not blinn,
+        FFLiDefaultShaderSpecularMode materialSpecularMode = FFL_SPECULAR_MODE_NORMAL;
+        if (mSpecularMode != FFL_SPECULAR_MODE_NORMAL) // if the default is not blinn,
             materialSpecularMode = cMaterialParam[modulateType].specularMode; // set it
 
         // if there's no tangent then leave it as blinn
         if (draw_param.attributeBufferParam.attributeBuffers[FFL_ATTRIBUTE_BUFFER_TYPE_TANGENT].ptr == nullptr)
-            materialSpecularMode = FFL_SPECULAR_MODE_BLINN;
+            materialSpecularMode = FFL_SPECULAR_MODE_NORMAL;
 
         mShader.setUniform(materialSpecularMode, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_MATERIAL_SPECULAR_MODE]);
     }

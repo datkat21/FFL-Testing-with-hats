@@ -77,13 +77,15 @@ private:
                 case SHADER_TYPE_WIIU_BLINN:
                 {
                     Shader* s = new Shader();
-                    s->setSpecularMode(FFL_SPECULAR_MODE_BLINN);
+                    s->setSpecularMode(FFL_SPECULAR_MODE_NORMAL);
                     mpShaders[type] = s;
                     break;
                 }
                 case SHADER_TYPE_WIIU_FFLICONWITHBODY:
                 {
                     Shader* s = new Shader();
+
+                    s->setLightDirection({ -0.50f, 0.366f, 0.785f });
                     s->setLightAmbient({ 0.5f, 0.5f, 0.5f, 1.0f });
                     s->setLightDiffuse({ 0.9f, 0.9f, 0.9f, 1.0f });
                     s->setLightSpecular({ 1.0f, 1.0f, 1.0f, 1.0f });
