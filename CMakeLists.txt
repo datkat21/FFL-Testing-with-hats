@@ -11,6 +11,9 @@ option(RIO_USE_OSMESA "Uses OSMesa, which provides off-screen rendering without 
 option(NO_GLTF "Disable glTF export feature" OFF)
 option(USE_SYSTEMD_SOCKET "Use systemd socket activation. Don't enable this if you don't know what it is." OFF)
 
+# Sentry integration.
+set(USE_SENTRY_DSN "" CACHE STRING "Sentry DSN (leave blank to disable Sentry)")
+
 set(CMAKE_CACHE_ARGS_INCLUDE_HELP TRUE) # Include option descriptions with cmake -LH.
 
 # Target Options ----------------
@@ -91,6 +94,28 @@ if(USE_SYSTEMD_SOCKET) # For systemd socket activation.
     if(NOT SYSTEMD_FOUND)
         message(FATAL_ERROR "USE_SYSTEMD_SOCKET was specified, but the systemd library was not found. Please install libsystemd-dev or whatever the equivalent is.")
     endif()
+endif()
+
+
+# Configure Sentry and Git info if USE_SENTRY_DSN isn't blank
+if(NOT USE_SENTRY_DSN STREQUAL "")
+    # Search for Sentry library.
+    find_package(sentry REQUIRED)
+
+    # Fetch Git hash
+    execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+    # Define compile-time constants for DSN and release
+    set(SENTRY_RELEASE "${CMAKE_PROJECT_NAME}@${GIT_COMMIT_HASH}")
+    add_compile_definitions(
+        USE_SENTRY_DSN="${USE_SENTRY_DSN}"
+        SENTRY_RELEASE="${SENTRY_RELEASE}"
+    )
 endif()
 
 # ----------- Add Subprojects -----------
@@ -196,6 +221,11 @@ endif()
 if(USE_SYSTEMD_SOCKET AND SYSTEMD_FOUND)
     message(STATUS "FFL-Testing: systemd socket support enabled")
     target_link_libraries(${TARGET_NAME} PRIVATE ${SYSTEMD_LIBRARIES})
+endif()
+
+if(NOT USE_SENTRY_DSN STREQUAL "" AND sentry_FOUND)
+    message(STATUS "FFL-Testing: Sentry enabled with DSN: ${USE_SENTRY_DSN}")
+    target_link_libraries(${TARGET_NAME} PRIVATE sentry::sentry)
 endif()
 
 # ----------- Summary -----------

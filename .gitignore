@@ -57,6 +57,7 @@ FFLRes*.dat
 *.swp
 *.kate-swp
 .DS_Store
+.sentry-native
 
 # visual studio
 .vs
