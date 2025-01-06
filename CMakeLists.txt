@@ -142,10 +142,14 @@ endif()
 
 if(RIO_GLES)
     target_compile_definitions(rio PUBLIC RIO_GLES)
+    # Needs to propagate to FFL:
+    target_compile_definitions(ffl-for-rio PUBLIC RIO_GLES)
 endif()
 
 if(RIO_NO_CLIP_CONTROL)
     target_compile_definitions(rio PUBLIC RIO_NO_CLIP_CONTROL)
+    # Needs to propagate to FFL:
+    target_compile_definitions(ffl-for-rio PUBLIC RIO_NO_CLIP_CONTROL)
 endif()
 
 # ----------- Main Sources -----------
@@ -190,6 +194,7 @@ endif()
 # Link libraries specific to main program.
 
 if(USE_SYSTEMD_SOCKET AND SYSTEMD_FOUND)
+    message(STATUS "FFL-Testing: systemd socket support enabled")
     target_link_libraries(${TARGET_NAME} PRIVATE ${SYSTEMD_LIBRARIES})
 endif()
 
