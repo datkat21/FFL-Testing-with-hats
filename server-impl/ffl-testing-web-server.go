@@ -68,7 +68,7 @@ type RenderRequest struct {
 	InstanceCount        uint8
 	InstanceRotationMode uint8
 	LightDirection       [3]int16 // default/unset: -1
-	_                    [2]byte // padding for alignment
+	_                    [2]byte  // padding for alignment
 }
 
 const FFL_EXPRESSION_LIMIT = 70
@@ -553,7 +553,7 @@ func handleRenderRequestError(w http.ResponseWriter, bufferData []byte, err erro
 			return
 		}
 
-		 	http.Error(w, `incomplete data from backend :( render probably failed for one of the following reasons:
+		http.Error(w, `incomplete data from backend :( render probably failed for one of the following reasons:
 * FFLInitCharModelCPUStep failed: internal error or use of out-of-bounds parts
 * FFLiVerifyCharInfoWithReason failed: mii data/CharInfo is invalid`, http.StatusInternalServerError)
 		return
@@ -634,14 +634,6 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	pantsColorStr := query.Get("pantsColor")
 	if pantsColorStr == "" {
 		pantsColorStr = "red"
-	}
-	hatTypeStr := query.Get("hatType")
-	if hatTypeStr == "" {
-		hatTypeStr = "none"
-	}
-	hatColorStr := query.Get("hatColor")
-	if hatColorStr == "" {
-		hatColorStr = "default"
 	}
 
 	var responseFormat uint8 = 0
@@ -787,18 +779,6 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	hatColorStr := query.Get("hatColor")
 	if hatColorStr == "" {
 		hatColorStr = "default"
-	}
-
-	var hatType int
-	hatType, err = strconv.Atoi(hatTypeStr)
-	if err != nil {
-		hatType = getHatTypeInt(hatTypeStr)
-	}
-
-	var hatColor int
-	hatColor, err = strconv.Atoi(hatColorStr)
-	if err != nil {
-		hatColor = getHatColorInt(hatColorStr)
 	}
 
 	// Parsing and validating resource type
@@ -1025,16 +1005,13 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		//InstanceRotationModeIsCamera: false,
 		DrawStageMode:  uint8(drawStageMode),
 		VerifyCharInfo: verifyCharInfo,
-		HatType:        uint8(hatType),
-		HatColor:       uint8(hatColor),
-		BodyType:       uint8(bodyType),
 		VerifyCRC16:    verifyCRC16,
 		LightEnable:    lightEnable,
 		ClothesColor:   int8(clothesColor),
 		PantsColor:     uint8(pantsColor),
 		// Extra data
-		HatType:     uint8(hatType),
-		HatColor:     uint8(hatColor),
+		HatType:  uint8(hatType),
+		HatColor: uint8(hatColor),
 	}
 
 	// Enabling mipmap if specified
@@ -1261,37 +1238,6 @@ var clothesColorMap = map[string]int{
 	"brown":       9,
 	"white":       10,
 	"black":       11,
-}
-
-var hatTypeMap = map[string]int{
-	// NOTE: solely based on mii studio consts, not FFL enums
-	"default":     0,
-	"cap":         1,
-	"beanie":      2,
-	"top_hat":     3,
-	"ribbon":      4,
-	"bow":         5,
-	"cat_ears":    6,
-	"straw_hat":   7,
-	"hijab":       8,
-	"bike_helmet": 9,
-}
-
-var hatColorMap = map[string]int{
-	// NOTE: solely based on mii studio consts, not FFL enums
-	"default":     0,
-	"red":         1,
-	"orange":      2,
-	"yellow":      3,
-	"yellowgreen": 4,
-	"green":       5,
-	"blue":        6,
-	"skyblue":     7,
-	"pink":        8,
-	"purple":      9,
-	"brown":       10,
-	"white":       11,
-	"black":       12,
 }
 
 var pantsColorMap = map[string]int{
