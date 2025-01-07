@@ -1,9 +1,10 @@
 #pragma once
 
-struct RenderRequest {
-    char     data[96];       // just a buffer that accounts for maximum size
-    uint16_t dataLength;     // determines the mii data format
-    uint8_t  modelFlag;      // FFLModelType + nose flatten @ bit 4
+struct RenderRequest
+{
+    char data[96];       // just a buffer that accounts for maximum size
+    uint16_t dataLength; // determines the mii data format
+    uint8_t modelFlag;   // FFLModelType + nose flatten @ bit 4
     // completely changes the response type:
     uint8_t  responseFormat; // indicates if response is gltf or tga
 

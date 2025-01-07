@@ -4,6 +4,7 @@
 #include <EnumStrings.h>
 #include <Model.h>
 #include <RootTask.h>
+#include <Hat.h>
 #include <Types.h>
 #include <BodyTypeStrings.h>
 
@@ -33,25 +34,16 @@ void handleGLTFRequest(RenderRequest* renderRequest, Model* pModel, int socket);
 #endif
 
 RootTask::RootTask()
-    : ITask("FFL Testing")
-    , mInitialized(false)
-    , mSocketIsListening(false)
-    // contains pointers
-    , mResourceDesc()
-    , mpShaders{ nullptr }
-    , mProjMtx()
-    , mProjMtxIconBody(nullptr)
-    , mCamera()
-    , mCounter(0.0f)
-    , mMiiCounter(0)
-    , mpModel(nullptr)
-    , mpBodyModels{ nullptr }
+    : ITask("FFL Testing"), mInitialized(false), mSocketIsListening(false)
+      // contains pointers
+      ,
+      mResourceDesc(), mpShaders{nullptr}, mProjMtx(), mProjMtxIconBody(nullptr), mCamera(), mCounter(0.0f), mMiiCounter(0), mpModel(nullptr), mpBodyModels{nullptr}, mpHatModels{nullptr}
 
-    // disables occasionally drawing mii and enables blocking
-    , mpServerOnly(getenv("SERVER_ONLY"))
-    , mpNoSpin(getenv("NO_SPIN"))
+      // disables occasionally drawing mii and enables blocking
+      ,
+      mpServerOnly(getenv("SERVER_ONLY")), mpNoSpin(getenv("NO_SPIN"))
 {
-#ifdef RIO_USE_OSMESA // off screen rendering
+#ifdef RIO_USE_OSMESA   // off screen rendering
     mpServerOnly = "1"; // force it truey
 #endif
     rio::MemUtil::set(mpBodyModels, 0, sizeof(mpBodyModels));
@@ -150,8 +142,8 @@ void RootTask::setupSocket_()
     mServerAddress.sin_family = AF_INET;
     mServerAddress.sin_addr.s_addr = INADDR_ANY;
     // Get port number from environment or use default
-    char portReminder[] ="\033[2m(you can change the port with the PORT environment variable)\033[0m\n";
-    const char* env_port = getenv("PORT");
+    char portReminder[] = "\033[2m(you can change the port with the PORT environment variable)\033[0m\n";
+    const char *env_port = getenv("PORT");
     int port = 12346; // default port
     if (env_port)
     {
@@ -163,9 +155,9 @@ void RootTask::setupSocket_()
     if (bind(mServerFD, (struct sockaddr *)&mServerAddress, sizeof(mServerAddress)) < 0)
     {
         perror("bind failed");
-        RIO_LOG("\033[1m" \
-        "TIP: Change the default port of 12346 with the PORT environment variable" \
-        "\033[0m\n");
+        RIO_LOG("\033[1m"
+                "TIP: Change the default port of 12346 with the PORT environment variable"
+                "\033[0m\n");
         exit(EXIT_FAILURE);
     }
     if (listen(mServerFD, 3) < 0)
@@ -195,11 +187,11 @@ void RootTask::setupSocket_()
 
         mSocketIsListening = true;
 
-        RIO_LOG("\033[1m" \
-        "tcp server listening on port %d\033[0m\n" \
-        "%s" \
-        "%s",
-        port, portReminder, serverOnlyReminder);
+        RIO_LOG("\033[1m"
+                "tcp server listening on port %d\033[0m\n"
+                "%s"
+                "%s",
+                port, portReminder, serverOnlyReminder);
     }
 }
 #endif
@@ -224,7 +216,7 @@ void RootTask::loadResourceFiles_()
                 arg.path = resPath;
                 arg.alignment = 0x2000;
 
-                u8* buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
+                u8 *buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
                 if (buffer == nullptr)
                     RIO_LOG("Skipping loading FFL_RESOURCE_TYPE_MIDDLE (%s failed to load)\n", resPath.c_str());
                 else
@@ -235,8 +227,8 @@ void RootTask::loadResourceFiles_()
                 }
             }
         }
-        //mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = 0;
-        // High, load from FFL path or current working directory
+        // mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = 0;
+        //  High, load from FFL path or current working directory
         {
             // Two different paths
             std::array<std::string, 2> resPaths = {"", "./FFLResHigh.dat"};
@@ -323,10 +315,10 @@ void RootTask::prepare_()
 
         // Create perspective projection instance
         rio::PerspectiveProjection proj(
-            500.0f, // Near
+            500.0f,  // Near
             1200.0f, // Far
-            fovy,// * 1.6f, // fovy
-            aspect // Aspect ratio
+            fovy,    // * 1.6f, // fovy
+            aspect   // Aspect ratio
         );
         // The near and far values define the depth range of the view frustum (500.0f to 700.0f)
 
@@ -334,13 +326,11 @@ void RootTask::prepare_()
         mProjMtx = proj.getMatrix();
 
         rio::PerspectiveProjection projIconBody(
-            10.0f,//10.0f,
+            10.0f, // 10.0f,
             1000.0f,
             rio::Mathf::deg2rad(15.0f),
-            1.0f
-        );
+            1.0f);
         mProjMtxIconBody = new rio::BaseMtx44f(projIconBody.getMatrix());
-
     }
 
 #if RIO_IS_WIN
@@ -348,7 +338,7 @@ void RootTask::prepare_()
     setupSocket_();
 #ifndef RIO_NO_GLFW_CALLS
     // Set window aspect ratio, so that when resizing it will not change
-    GLFWwindow* glfwWindow = rio::Window::instance()->getNativeWindow().getGLFWwindow();
+    GLFWwindow *glfwWindow = rio::Window::instance()->getNativeWindow().getGLFWwindow();
     glfwSetWindowAspectRatio(glfwWindow, window->getWidth(), window->getHeight());
 #endif // RIO_NO_GLFW_CALLS
 #endif // RIO_IS_WIN
@@ -404,9 +394,9 @@ void RootTask::createModel_()
 
     // default model source if there is no socket
 #if RIO_IS_CAFE
-        // use mii maker database on wii u
-        modelSource.dataSource = FFL_DATA_SOURCE_OFFICIAL;
-        // NOTE: will only use first 6 miis from mii maker database
+    // use mii maker database on wii u
+    modelSource.dataSource = FFL_DATA_SOURCE_OFFICIAL;
+    // NOTE: will only use first 6 miis from mii maker database
 #else
     FFLiCharInfo charInfo;
     if (!mStoreDataArray.empty())
@@ -438,16 +428,15 @@ void RootTask::createModel_()
         // guest miis are defined in FFLiDatabaseDefault.cpp
         // fetched from m_MiiDataOfficial, derived from the static array MII_DATA_CORE_RFL
 #endif
-        modelSource.index = mMiiCounter;
-        modelSource.pBuffer = NULL;
+    modelSource.index = mMiiCounter;
+    modelSource.pBuffer = NULL;
 #if !RIO_IS_CAFE
-    }
+}
 #endif
 
-    // limit current counter by the amount
-    // of max miis (6 for default/guest miis)
-    mMiiCounter = (mMiiCounter + 1) % maxMiis;
-
+// limit current counter by the amount
+// of max miis (6 for default/guest miis)
+mMiiCounter = (mMiiCounter + 1) % maxMiis;
 
     Model::InitArgStoreData arg = {
         .desc = {
@@ -475,13 +464,139 @@ void RootTask::createModel_()
     mCounter = 0.0f;
 }
 
+FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo *pCharInfo, RenderRequest *buf)
+{
+    MiiDataInputType inputType;
+
+    switch (buf->dataLength)
+    {
+    /*case sizeof(FFLStoreData):
+    case sizeof(FFLiMiiDataOfficial):
+    case sizeof(FFLiMiiDataCore):
+        inputType = INPUT_TYPE_FFL_MIIDATACORE;
+        break;
+    */
+    case 76: // RFLStoreData, FFLiStoreDataRFL ....????? (idk if this exists)
+        inputType = INPUT_TYPE_RFL_STOREDATA;
+        break;
+    case 74: // RFLCharData, FFLiMiiDataOfficialRFL
+        inputType = INPUT_TYPE_RFL_CHARDATA;
+        break;
+    case sizeof(charInfo): // nx char info
+        inputType = INPUT_TYPE_NX_CHARINFO;
+        break;
+    case sizeof(coreData):
+    case 68: // sizeof(storeData):
+        inputType = INPUT_TYPE_NX_COREDATA;
+        break;
+    case sizeof(charInfoStudio): // studio raw
+        inputType = INPUT_TYPE_STUDIO_RAW;
+        break;
+    case STUDIO_DATA_ENCODED_LENGTH: // studio encoded i think
+        inputType = INPUT_TYPE_STUDIO_ENCODED;
+        break;
+    case sizeof(FFLiMiiDataCore):
+    case sizeof(FFLiMiiDataOfficial): // creator name unused
+        inputType = INPUT_TYPE_FFL_MIIDATACORE;
+        break;
+    case sizeof(FFLStoreData):
+        inputType = INPUT_TYPE_FFL_STOREDATA;
+        break;
+    default:
+        // uh oh, we can't detect it
+        return FFL_RESULT_ERROR;
+        break;
+    }
+
+    // create temporary charInfoNX for studio, coredata
+    charInfo charInfoNX;
+
+    switch (inputType)
+    {
+    case INPUT_TYPE_RFL_STOREDATA:
+        // 76 = sizeof RFLStoreData
+        if (buf->verifyCRC16 && !FFLiIsValidCRC16(buf->data, 76))
+            return FFL_RESULT_FILE_INVALID;
+        [[fallthrough]];
+    case INPUT_TYPE_RFL_CHARDATA:
+    {
+        FFLiMiiDataCoreRFL charDataRFL;
+        rio::MemUtil::copy(&charDataRFL, buf->data, sizeof(FFLiMiiDataCoreRFL));
+        // look at create id to run FFLiIsNTRMiiID
+        // NOTE: FFLiMiiDataCoreRFL2CharInfo is SUPPOSED to check
+        // whether it is an NTR mii id or not and store
+        // the result as pCharInfo->birthPlatform = FFL_BIRTH_PLATFORM_NTR
+        // HOWEVER, it clears out the create ID and runs the compare anyway
+        // the create id is actually not the same size either
+
+        // NOTE: NFLCharData for DS can be little endian tho!!!!!!
+#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+        charDataRFL.SwapEndian();
+#endif // __BYTE_ORDER__
+
+        FFLiMiiDataCoreRFL2CharInfo(pCharInfo,
+                                    charDataRFL,
+                                    NULL, false
+                                    // reinterpret_cast<u16*>(&buf->data[0x36]), true // creator name
+                                    //  name offset: https://github.com/SMGCommunity/Petari/blob/53fd4ff9db54cb1c91a96534dcae9f2c2ea426d1/libs/RVLFaceLib/include/RFLi_Types.h#L342
+        );
+        break;
+    }
+    case INPUT_TYPE_STUDIO_ENCODED:
+    {
+        // mii studio url data format is obfuscated
+        // decodes it in a buffer
+        char decodedData[STUDIO_DATA_ENCODED_LENGTH];
+        rio::MemUtil::copy(decodedData, buf->data, STUDIO_DATA_ENCODED_LENGTH);
+        studioURLObfuscationDecode(decodedData);
+        studioToCharInfoNX(&charInfoNX, reinterpret_cast<::charInfoStudio *>(decodedData));
+        charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
+        break;
+    }
+    case INPUT_TYPE_STUDIO_RAW:
+        // we may not need this if we decode from and to buf->data but that's confusing
+        studioToCharInfoNX(&charInfoNX, reinterpret_cast<::charInfoStudio *>(buf->data));
+        charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
+        break;
+    case INPUT_TYPE_NX_CHARINFO:
+        charInfoNXToFFLiCharInfo(pCharInfo, reinterpret_cast<::charInfo *>(buf->data));
+        break;
+    case INPUT_TYPE_NX_COREDATA:
+        coreDataToCharInfoNX(&charInfoNX, reinterpret_cast<::coreData *>(buf->data));
+        charInfoNXToFFLiCharInfo(pCharInfo, &charInfoNX);
+        break;
+    case INPUT_TYPE_FFL_STOREDATA:
+        // only verify CRC16, then fall through
+        if (buf->verifyCRC16 && !FFLiIsValidCRC16(buf->data, sizeof(FFLiStoreDataCFL)))
+            return FFL_RESULT_FILE_INVALID;
+        [[fallthrough]];
+    case INPUT_TYPE_FFL_MIIDATACORE:
+    {
+        FFLiMiiDataCore miiDataCore;
+        rio::MemUtil::copy(&miiDataCore, buf->data, sizeof(FFLiMiiDataCore));
+        // NOTE: FFLiMiiDataOfficial from CFL/FFL databases
+        // are both in big endian, not sure how to detect that
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+        miiDataCore.SwapEndian();
+#endif // __BYTE_ORDER__
+        FFLiMiiDataCore2CharInfo(pCharInfo, miiDataCore,
+                                 // const u16* pCreatorName, bool resetBirthday
+                                 NULL, false);
+        break;
+    }
+    default: // unknown
+        return FFL_RESULT_ERROR;
+        break;
+    }
+    return FFL_RESULT_OK;
+}
+
 const std::string socketErrorPrefix = "ERROR: ";
 
 // create model for render request
 bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
 {
     FFLiCharInfo charInfo;
-
 
     std::string errMsg;
 
@@ -516,9 +631,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
         if (verifyCharInfoReason != FFLI_VERIFY_CHAR_INFO_REASON_OK)
         {
             // CHARINFO IS INVALID, FAIL!
-            errMsg = "FFLiVerifyCharInfoWithReason (data verification) failed: "
-            + std::string(FFLiVerifyCharInfoReasonToString(verifyCharInfoReason))
-            + "\n";
+            errMsg = "FFLiVerifyCharInfoWithReason (data verification) failed: " + std::string(FFLiVerifyCharInfoReasonToString(verifyCharInfoReason)) + "\n";
             RIO_LOG("%s", errMsg.c_str());
             errMsg = socketErrorPrefix + errMsg;
             send(socket_handle, errMsg.c_str(), static_cast<int>(errMsg.length()), 0);
@@ -538,7 +651,6 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
 
     // NOTE NOTE: MAKE SURE TO CHECK NULL MII ID TOO
 
-
     FFLCharModelSource modelSource = {
         // don't call PickupCharInfo or verify mii after we already did
         .dataSource = FFL_DATA_SOURCE_DIRECT_POINTER, // aka CharInfo/CharModel??
@@ -548,17 +660,15 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
     };
 
     // initialize expanded expression flags to blank
-    FFLAllExpressionFlag expressionFlag = { .flags = { 0, 0, 0 } }; //{ .flags = { 1 << FFL_EXPRESSION_NORMAL } };
+    FFLAllExpressionFlag expressionFlag = {.flags = {0, 0, 0}}; //{ .flags = { 1 << FFL_EXPRESSION_NORMAL } };
 
     u32 modelFlag = static_cast<u32>(buf->modelFlag);
     // This is set because we always initialize all flags to zero:
     modelFlag |= FFL_MODEL_FLAG_NEW_EXPRESSIONS;
     // NOTE: This flag is needed to use expressions past 31 ^^
 
-    if (buf->expressionFlag[0] != 0
-        || buf->expressionFlag[1] != 0
-        || buf->expressionFlag[2] != 0)
-        //expressionFlag.flags[0] = buf->expressionFlag;
+    if (buf->expressionFlag[0] != 0 || buf->expressionFlag[1] != 0 || buf->expressionFlag[2] != 0)
+        // expressionFlag.flags[0] = buf->expressionFlag;
         rio::MemUtil::copy(expressionFlag.flags, buf->expressionFlag, sizeof(u32) * 3);
     else
         FFLSetExpressionFlagIndex(&expressionFlag, buf->expression, true); // set that bit
@@ -579,6 +689,21 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
         modelFlag |= FFL_MODEL_FLAG_NEW_MASK_ONLY;
 #endif
 
+    // Hat modelFlag conditions.
+    if (cHatTypes[int(buf->hatType)] == HAT_TYPE_HAT_ONLY)
+    {
+        modelFlag = FFL_MODEL_FLAG_HAT;
+    }
+    else if (cHatTypes[int(buf->hatType)] == HAT_TYPE_FACE_ONLY)
+    {
+        modelFlag = FFL_MODEL_FLAG_FACE_ONLY;
+    }
+    else if (cHatTypes[int(buf->hatType)] == HAT_TYPE_BALD)
+    {
+        // bald Hair type
+        charInfo.parts.hairType = FFL_HAIR_BALD;
+    }
+
     // otherwise just fall through and use default
     Model::InitArgStoreData arg = {
         .desc = {
@@ -594,6 +719,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
     };
 
     mpModel = new Model();
+
     ShaderType whichShader = SHADER_TYPE_WIIU;
     if (buf->shaderType < SHADER_TYPE_MAX)
         whichShader = static_cast<ShaderType>(buf->shaderType);
@@ -643,14 +769,14 @@ static void writeTGAHeaderToSocket(int socket, u32 width, u32 height, rio::Textu
     u8 header[TGA_HEADER_SIZE]; // tga header size = 0x12
     // set all fields to 0 initially including unused ones
     rio::MemUtil::set(&header, 0, TGA_HEADER_SIZE);
-    header[ 2] = 2;                    // imageType, 2 = uncomp_true_color
+    header[2] = 2;                     // imageType, 2 = uncomp_true_color
     header[12] = width & 0xff;         // width MSB
     header[13] = (width >> 8) & 0xff;  // width LSB
     header[14] = height & 0xff;        // height MSB
     header[15] = (height >> 8) & 0xff; // height LSB
     header[16] = bitsPerPixel;
-    header[17] = 8;  // 32 = Flag that sets the image origin to the top left
-                     // nnas standard tgas set this to 8 to be upside down
+    header[17] = 8; // 32 = Flag that sets the image origin to the top left
+                    // nnas standard tgas set this to 8 to be upside down
     // tga header will be written to socket at the same time pixels are reads
 
     send(socket, reinterpret_cast<char*>(&header), TGA_HEADER_SIZE, 0); // send tga header
@@ -679,12 +805,12 @@ static void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio
     rio::RenderBuffer renderBufferDownsample;
     renderBufferDownsample.setSize(width, height);
     RIO_GL_CALL(glViewport(0, 0, width, height));
-    //rio::Window::instance()->getNativeWindow()->getColorBufferTextureFormat();
+    // rio::Window::instance()->getNativeWindow()->getColorBufferTextureFormat();
     rio::Texture2D *renderTextureDownsampleColor = new rio::Texture2D(rio::TEXTURE_FORMAT_R8_G8_B8_A8_UNORM, renderBufferDownsample.getSize().x, renderBufferDownsample.getSize().y, 1);
     rio::RenderTargetColor renderTargetDownsampleColor;
     renderTargetDownsampleColor.linkTexture2D(*renderTextureDownsampleColor);
     renderBufferDownsample.setRenderTargetColor(&renderTargetDownsampleColor);
-    renderBufferDownsample.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR_DEPTH_STENCIL, { 0.0f, 0.0f, 0.0f, 0.0f });
+    renderBufferDownsample.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR_DEPTH_STENCIL, {0.0f, 0.0f, 0.0f, 0.0f});
     renderBufferDownsample.bind();
     rio::RenderState render_state;
     render_state.setBlendEnable(true);
@@ -719,19 +845,19 @@ static void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio
 
     float quadVertices[] = {
 #ifndef RIO_NO_CLIP_CONTROL
-        -1.0f, 1.0f,  0.0f, 0.0f,
+        -1.0f, 1.0f, 0.0f, 0.0f,
         -1.0f, -1.0f, 0.0f, 1.0f,
-        1.0f,  -1.0f, 1.0f, 1.0f,
-        -1.0f, 1.0f,  0.0f, 0.0f,
-        1.0f,  -1.0f, 1.0f, 1.0f,
-        1.0f,  1.0f,  1.0f, 0.0f
+        1.0f, -1.0f, 1.0f, 1.0f,
+        -1.0f, 1.0f, 0.0f, 0.0f,
+        1.0f, -1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 0.0f
 #else
         -1.0f, -1.0f, 0.0f, 0.0f,
-        -1.0f, 1.0f,  0.0f, 1.0f,
-        1.0f,  1.0f,  1.0f, 1.0f,
+        -1.0f, 1.0f, 0.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 1.0f,
         -1.0f, -1.0f, 0.0f, 0.0f,
-        1.0f,  1.0f,  1.0f, 1.0f,
-        1.0f,  -1.0f, 1.0f, 0.0f
+        1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, -1.0f, 1.0f, 0.0f
 #endif
     };
 
@@ -741,9 +867,9 @@ static void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio
     RIO_GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, quadVBO));
     RIO_GL_CALL(glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW));
     RIO_GL_CALL(glEnableVertexAttribArray(0));
-    RIO_GL_CALL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0));
+    RIO_GL_CALL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0));
     RIO_GL_CALL(glEnableVertexAttribArray(1));
-    RIO_GL_CALL(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float))));
+    RIO_GL_CALL(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float))));
     RIO_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
     RIO_GL_CALL(glBindVertexArray(0));
     // Unbind the framebuffer
@@ -755,38 +881,35 @@ static void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio
 
     renderBufferDownsample.bind();
 
+    // int bufferSize = renderRequest->resolution * renderRequest->resolution * 4;
+    /*
+        // Create a regular framebuffer to resolve the MSAA buffer to
+        GLuint resolveFBO, resolveColorRBO;
+        glGenFramebuffers(1, &resolveFBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, resolveFBO);
+
+        // Create and attach a regular color renderbuffer
+        glGenRenderbuffers(1, &resolveColorRBO);
+        glBindRenderbuffer(GL_RENDERBUFFER, resolveColorRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, renderRequest->resolution, renderRequest->resolution);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, resolveColorRBO);
 
 
+        // Blit (resolve) the multisampled framebuffer to the regular framebuffer
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, msaaFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveFBO);
+        glBlitFramebuffer(0, 0, renderRequest->resolution, renderRequest->resolution,
+                        0, 0, renderRequest->resolution, renderRequest->resolution,
+                        GL_COLOR_BUFFER_BIT, GL_LINEAR);
 
-    //int bufferSize = renderRequest->resolution * renderRequest->resolution * 4;
-/*
-    // Create a regular framebuffer to resolve the MSAA buffer to
-    GLuint resolveFBO, resolveColorRBO;
-    glGenFramebuffers(1, &resolveFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, resolveFBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, resolveFBO);
 
-    // Create and attach a regular color renderbuffer
-    glGenRenderbuffers(1, &resolveColorRBO);
-    glBindRenderbuffer(GL_RENDERBUFFER, resolveColorRBO);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, renderRequest->resolution, renderRequest->resolution);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, resolveColorRBO);
-
-
-    // Blit (resolve) the multisampled framebuffer to the regular framebuffer
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, msaaFBO);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveFBO);
-    glBlitFramebuffer(0, 0, renderRequest->resolution, renderRequest->resolution,
-                    0, 0, renderRequest->resolution, renderRequest->resolution,
-                    GL_COLOR_BUFFER_BIT, GL_LINEAR);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, resolveFBO);
-
-    RIO_GL_CALL(glReadPixels(0, 0, renderRequest->resolution, renderRequest->resolution, GL_RGBA, GL_UNSIGNED_BYTE, readBuffer));
-*/
+        RIO_GL_CALL(glReadPixels(0, 0, renderRequest->resolution, renderRequest->resolution, GL_RGBA, GL_UNSIGNED_BYTE, readBuffer));
+    */
 
 #endif
 
-    //renderBufferDownsample.read(0, readBuffer, renderBufferDownsample.getSize().x, renderBufferDownsample.getSize().y, renderTextureDownsampleColor->getNativeTexture().surface.nativeFormat);
+    // renderBufferDownsample.read(0, readBuffer, renderBufferDownsample.getSize().x, renderBufferDownsample.getSize().y, renderTextureDownsampleColor->getNativeTexture().surface.nativeFormat);
 
     rio::NativeTextureFormat nativeFormat = texture->getNativeTexture().surface.nativeFormat;
 
@@ -801,9 +924,9 @@ static void copyAndSendRenderBufferToSocket(rio::RenderBuffer& renderBuffer, rio
     RIO_GL_CALL(glReadPixels(0, 0, width, height, nativeFormat.format, nativeFormat.type, nullptr));
 
     // Map the PBO to read the data
-    void* readBuffer;
+    void *readBuffer;
     // opengl 2 and below compatible function
-    //RIO_GL_CALL(readBuffer = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
+    // RIO_GL_CALL(readBuffer = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
     // this should be compatible with OpenGL 3.3 and OpenGL ES 3.0
     RIO_GL_CALL(readBuffer = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, bufferSize, GL_MAP_READ_BIT));
 
@@ -854,7 +977,70 @@ rio::mdl::Model* RootTask::getBodyModel_(Model* pModel, BodyType type)
     return model;
 }
 
+// draws mii hat
+void RootTask::drawMiiHat(Model *pModel, uint8_t &hatType,
+                          rio::Matrix34f &model_mtx, rio::BaseMtx34f &view_mtx,
+                          rio::BaseMtx44f &proj_mtx, const rio::Vector3f scaleFactors)
+{
 
+    const bool lightEnable = pModel->getLightEnable();
+    FFLiCharInfo *pCharInfo = pModel->getCharInfo();
+
+    // Hat model
+    // RIO_ASSERT(hatType < 10);
+    std::string errMsg;
+
+    const rio::mdl::Model *model = mpHatModels[hatType];
+
+    const rio::mdl::Mesh *const meshes = model->meshes();
+
+    // THANK YOU ARIAN
+
+    FFLPartsTransform partsTransform;
+    FFLGetPartsTransform(&partsTransform, mpModel->getCharModel());
+
+    // Render each mesh in order
+    for (u32 i = 0; i < model->numMeshes(); i++)
+    {
+        const rio::mdl::Mesh &mesh = meshes[i];
+
+        // BIND SHADER
+        IShader *pShader = pModel->getShader();
+        pShader->bindBodyShader(lightEnable, pCharInfo);
+        // #ifndef USE_OLD_MODELS
+        //         if ((i % 2) == 1) // is it the second mesh (pants)?
+        //             pShader->setBodyShaderPantsMaterial(pantsColor);
+        // #endif
+
+        // make new matrix for body
+        // rio::Matrix34f modelMtxHat = rio::Matrix34f::ident; // model_mtx;
+
+        // // apply scale factors before anything else
+        // modelMtxBody.applyScaleLocal(scaleFactors);
+        // apply original model matrix (rotation)
+        // modelMtxHat.setMul(model_mtx, modelMtxHat);
+        rio::Matrix34f tmpHatMatrix;
+
+        // apply head rotation, and translation
+        tmpHatMatrix.makeRT(cBodyHeadRotation, {0.0f,
+                                                cBodyHeadYTranslation * scaleFactors.y * cBodyScaleFactor,
+                                                0.0f});
+
+        tmpHatMatrix.applyTranslationLocal({partsTransform.hatTranslate.x, partsTransform.hatTranslate.y, partsTransform.hatTranslate.z});
+
+        // Apply Position & Rotation ???
+        // tmpHatMatrix.makeRT({0, 0, 0}, {partsTransform.hatTranslate.x, partsTransform.hatTranslate.y, partsTransform.hatTranslate.z});
+        // tmpHatMatrix.makeRT({0, 0, 0}, {0, 0, 0});
+        tmpHatMatrix.setMul(model_mtx, tmpHatMatrix);
+
+        pShader->setViewUniformBody(tmpHatMatrix, view_mtx, proj_mtx);
+
+        rio::RenderState render_state;
+        render_state.setCullingMode(rio::Graphics::CULLING_MODE_BACK);
+        render_state.applyCullingAndPolygonModeAndPolygonOffset();
+        mesh.draw();
+    }
+}
 
 // configures camera, proj mtx, uses height from charinfo...
 // ... to handle the view type appropriately
@@ -871,13 +1057,13 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
             // if it has body then use the matrix we just defined
             *projMtx = *mProjMtxIconBody;
 
-            //RIO_LOG("x = %i, y = %i, z = %i\n", renderRequest->cameraRotate.x, renderRequest->cameraRotate.y, renderRequest->cameraRotate.z);
-            /*
-            rio::Vec3f fCameraPosition = {
-                fmod(static_cast<f32>(renderRequest->cameraRotate.x), 360),
-                fmod(static_cast<f32>(renderRequest->cameraRotate.y), 360),
-                fmod(static_cast<f32>(renderRequest->cameraRotate.z), 360),
-            };*/
+        // RIO_LOG("x = %i, y = %i, z = %i\n", renderRequest->cameraRotate.x, renderRequest->cameraRotate.y, renderRequest->cameraRotate.z);
+        /*
+        rio::Vec3f fCameraPosition = {
+            fmod(static_cast<f32>(renderRequest->cameraRotate.x), 360),
+            fmod(static_cast<f32>(renderRequest->cameraRotate.y), 360),
+            fmod(static_cast<f32>(renderRequest->cameraRotate.z), 360),
+        };*/
 
             // FFLMakeIconWithBody view uses 37.05f, 415.53f
             // below values are extracted from wii u mii maker
@@ -915,96 +1101,88 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
             pCamera->pos() = { 0.0f, 9.0f, 900.0f };
             pCamera->at() = { 0.0f, 105.0f, 0.0f };
 
-            pCamera->setUp({ 0.0f, 1.0f, 0.0f });
-            break;
-        }
-        case VIEW_TYPE_ALL_BODY_SUGAR: // like mii maker/nnid
-        {
-            static const float aspect = 3.0f / 4.0f;
-            *aspectHeightFactor = 1.0f / aspect;
-            //projMtx = *mProjMtxIconBody;
-            static const rio::PerspectiveProjection projAllBodyAspect(
-                10.0f,//10.0f,
-                1000.0f,
-                rio::Mathf::deg2rad(15.0f),
-                aspect
-            );
-            static const rio::BaseMtx44f projMtxAllBodyAspect = rio::BaseMtx44f(projAllBodyAspect.getMatrix());
-            *projMtx = projMtxAllBodyAspect;
+        pCamera->setUp({0.0f, 1.0f, 0.0f});
+        break;
+    }
+    case VIEW_TYPE_ALL_BODY_SUGAR: // like mii maker/nnid
+    {
+        static const float aspect = 3.0f / 4.0f;
+        *aspectHeightFactor = 1.0f / aspect;
+        // projMtx = *mProjMtxIconBody;
+        static const rio::PerspectiveProjection projAllBodyAspect(
+            10.0f, // 10.0f,
+            1000.0f,
+            rio::Mathf::deg2rad(15.0f),
+            aspect);
+        static const rio::BaseMtx44f projMtxAllBodyAspect = rio::BaseMtx44f(projAllBodyAspect.getMatrix());
+        *projMtx = projMtxAllBodyAspect;
 
-            *isCameraPosAbsolute = true;
+        *isCameraPosAbsolute = true;
 
-            // NOTE: wii u mii maker does some strange
-            // camera zooming, to make the character
-            // bigger when it's shorter and smaller
-            // when it's taller, purely based on height
+        // NOTE: wii u mii maker does some strange
+        // camera zooming, to make the character
+        // bigger when it's shorter and smaller
+        // when it's taller, purely based on height
 
-            // this is an ATTEMPT??? to simulate that
-            // via interpolation which is... meh
+        // this is an ATTEMPT??? to simulate that
+        // via interpolation which is... meh
 
             const float scaleFactorY = BodyModel::calcBodyScale(pCharInfo->build, pCharInfo->height).y;
 
-            // These camera parameters look right when the character is tallest
-            const rio::Vector3f posStart = { 0.0f, 30.0f, 550.0f };
-            const rio::Vector3f atStart = { 0.0f, 65.0f, 0.0f };
+        // These camera parameters look right when the character is tallest
+        const rio::Vector3f posStart = {0.0f, 30.0f, 550.0f};
+        const rio::Vector3f atStart = {0.0f, 65.0f, 0.0f};
 
-            // Likewise these look correct when it's shortest.
-            const rio::Vector3f posEnd = { 0.0f, 9.0f, 850.0f };
-            const rio::Vector3f atEnd = { 0.0f, 90.0f, 0.0f };
+        // Likewise these look correct when it's shortest.
+        const rio::Vector3f posEnd = {0.0f, 9.0f, 850.0f};
+        const rio::Vector3f atEnd = {0.0f, 90.0f, 0.0f};
 
-            // Calculate interpolation factor (normalized to range [0, 1])
-            float t = (scaleFactorY - 0.5f) / (1.264f - 0.5f);
+        // Calculate interpolation factor (normalized to range [0, 1])
+        float t = (scaleFactorY - 0.5f) / (1.264f - 0.5f);
 
+        // Interpolate between start and end positions
+        rio::Vector3f pos = {
+            posStart.x + t * (posEnd.x - posStart.x),
+            posStart.y + t * (posEnd.y - posStart.y),
+            posStart.z + t * (posEnd.z - posStart.z)};
 
+        // Interpolate between start and end target positions
+        rio::Vector3f at = {
+            atStart.x + t * (atEnd.x - atStart.x),
+            atStart.y + t * (atEnd.y - atStart.y),
+            atStart.z + t * (atEnd.z - atStart.z)};
 
-            // Interpolate between start and end positions
-            rio::Vector3f pos = {
-                posStart.x + t * (posEnd.x - posStart.x),
-                posStart.y + t * (posEnd.y - posStart.y),
-                posStart.z + t * (posEnd.z - posStart.z)
-            };
+        /*
+        // height = 127, 1.264
+        pCamera->pos() = { 0.0f, 9.0f, 850.0f };
+        pCamera->at() = { 0.0f, 90.0f, 0.0f }; // higher = model is lower
+        // height = 0,   0.5
+        pCamera->pos() = { 0.0f, 30.0f, 550.0f }; // lower = closer
+        pCamera->at() = { 0.0f, 65.0f, 0.0f };
+        */
 
-            // Interpolate between start and end target positions
-            rio::Vector3f at = {
-                atStart.x + t * (atEnd.x - atStart.x),
-                atStart.y + t * (atEnd.y - atStart.y),
-                atStart.z + t * (atEnd.z - atStart.z)
-            };
+        pCamera->pos() = pos;
+        pCamera->at() = at;
+        // pCamera->pos() = { 0.0f, 9.0f, 900.0f };
+        // pCamera->at() = { 0.0f, 6.0f, 0.0f };
+        pCamera->setUp({0.0f, 1.0f, 0.0f});
+        break;
+    }
+    default:
+    {
+        // default, face only (FFLMakeIcon)
+        // use default if request is head only
+        *projMtx = mProjMtx;
+        *willDrawBody = false;
 
-            /*
-            // height = 127, 1.264
-            pCamera->pos() = { 0.0f, 9.0f, 850.0f };
-            pCamera->at() = { 0.0f, 90.0f, 0.0f }; // higher = model is lower
-            // height = 0,   0.5
-            pCamera->pos() = { 0.0f, 30.0f, 550.0f }; // lower = closer
-            pCamera->at() = { 0.0f, 65.0f, 0.0f };
-            */
+        pCamera->at() = {0.0f, 34.5f, 0.0f};
+        pCamera->setUp({0.0f, 1.0f, 0.0f});
 
-            pCamera->pos() = pos;
-            pCamera->at() = at;
-            //pCamera->pos() = { 0.0f, 9.0f, 900.0f };
-            //pCamera->at() = { 0.0f, 6.0f, 0.0f };
-            pCamera->setUp({ 0.0f, 1.0f, 0.0f });
-            break;
-        }
-        default:
-        {
-            // default, face only (FFLMakeIcon)
-            // use default if request is head only
-            *projMtx = mProjMtx;
-            *willDrawBody = false;
-
-            pCamera->at() = { 0.0f, 34.5f, 0.0f };
-            pCamera->setUp({ 0.0f, 1.0f, 0.0f });
-
-            pCamera->pos() = { 0.0f, 34.5f, 600.0f };
-            break;
-        }
+        pCamera->pos() = {0.0f, 34.5f, 600.0f};
+        break;
+    }
     }
 }
-
-
-
 
 // Convert degrees to radians
 static rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3])
@@ -1022,8 +1200,7 @@ static rio::Vector3f calculateCameraOrbitPosition(f32 radius, const rio::Vector3
     return {
         radius * -std::sin(radians.y) * std::cos(radians.x),
         radius * std::sin(radians.x),
-        radius * std::cos(radians.y) * std::cos(radians.x)
-    };
+        radius * std::cos(radians.y) * std::cos(radians.x)};
 }
 
 // Calculate up vector based on z rotation
@@ -1048,7 +1225,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     RIO_LOG("handleRenderRequest: socket handle: %d\n", socket);
 
     // hopefully renderrequest is proper
-    RenderRequest* renderRequest = reinterpret_cast<RenderRequest*>(buf);
+    RenderRequest *renderRequest = reinterpret_cast<RenderRequest *>(buf);
 
     if (renderRequest->responseFormat == RESPONSE_FORMAT_GLTF_MODEL)
     {
@@ -1074,11 +1251,11 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
          * they would negate the need to do this.
          */
 
-        // select mask texture for current expression
-        const FFLiRenderTexture* pRenderTexture = pCharModel->maskTextures.pRenderTextures[pCharModel->expression];
-        RIO_ASSERT(pRenderTexture != nullptr);
+            // select mask texture for current expression
+            const FFLiRenderTexture *pRenderTexture = pCharModel->maskTextures.pRenderTextures[pCharModel->expression];
+            RIO_ASSERT(pRenderTexture != nullptr);
 
-        pRenderTexture->pRenderBuffer->bind();
+            pRenderTexture->pRenderBuffer->bind();
 
         // NOTE the resolution of this is the texture resolution so that would have to match what the client expects
         copyAndSendRenderBufferToSocket(*pRenderTexture->pRenderBuffer, pRenderTexture->pTexture2D, socket, 1);
@@ -1212,7 +1389,6 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     rio::Matrix34f model_mtx = rio::Matrix34f::ident;
 
-
     rio::Matrix34f rotationMtx;
     rotationMtx.makeR(modelRotate);
     // apply rotation
@@ -1260,13 +1436,13 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     // Create the render buffer with the desired size
     rio::RenderBuffer renderBuffer;
-    //renderBuffer.setSize(renderRequest->resolution * 2, renderRequest->resolution * 2);    hasSocketRequest = false;
+    // renderBuffer.setSize(renderRequest->resolution * 2, renderRequest->resolution * 2);    hasSocketRequest = false;
 
     int ssaaFactor =
 #ifdef TRY_SCALING
-    2;  // Super Sampling factor, e.g., 2 for 2x SSAA
+        2; // Super Sampling factor, e.g., 2 for 2x SSAA
 #else
-    1;
+            1;
 #endif
     const int iResolution = static_cast<int>(renderRequest->resolution);
     const int width = iResolution * ssaaFactor;
@@ -1280,19 +1456,19 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     renderBuffer.setSize(width, height);
     RIO_LOG("Render buffer created with size: %dx%d\n", renderBuffer.getSize().x, renderBuffer.getSize().y);
 
-    //rio::Window::instance()->getNativeWindow()->getColorBufferTextureFormat();
+    // rio::Window::instance()->getNativeWindow()->getColorBufferTextureFormat();
     rio::TextureFormat textureFormat = rio::TEXTURE_FORMAT_R8_G8_B8_A8_UNORM;
 #if RIO_IS_WIN && defined(TRY_BGRA_RENDERBUFFER_FORMAT)
     // ig this works on opengl and is the teeniest tiniest bit more efficient
     // however golang does not support this and png, jpeg, webp aren't using this anyway so
     textureFormat = rio::TEXTURE_FORMAT_B8_G8_R8_A8_UNORM;
 #elif RIO_IS_WIN //&& !defined(RIO_GLES) // not supported in gles core
-    if (renderRequest->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y
+        if (renderRequest->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y
 #ifdef RIO_GLES
-        && GLAD_GL_EXT_texture_format_BGRA8888
+            && GLAD_GL_EXT_texture_format_BGRA8888
 #endif
-    )
-        textureFormat = rio::TEXTURE_FORMAT_B8_G8_R8_A8_UNORM;
+        )
+            textureFormat = rio::TEXTURE_FORMAT_B8_G8_R8_A8_UNORM;
 #endif
     rio::Texture2D renderTextureColor(textureFormat, renderBuffer.getSize().x, renderBuffer.getSize().y, 1);
     rio::RenderTargetColor renderTargetColor;
@@ -1331,8 +1507,8 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     RIO_LOG("Render buffer bound.\n");
 
-    //if (gl_FragCoord.z > 0.98593) discard;
-    // Enable depth testing
+    // if (gl_FragCoord.z > 0.98593) discard;
+    //  Enable depth testing
     /*glEnable(GL_DEPTH_TEST);
     // Set the depth function to discard fragments with depth values greater than the threshold
     glDepthFunc(GL_GREATER);
@@ -1423,7 +1599,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     renderBuffer.getRenderTargetDepth()->invalidateGPUCache();
     renderTextureColor.setCompMap(0x00010205);
 
-    //RIO_LOG("Render buffer unbound and GPU cache invalidated.\n");
+    // RIO_LOG("Render buffer unbound and GPU cache invalidated.\n");
 
     if (instanceCurrent < instanceTotal - 1)
     {
@@ -1480,7 +1656,7 @@ void RootTask::calc_()
             delete mpModel;
             hasSocketRequest = true;
 
-            RenderRequest* reqBuf = reinterpret_cast<RenderRequest*>(buf);
+            RenderRequest *reqBuf = reinterpret_cast<RenderRequest *>(buf);
 
             if (!createModel_(reqBuf, mServerSocket))
             {
@@ -1508,7 +1684,6 @@ void RootTask::calc_()
     }
 #endif
 
-
     if (hasSocketRequest)
         return handleRenderRequest(buf, mpModel, mServerSocket);
 
@@ -1516,7 +1691,7 @@ void RootTask::calc_()
     {
         rio::Window::instance()->clearColor(0.2f, 0.3f, 0.3f, 1.0f);
         rio::Window::instance()->clearDepthStencil();
-        //rio::Window::instance()->setSwapInterval(0);  // disable v-sync
+        // rio::Window::instance()->setSwapInterval(0);  // disable v-sync
     }
 
     if (mpModel == nullptr)
@@ -1525,9 +1700,9 @@ void RootTask::calc_()
     // Distance in the XZ-plane from the center to the camera position
     f32 radius = 700.0f;
     // Define a constant position in the 3D space for the center position of the camera
-    static const rio::Vector3f CENTER_POS = { 0.0f, 90.0f, radius };
-    mCamera.at() = { 0.0f, 80.0f, 0.0f };
-    mCamera.setUp({ 0.0f, 1.0f, 0.0f });
+    static const rio::Vector3f CENTER_POS = {0.0f, 90.0f, radius};
+    mCamera.at() = {0.0f, 80.0f, 0.0f};
+    mCamera.setUp({0.0f, 1.0f, 0.0f});
     // Move the camera around the target clockwise
     // Define the radius of the orbit in the XZ-plane (distance from the target)
     rio::Matrix34f model_mtx = rio::Matrix34f::ident;
@@ -1540,13 +1715,11 @@ void RootTask::calc_()
         std::cos(mCounter) * radius
     );
     */
-    mCamera.pos() = { CENTER_POS.x, CENTER_POS.y, radius };
+    mCamera.pos() = {CENTER_POS.x, CENTER_POS.y, radius};
 
-    model_mtx.makeR({
-        0.0f,
-        mCounter,
-        0.0f
-    });
+    model_mtx.makeR({0.0f,
+                     mCounter,
+                     0.0f});
 
     mpModel->setMtxRT(model_mtx);
 
@@ -1630,7 +1803,6 @@ void handleGLTFRequest(RenderRequest* renderRequest, Model* pModel, int socket)
 
     // Get the model data from the stream
     std::string modelData = modelStream.str();
-
 
     // Send the actual GLTF model data
     unsigned long totalSent = 0;

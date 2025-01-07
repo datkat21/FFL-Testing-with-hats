@@ -24,7 +24,6 @@
 #include <gfx/mdl/rio_Model.h>
 #include <task/rio_Task.h>
 
-
 #include <nn/ffl.h>
 #include <nn/ffl/FFLiMiiData.h>
 
@@ -37,12 +36,22 @@
 #include <vector>
 #endif
 
+// arian told me to put it in here instead of another one so ok i will do that
+typedef enum BodyType
+{
+    BODY_TYPE_WIIU,
+    BODY_TYPE_SWITCH,
+    BODY_TYPE_MIITOMO,
+    BODY_TYPE_MAX,
+} BodyType;
+
+
 class Model;
 
 #define RENDERREQUEST_SIZE sizeof(RenderRequest)
 
 #include <mii_ext_MiiPort.h> // used for below function
-FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo* pCharInfo, RenderRequest *buf);
+FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo *pCharInfo, RenderRequest *buf);
 
 class RootTask : public rio::ITask
 {
@@ -56,14 +65,14 @@ private:
 
     void handleRenderRequest(char* buf, Model* pModel, int socket);
 #ifndef NO_GLTF
-    void handleGLTFRequest(RenderRequest* renderRequest);
+    void handleGLTFRequest(RenderRequest *renderRequest);
 #endif
 
     void loadResourceFiles_();
     void loadBodyModels_();
     void createModel_();
-    //void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
-    bool createModel_(RenderRequest* buf, int socket_handle);
+    // void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
+    bool createModel_(RenderRequest *buf, int socket_handle);
 
     void initializeShaders_()
     {
@@ -111,8 +120,8 @@ private:
     void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
 
 private:
-    bool                mInitialized;
-    bool                mSocketIsListening;
+    bool mInitialized;
+    bool mSocketIsListening;
 #if RIO_IS_WIN
     std::vector<std::vector<char>> mStoreDataArray;
 #endif

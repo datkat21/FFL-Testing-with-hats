@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	// ApproxBiLinear for CPU SSAA
 	"golang.org/x/image/draw"
 
@@ -628,10 +629,8 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if clothesColorStr == "" {
 		clothesColorStr = "-1"
 	}
-	pantsColorStr := query.Get("pantsColor")
-	if pantsColorStr == "" {
-		pantsColorStr = "red"
-	}
+
+	bodyTypeStr := query.Get("bodyType")
 
 	var responseFormat uint8 = 0
 	if strings.HasSuffix(r.URL.Path, ".glb") {
@@ -767,6 +766,28 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	mipmapEnable := query.Get("mipmapEnable") != ""      // is present?
 	lightEnable := query.Get("lightEnable") != "0"       // 0 = no lighting
 	verifyCharInfo := query.Get("verifyCharInfo") != "0" // verify default
+	// hatType := query.Get("hatType") != "0" // verify default
+
+	hatTypeStr := query.Get("hatType")
+	if hatTypeStr == "" {
+		hatTypeStr = "default"
+	}
+	hatColorStr := query.Get("hatColor")
+	if hatColorStr == "" {
+		hatColorStr = "default"
+	}
+
+	var hatType int
+	hatType, err = strconv.Atoi(hatTypeStr)
+	if err != nil {
+		hatType = getHatTypeInt(hatTypeStr)
+	}
+
+	var hatColor int
+	hatColor, err = strconv.Atoi(hatColorStr)
+	if err != nil {
+		hatColor = getHatColorInt(hatColorStr)
+	}
 
 	// Parsing and validating resource type
 	resourceType, err := strconv.Atoi(resourceTypeStr)
@@ -948,7 +969,6 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 	bgColor4u8 := [4]uint8{bgColor.R, bgColor.G, bgColor.B, bgColor.A}
 
-
 	shaderType, err := strconv.Atoi(shaderTypeStr)
 	if err != nil {
 		shaderType = getMapToInt(shaderTypeStr, shaderTypeMap, 0)
@@ -979,6 +999,9 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		//InstanceRotationModeIsCamera: false,
 		DrawStageMode:  uint8(drawStageMode),
 		VerifyCharInfo: verifyCharInfo,
+		HatType:        uint8(hatType),
+		HatColor:       uint8(hatColor),
+		BodyType:       uint8(bodyType),
 		VerifyCRC16:    verifyCRC16,
 		LightEnable:    lightEnable,
 		ClothesColor:   int8(clothesColor),
@@ -1209,6 +1232,37 @@ var clothesColorMap = map[string]int{
 	"brown":       9,
 	"white":       10,
 	"black":       11,
+}
+
+var hatTypeMap = map[string]int{
+	// NOTE: solely based on mii studio consts, not FFL enums
+	"default":     0,
+	"cap":         1,
+	"beanie":      2,
+	"top_hat":     3,
+	"ribbon":      4,
+	"bow":         5,
+	"cat_ears":    6,
+	"straw_hat":   7,
+	"hijab":       8,
+	"bike_helmet": 9,
+}
+
+var hatColorMap = map[string]int{
+	// NOTE: solely based on mii studio consts, not FFL enums
+	"default":     0,
+	"red":         1,
+	"orange":      2,
+	"yellow":      3,
+	"yellowgreen": 4,
+	"green":       5,
+	"blue":        6,
+	"skyblue":     7,
+	"pink":        8,
+	"purple":      9,
+	"brown":       10,
+	"white":       11,
+	"black":       12,
 }
 
 var pantsColorMap = map[string]int{

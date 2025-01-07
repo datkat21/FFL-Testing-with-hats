@@ -1,0 +1,545 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Library Debug|Win32">
+      <Configuration>Library Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Library Debug|x64">
+      <Configuration>Library Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{8BF438D7-D1A1-47DE-8A7E-BDADE7FA6A6A}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Library Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Library Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Library Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Library Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Library Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)\</OutDir>
+    <TargetName>$(ProjectName)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Library Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)\</OutDir>
+    <TargetName>libffl</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;FFL_MLC_PATH="./";RIO_DEBUG;NDEBUG;FFL_NO_OPEN_DATABASE;FFL_TEST_DISABLE_MII_COLOR_VERIFY;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>ninTexUtils/include;rio/include;ffl/include;include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>glew-2.1.0-win32/glew-2.1.0/include;glfw-3.4.bin.WIN64/glfw-3.4.bin.WIN64/include;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <WarningLevel>Level3</WarningLevel>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Library Debug|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;FFL_MLC_PATH="./";RIO_DEBUG;NDEBUG;FFL_NO_OPEN_DATABASE;FFL_TEST_DISABLE_MII_COLOR_VERIFY;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>ninTexUtils/include;rio/include;ffl/include;include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>glew-2.1.0-win32/glew-2.1.0/include;glfw-3.4.bin.WIN64/glfw-3.4.bin.WIN64/include;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <WarningLevel>Level3</WarningLevel>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;RIO_DEBUG;RIO_NO_CONTROLLERS_WIN;FFL_NO_FS;FFL_NO_DATABASE_FILE;FFL_NO_MIDDLE_DB;FFL_NO_DATABASE_RANDOM;FFL_NO_DRAW_MASK_TWICE;%(PreprocessorDefinitions);RIO_NO_CLIP_CONTROL;NEW_MODELS;FFL_NO_DRAW_MASK_ALPHA_VALUES</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>zlib-win-build-1.3.1-p1;glfw-3.4.bin.WIN64/glfw-3.4.bin.WIN64/include;ninTexUtils/include;rio/include;ffl/include;include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <WarningLevel>Level3</WarningLevel>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>zlib-win-build-1.3.1-p1/build-VS2022/x64/Debug/libz.lib;opengl32.lib;glfw-3.4.bin.WIN64/glfw-3.4.bin.WIN64/lib-vc2022/glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ModuleDefinitionFile>
+      </ModuleDefinitionFile>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Library Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;RIO_DEBUG;RIO_NO_CONTROLLERS_WIN;FFL_NO_FS;FFL_NO_DATABASE_FILE;FFL_NO_MIDDLE_DB;FFL_NO_DATABASE_RANDOM;FFL_NO_DRAW_MASK_TWICE;%(PreprocessorDefinitions);NO_GLTF;RIO_NO_CLIP_CONTROL;RIO_NO_GLFW_CALLS;RIO_NO_GLAD_LOADER;FFL_ADD_GLAD_GL_IMPLEMENTATION_IN_FFLGLOBAL;RIO_GL_TRACE</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>zlib-win-build-1.3.1-p1;glfw-3.4.bin.WIN64/glfw-3.4.bin.WIN64/include;ninTexUtils/include;rio/include;ffl/include;include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <WarningLevel>Level3</WarningLevel>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>zlib-win-build-1.3.1-p1/build-VS2022/x64/Debug/libz.lib;opengl32.lib;glfw-3.4.bin.WIN64/glfw-3.4.bin.WIN64/lib-vc2022/glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ModuleDefinitionFile>libffl.def</ModuleDefinitionFile>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;FFL_MLC_PATH="./";RIO_DEBUG;NDEBUG;FFL_NO_OPEN_DATABASE;FFL_TEST_DISABLE_MII_COLOR_VERIFY;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>ninTexUtils/include;rio/include;ffl/include;include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>glew-2.1.0-win32/glew-2.1.0/include;glfw-3.4.bin.WIN64/glfw-3.4.bin.WIN64/include;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <WarningLevel>Level3</WarningLevel>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;FFL_MLC_PATH="./";RIO_DEBUG;NDEBUG;FFL_NO_OPEN_DATABASE;FFL_TEST_DISABLE_MII_COLOR_VERIFY;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>ninTexUtils/include;rio/include;ffl/include;include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>glew-2.1.0-win32/glew-2.1.0/include;glfw-3.4.bin.WIN64/glfw-3.4.bin.WIN64/include;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <WarningLevel>Level3</WarningLevel>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="ffl\src\detail\FFLiBug.cpp" />
+    <ClCompile Include="ffl\src\detail\FFLiCharInfo.cpp" />
+    <ClCompile Include="ffl\src\detail\FFLiCopySurface.cpp" />
+    <ClCompile Include="ffl\src\detail\FFLiCopySurfaceDrawer.cpp" />
+    <ClCompile Include="ffl\src\detail\FFLiCopySurfaceShader.cpp" />
+    <ClCompile Include="ffl\src\detail\FFLiCrc.cpp" />
+    <ClCompile Include="ffl\src\detail\FFLiResourceCache.cpp" />
+    <ClCompile Include="ffl\src\detail\FFLiResourceShape.cpp" />
+    <ClCompile Include="ffl\src\detail\FFLiResourceTexture.cpp" />
+    <ClCompile Include="ffl\src\FFLCharModel.cpp" />
+    <ClCompile Include="ffl\src\FFLDatabase.cpp" />
+    <ClCompile Include="ffl\src\FFLGlobal.cpp" />
+    <ClCompile Include="ffl\src\FFLiAdditionalInfo.cpp" />
+    <ClCompile Include="ffl\src\FFLiAuthorID.cpp" />
+    <ClCompile Include="ffl\src\FFLiCharModel.cpp" />
+    <ClCompile Include="ffl\src\FFLiCharModelCreateParam.cpp" />
+    <ClCompile Include="ffl\src\FFLiCharModelCreator.cpp" />
+    <ClCompile Include="ffl\src\FFLiColor.cpp" />
+    <ClCompile Include="ffl\src\FFLiCoordinate.cpp" />
+    <ClCompile Include="ffl\src\FFLiCreateID.cpp" />
+    <ClCompile Include="ffl\src\FFLiDatabaseDefault.cpp" />
+    <ClCompile Include="ffl\src\FFLiDatabaseFileAccessor.cpp" />
+    <ClCompile Include="ffl\src\FFLiDatabaseFileHidden.cpp" />
+    <ClCompile Include="ffl\src\FFLiDatabaseFileOfficial.cpp" />
+    <ClCompile Include="ffl\src\FFLiDatabaseManager.cpp" />
+    <ClCompile Include="ffl\src\FFLiDatabaseRandom.cpp" />
+    <ClCompile Include="ffl\src\FFLiDateTime.cpp" />
+    <ClCompile Include="ffl\src\FFLiFacelineTexture.cpp" />
+    <ClCompile Include="ffl\src\FFLiManager.cpp" />
+    <ClCompile Include="ffl\src\FFLiMaskTextures.cpp" />
+    <ClCompile Include="ffl\src\FFLiMiddleDB.cpp" />
+    <ClCompile Include="ffl\src\FFLiMiiData.cpp" />
+    <ClCompile Include="ffl\src\FFLiMiiDataCore.cpp" />
+    <ClCompile Include="ffl\src\FFLiMipMapUtil.cpp" />
+    <ClCompile Include="ffl\src\FFLiMisc.cpp" />
+    <ClCompile Include="ffl\src\FFLiModulate.cpp" />
+    <ClCompile Include="ffl\src\FFLiPartsTextures.cpp" />
+    <ClCompile Include="ffl\src\FFLiPath.cpp" />
+    <ClCompile Include="ffl\src\FFLiRandomContext.cpp" />
+    <ClCompile Include="ffl\src\FFLiRawMask.cpp" />
+    <ClCompile Include="ffl\src\FFLiRawMaskParts.cpp" />
+    <ClCompile Include="ffl\src\FFLiRenderTexture.cpp" />
+    <ClCompile Include="ffl\src\FFLiResourceHeader.cpp" />
+    <ClCompile Include="ffl\src\FFLiResourceLoader.cpp" />
+    <ClCompile Include="ffl\src\FFLiResourceLoaderBuffer.cpp" />
+    <ClCompile Include="ffl\src\FFLiResourceManager.cpp" />
+    <ClCompile Include="ffl\src\FFLiResourceUncompressBuffer.cpp" />
+    <ClCompile Include="ffl\src\FFLiResourceUtil.cpp" />
+    <ClCompile Include="ffl\src\FFLiShaderCallback.cpp" />
+    <ClCompile Include="ffl\src\FFLiShape.cpp" />
+    <ClCompile Include="ffl\src\FFLiSwapEndian.cpp" />
+    <ClCompile Include="ffl\src\FFLiSystem.cpp" />
+    <ClCompile Include="ffl\src\FFLiSystemContext.cpp" />
+    <ClCompile Include="ffl\src\FFLiTexture.cpp" />
+    <ClCompile Include="ffl\src\FFLiUtil.cpp" />
+    <ClCompile Include="ffl\src\FFLiUtilShader.cpp" />
+    <ClCompile Include="ffl\src\FFLiZlibInflator.cpp" />
+    <ClCompile Include="ffl\src\FFLMiddleDB.cpp" />
+    <ClCompile Include="ffl\src\FFLResource.cpp" />
+    <ClCompile Include="ffl\src\FFLShaderCallback.cpp" />
+    <ClCompile Include="nintexutils\src\nintexutils\bcn\decompress.c" />
+    <ClCompile Include="nintexutils\src\nintexutils\dds.c" />
+    <ClCompile Include="nintexutils\src\nintexutils\gfd\gfdInterface.cpp" />
+    <ClCompile Include="nintexutils\src\nintexutils\gx2\gx2Shaders.cpp" />
+    <ClCompile Include="nintexutils\src\nintexutils\gx2\gx2Surface.cpp" />
+    <ClCompile Include="nintexutils\src\nintexutils\gx2\gx2Texture.cpp" />
+    <ClCompile Include="nintexutils\src\nintexutils\gx2\tcl\addrlib.cpp" />
+    <ClCompile Include="rio\src\audio\rio_AudioMgr.cpp" />
+    <ClCompile Include="rio\src\audio\rio_AudioSrc.cpp" />
+    <ClCompile Include="rio\src\container\rio_LinkList.cpp" />
+    <ClCompile Include="rio\src\controller\cafe\rio_CafeDRCControllerCafe.cpp" />
+    <ClCompile Include="rio\src\controller\cafe\rio_CafeRemoteControllerCafe.cpp" />
+    <ClCompile Include="rio\src\controller\cafe\rio_CafeVPadDeviceCafe.cpp" />
+    <ClCompile Include="rio\src\controller\cafe\rio_CafeWPadDeviceCafe.cpp" />
+    <ClCompile Include="rio\src\controller\rio_Controller.cpp" />
+    <ClCompile Include="rio\src\controller\rio_ControllerBase.cpp" />
+    <ClCompile Include="rio\src\controller\rio_ControllerMgr.cpp" />
+    <ClCompile Include="rio\src\controller\win\rio_KeyboardMouseDeviceWin.cpp" />
+    <ClCompile Include="rio\src\controller\win\rio_WinControllerWin.cpp" />
+    <ClCompile Include="rio\src\controller\win\rio_WinGamepadControllerWin.cpp" />
+    <ClCompile Include="rio\src\filedevice\cafe\rio_CafeSDFileDeviceCafe.cpp" />
+    <ClCompile Include="rio\src\filedevice\cafe\rio_NativeFileDeviceCafe.cpp" />
+    <ClCompile Include="rio\src\filedevice\rio_ContentFileDevice.cpp" />
+    <ClCompile Include="rio\src\filedevice\rio_FileDevice.cpp" />
+    <ClCompile Include="rio\src\filedevice\rio_FileDeviceMgr.cpp" />
+    <ClCompile Include="rio\src\filedevice\rio_Path.cpp" />
+    <ClCompile Include="rio\src\filedevice\rio_StdIOFileDevice.cpp" />
+    <ClCompile Include="rio\src\filedevice\win\rio_NativeFileDeviceWin.cpp" />
+    <ClCompile Include="rio\src\gfx\cafe\rio_GraphicsCafe.cpp" />
+    <ClCompile Include="rio\src\gfx\cafe\rio_WindowCafe.cpp" />
+    <ClCompile Include="rio\src\gfx\lyr\rio_Drawable.cpp" />
+    <ClCompile Include="rio\src\gfx\lyr\rio_Layer.cpp" />
+    <ClCompile Include="rio\src\gfx\lyr\rio_Renderer.cpp" />
+    <ClCompile Include="rio\src\gfx\mdl\res\rio_MaterialData.cpp" />
+    <ClCompile Include="rio\src\gfx\mdl\res\rio_ModelCacher.cpp" />
+    <ClCompile Include="rio\src\gfx\mdl\rio_Material.cpp" />
+    <ClCompile Include="rio\src\gfx\mdl\rio_Mesh.cpp" />
+    <ClCompile Include="rio\src\gfx\mdl\rio_Model.cpp" />
+    <ClCompile Include="rio\src\gfx\rio_Camera.cpp" />
+    <ClCompile Include="rio\src\gfx\rio_Color.cpp" />
+    <ClCompile Include="rio\src\gfx\rio_PrimitiveRenderer.cpp" />
+    <ClCompile Include="rio\src\gfx\rio_Projection.cpp" />
+    <ClCompile Include="rio\src\gfx\rio_Window.cpp" />
+    <ClCompile Include="rio\src\gfx\win\rio_GraphicsWin.cpp" />
+    <ClCompile Include="rio\src\gfx\win\rio_WindowWin.cpp" />
+    <ClCompile Include="rio\src\gpu\cafe\rio_RenderStateCafe.cpp" />
+    <ClCompile Include="rio\src\gpu\cafe\rio_RenderStateMRTCafe.cpp" />
+    <ClCompile Include="rio\src\gpu\cafe\rio_ShaderCafe.cpp" />
+    <ClCompile Include="rio\src\gpu\cafe\rio_TextureCafe.cpp" />
+    <ClCompile Include="rio\src\gpu\cafe\rio_TextureSamplerCafe.cpp" />
+    <ClCompile Include="rio\src\gpu\cafe\rio_UniformBlockCafe.cpp" />
+    <ClCompile Include="rio\src\gpu\cafe\rio_VertexArrayCafe.cpp" />
+    <ClCompile Include="rio\src\gpu\cafe\rio_VertexBufferCafe.cpp" />
+    <ClCompile Include="rio\src\gpu\cafe\rio_VertexStreamCafe.cpp" />
+    <ClCompile Include="rio\src\gpu\rio_RenderBuffer.cpp" />
+    <ClCompile Include="rio\src\gpu\rio_RenderState.cpp" />
+    <ClCompile Include="rio\src\gpu\rio_RenderStateMRT.cpp" />
+    <ClCompile Include="rio\src\gpu\rio_RenderTarget.cpp" />
+    <ClCompile Include="rio\src\gpu\rio_Texture.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_RenderStateMRTWin.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_RenderStateWin.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_ShaderWin.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_Texture2DUtilWin.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_TextureSamplerWin.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_TextureWin.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_UniformBlockWin.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_VertexArrayWin.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_VertexBufferWin.cpp" />
+    <ClCompile Include="rio\src\gpu\win\rio_VertexStreamWin.cpp" />
+    <ClCompile Include="rio\src\math\impl\rio_QuatImpl.cpp" />
+    <ClCompile Include="rio\src\math\impl\rio_VectorImpl.cpp" />
+    <ClCompile Include="rio\src\math\rio_Matrix.cpp" />
+    <ClCompile Include="rio\src\rio.cpp" />
+    <ClCompile Include="rio\src\task\rio_Task.cpp" />
+    <ClCompile Include="rio\src\task\rio_TaskMgr.cpp" />
+    <ClCompile Include="src\DataUtils.cpp" />
+    <ClCompile Include="src\GLTFExportCallback.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Model.cpp" />
+    <ClCompile Include="src\RootTask.cpp" />
+    <ClCompile Include="src\Shader.cpp" />
+    <ClCompile Include="src\ShaderMiitomo.cpp" />
+    <ClCompile Include="src\ShaderSwitch.cpp" />
+    <ClCompile Include="src\tinygltf_impl.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ffl\include\nn\act.h" />
+    <ClInclude Include="ffl\include\nn\ffl.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiBug.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiCharInfo.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiCopySurface.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiCopySurfaceDrawer.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiCopySurfaceShader.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiCrc.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiFileWriteBuffer.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiResourceCache.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiResourcePartsInfo.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiResourceShape.h" />
+    <ClInclude Include="ffl\include\nn\ffl\detail\FFLiResourceTexture.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLAdditionalInfo.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLAge.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLBirthPlatform.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLBoundingBox.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLCharModel.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLCharModelDesc.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLCharModelSource.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLColor.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLCreateID.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLDatabase.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLDataSource.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLDrawParam.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLExpression.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLFontRegion.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLGender.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLGlobal.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiAdditionalInfo.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiAuthorID.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiCharModel.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiCharModelCreateParam.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiCharModelCreator.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiColor.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiCoordinate.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiCreateID.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiDatabaseDefault.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiDatabaseFile.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiDatabaseFileAccessor.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiDatabaseFileHidden.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiDatabaseFileOfficial.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiDatabaseManager.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiDatabaseRandom.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiDateTime.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiFacelineTexture.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiFacelineTextureTempObject.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiManager.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiMaskTextures.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiMaskTexturesTempObject.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiMiddleDB.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiMiiData.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiMiiDataCore.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiMipMapUtil.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiMisc.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiModulate.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLInitDesc.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiPartsTextures.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiPath.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiRandomContext.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiRawMask.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiRawMaskParts.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiRenderTexture.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiResourceHeader.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiResourceLoader.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiResourceLoaderBuffer.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiResourceManager.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiResourceUncompressBuffer.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiResourceUtil.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiShaderCallback.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiShape.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiShapePartsType.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiShapeType.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiSwapEndian.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiSystem.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiSystemContext.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiTexture.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiTexturePartsType.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiTextureTempObject.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiUtil.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiUtilShader.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiZlibInflator.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLiZlibInterface.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLMiddleDB.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLMiddleDBType.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLModelType.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLModulateParam.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLPartsTransform.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLRace.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLResolution.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLResource.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLResourceDesc.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLResourceType.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLResult.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLRIOInterop.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLShaderCallback.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLStandard.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLTexture.h" />
+    <ClInclude Include="ffl\include\nn\ffl\FFLVec.h" />
+    <ClInclude Include="ffl\include\nn\ffl\types.h" />
+    <ClInclude Include="ffl\include\nn\ffl\version.h" />
+    <ClInclude Include="ffl\src\detail\shaders\FFLiCopySurfaceShaderObj.h" />
+    <ClInclude Include="glfw-3.4.bin.win64\glfw-3.4.bin.win64\include\glfw\glfw3.h" />
+    <ClInclude Include="glfw-3.4.bin.win64\glfw-3.4.bin.win64\include\glfw\glfw3native.h" />
+    <ClInclude Include="include\Model.h" />
+    <ClInclude Include="include\RootTask.h" />
+    <ClInclude Include="include\Shader.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\bcn\decompress.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\dds.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\format_utils.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\gfd\gfdEnum.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\gfd\gfdFile.hpp" />
+    <ClInclude Include="nintexutils\include\nintexutils\gfd\gfdStruct.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\gx2\gx2Enum.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\gx2\gx2Shaders.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\gx2\gx2Surface.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\gx2\gx2Texture.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\gx2\tcl\addrlib.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\gx2\tcl\addrlib.hpp" />
+    <ClInclude Include="nintexutils\include\nintexutils\types.h" />
+    <ClInclude Include="nintexutils\include\nintexutils\util.h" />
+    <ClInclude Include="rio\include\audio\rio_AudioMgr.h" />
+    <ClInclude Include="rio\include\audio\rio_AudioSrc.h" />
+    <ClInclude Include="rio\include\container\rio_LinkList.h" />
+    <ClInclude Include="rio\include\container\rio_TList.h" />
+    <ClInclude Include="rio\include\controller\cafe\rio_CafeDRCControllerCafe.h" />
+    <ClInclude Include="rio\include\controller\cafe\rio_CafeRemoteControllerCafe.h" />
+    <ClInclude Include="rio\include\controller\cafe\rio_CafeVPadDeviceCafe.h" />
+    <ClInclude Include="rio\include\controller\cafe\rio_CafeWPadDeviceCafe.h" />
+    <ClInclude Include="rio\include\controller\rio_ControlDevice.h" />
+    <ClInclude Include="rio\include\controller\rio_Controller.h" />
+    <ClInclude Include="rio\include\controller\rio_ControllerBase.h" />
+    <ClInclude Include="rio\include\controller\rio_ControllerDefine.h" />
+    <ClInclude Include="rio\include\controller\rio_ControllerMgr.h" />
+    <ClInclude Include="rio\include\controller\win\rio_KeyboardMouseDeviceWin.h" />
+    <ClInclude Include="rio\include\controller\win\rio_WinControllerWin.h" />
+    <ClInclude Include="rio\include\controller\win\rio_WinGamepadControllerWin.h" />
+    <ClInclude Include="rio\include\filedevice\cafe\rio_CafeSDFileDeviceCafe.h" />
+    <ClInclude Include="rio\include\filedevice\rio_ContentFileDevice.h" />
+    <ClInclude Include="rio\include\filedevice\rio_FileDevice.h" />
+    <ClInclude Include="rio\include\filedevice\rio_FileDeviceMgr.h" />
+    <ClInclude Include="rio\include\filedevice\rio_MainFileDevice.h" />
+    <ClInclude Include="rio\include\filedevice\rio_NativeFileDevice.h" />
+    <ClInclude Include="rio\include\filedevice\rio_Path.h" />
+    <ClInclude Include="rio\include\filedevice\rio_StdIOFileDevice.h" />
+    <ClInclude Include="rio\include\gfx\cafe\rio_NativeWindowCafe.h" />
+    <ClInclude Include="rio\include\gfx\lyr\rio_Drawable.h" />
+    <ClInclude Include="rio\include\gfx\lyr\rio_Layer.h" />
+    <ClInclude Include="rio\include\gfx\lyr\rio_Renderer.h" />
+    <ClInclude Include="rio\include\gfx\mdl\res\rio_MaterialData.h" />
+    <ClInclude Include="rio\include\gfx\mdl\res\rio_MeshData.h" />
+    <ClInclude Include="rio\include\gfx\mdl\res\rio_ModelCacher.h" />
+    <ClInclude Include="rio\include\gfx\mdl\res\rio_ModelCommonData.h" />
+    <ClInclude Include="rio\include\gfx\mdl\res\rio_ModelData.h" />
+    <ClInclude Include="rio\include\gfx\mdl\rio_Material.h" />
+    <ClInclude Include="rio\include\gfx\mdl\rio_Mesh.h" />
+    <ClInclude Include="rio\include\gfx\mdl\rio_Model.h" />
+    <ClInclude Include="rio\include\gfx\rio_Camera.h" />
+    <ClInclude Include="rio\include\gfx\rio_Color.h" />
+    <ClInclude Include="rio\include\gfx\rio_Graphics.h" />
+    <ClInclude Include="rio\include\gfx\rio_PrimitiveRenderer.h" />
+    <ClInclude Include="rio\include\gfx\rio_Projection.h" />
+    <ClInclude Include="rio\include\gfx\rio_Window.h" />
+    <ClInclude Include="rio\include\gfx\win\rio_NativeWindowWin.h" />
+    <ClInclude Include="rio\include\gpu\cafe\rio_DrawerCafe.h" />
+    <ClInclude Include="rio\include\gpu\rio_Drawer.h" />
+    <ClInclude Include="rio\include\gpu\rio_RenderBuffer.h" />
+    <ClInclude Include="rio\include\gpu\rio_RenderState.h" />
+    <ClInclude Include="rio\include\gpu\rio_RenderStateMRT.h" />
+    <ClInclude Include="rio\include\gpu\rio_RenderTarget.h" />
+    <ClInclude Include="rio\include\gpu\rio_Shader.h" />
+    <ClInclude Include="rio\include\gpu\rio_Texture.h" />
+    <ClInclude Include="rio\include\gpu\rio_TextureSampler.h" />
+    <ClInclude Include="rio\include\gpu\rio_UniformBlock.h" />
+    <ClInclude Include="rio\include\gpu\rio_VertexArray.h" />
+    <ClInclude Include="rio\include\gpu\rio_VertexBuffer.h" />
+    <ClInclude Include="rio\include\gpu\rio_VertexStream.h" />
+    <ClInclude Include="rio\include\gpu\win\rio_DrawerWin.h" />
+    <ClInclude Include="rio\include\gpu\win\rio_Texture2DUtilWin.h" />
+    <ClInclude Include="rio\include\math\impl\rio_MatrixImpl.h" />
+    <ClInclude Include="rio\include\math\impl\rio_QuatImpl.h" />
+    <ClInclude Include="rio\include\math\impl\rio_VectorImpl.h" />
+    <ClInclude Include="rio\include\math\rio_Math.h" />
+    <ClInclude Include="rio\include\math\rio_MathTypes.h" />
+    <ClInclude Include="rio\include\math\rio_Matrix.h" />
+    <ClInclude Include="rio\include\math\rio_Quat.h" />
+    <ClInclude Include="rio\include\math\rio_Vector.h" />
+    <ClInclude Include="rio\include\misc\cafe\rio_MemUtilCafe.h" />
+    <ClInclude Include="rio\include\misc\gl\rio_GL.h" />
+    <ClInclude Include="rio\include\misc\rio_BitFlag.h" />
+    <ClInclude Include="rio\include\misc\rio_MemUtil.h" />
+    <ClInclude Include="rio\include\misc\rio_Types.h" />
+    <ClInclude Include="rio\include\misc\win\rio_MemUtilWin.h" />
+    <ClInclude Include="rio\include\misc\win\rio_Windows.h" />
+    <ClInclude Include="rio\include\rio.h" />
+    <ClInclude Include="rio\include\task\rio_Task.h" />
+    <ClInclude Include="rio\include\task\rio_TaskMgr.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
