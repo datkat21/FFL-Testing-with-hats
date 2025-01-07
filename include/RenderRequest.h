@@ -31,6 +31,8 @@ struct RenderRequest
     int8_t   clothesColor;   // favorite color, -1 for default
     uint8_t  pantsColor;     // corresponds to PantsColor
     int8_t   bodyType;       // BodyType, -1 = default for shader
+    uint8_t  hatType;        // HatType, 0 = off for miic compatibility...
+    uint8_t  hatColor;       // HatColor, 0 = default for miic compatibility...
 
     uint8_t  instanceCount;
     uint8_t  instanceRotationMode;

@@ -63,10 +63,12 @@ type RenderRequest struct {
 	ClothesColor         int8 // default: -1
 	PantsColor           uint8
 	BodyType             int8
+	HatType              uint8 // HatType, 0 = off for miic compatibility...
+	HatColor             uint8 // HatColor, 0 = default for miic compatibility...
 	InstanceCount        uint8
 	InstanceRotationMode uint8
 	LightDirection       [3]int16 // default/unset: -1
-	//_                    [3]byte // padding for alignment
+	_                    [2]byte // padding for alignment
 }
 
 const FFL_EXPRESSION_LIMIT = 70
@@ -551,7 +553,7 @@ func handleRenderRequestError(w http.ResponseWriter, bufferData []byte, err erro
 			return
 		}
 
-		http.Error(w, `incomplete data from backend :( render probably failed for one of the following reasons:
+		 	http.Error(w, `incomplete data from backend :( render probably failed for one of the following reasons:
 * FFLInitCharModelCPUStep failed: internal error or use of out-of-bounds parts
 * FFLiVerifyCharInfoWithReason failed: mii data/CharInfo is invalid`, http.StatusInternalServerError)
 		return
@@ -629,8 +631,18 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if clothesColorStr == "" {
 		clothesColorStr = "-1"
 	}
-
-	bodyTypeStr := query.Get("bodyType")
+	pantsColorStr := query.Get("pantsColor")
+	if pantsColorStr == "" {
+		pantsColorStr = "red"
+	}
+	hatTypeStr := query.Get("hatType")
+	if hatTypeStr == "" {
+		hatTypeStr = "none"
+	}
+	hatColorStr := query.Get("hatColor")
+	if hatColorStr == "" {
+		hatColorStr = "default"
+	}
 
 	var responseFormat uint8 = 0
 	if strings.HasSuffix(r.URL.Path, ".glb") {
@@ -850,17 +862,6 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var clothesColor int
-	clothesColor, err = strconv.Atoi(clothesColorStr)
-	if err != nil {
-		clothesColor = getMapToInt(clothesColorStr, clothesColorMap, -1)
-	}
-	var pantsColor int
-	pantsColor, err = strconv.Atoi(pantsColorStr)
-	if err != nil {
-		pantsColor = getMapToInt(pantsColorStr, pantsColorMap, 0)
-	}
-
 	// Parsing and validating width
 	width, err := strconv.Atoi(widthStr)
 	if err != nil {
@@ -973,9 +974,34 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		shaderType = getMapToInt(shaderTypeStr, shaderTypeMap, 0)
 	}
+	// Miitomo shader uses gray pants color by default to mimic Mii studio renders.
+	if shaderType == 2 && pantsColorStr == "" {
+		pantsColorStr = "gray"
+	}
 	bodyType, err := strconv.Atoi(bodyTypeStr)
 	if err != nil {
 		bodyType = getMapToInt(bodyTypeStr, bodyTypeMap, -1)
+	}
+
+	var clothesColor int
+	clothesColor, err = strconv.Atoi(clothesColorStr)
+	if err != nil {
+		clothesColor = getMapToInt(clothesColorStr, clothesColorMap, -1)
+	}
+	var pantsColor int
+	pantsColor, err = strconv.Atoi(pantsColorStr)
+	if err != nil {
+		pantsColor = getMapToInt(pantsColorStr, pantsColorMap, 0)
+	}
+	var hatType int
+	hatType, err = strconv.Atoi(hatTypeStr)
+	if err != nil {
+		hatType = getMapToInt(hatTypeStr, hatTypeMap, 0)
+	}
+	var hatColor int
+	hatColor, err = strconv.Atoi(hatColorStr)
+	if err != nil {
+		hatColor = getMapToInt(hatColorStr, hatColorMap, 0)
 	}
 
 	// Creating the render request
@@ -1006,6 +1032,9 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		LightEnable:    lightEnable,
 		ClothesColor:   int8(clothesColor),
 		PantsColor:     uint8(pantsColor),
+		// Extra data
+		HatType:     uint8(hatType),
+		HatColor:     uint8(hatColor),
 	}
 
 	// Enabling mipmap if specified
@@ -1273,6 +1302,35 @@ var pantsColorMap = map[string]int{
 	"gold": 3,
 	"body": 4,
 	"none": 5,
+}
+
+var hatColorMap = map[string]int{
+	"default":     0,
+	"red":         1,
+	"orange":      2,
+	"yellow":      3,
+	"yellowgreen": 4,
+	"green":       5,
+	"blue":        6,
+	"skyblue":     7,
+	"pink":        8,
+	"purple":      9,
+	"brown":       10,
+	"white":       11,
+	"black":       12,
+}
+
+var hatTypeMap = map[string]int{
+	"none":        0,
+	"cap":         1,
+	"beanie":      2,
+	"top_hat":     3,
+	"ribbon":      4,
+	"bow":         5,
+	"cat_ears":    6,
+	"straw_hat":   7,
+	"hijab":       8,
+	"bike_helmet": 9,
 }
 
 func getMapToInt(input string, theMap map[string]int, defaultValue int) int {

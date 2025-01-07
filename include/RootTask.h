@@ -28,6 +28,7 @@
 #include <nn/ffl/FFLiMiiData.h>
 
 #include <RenderRequest.h>
+#include <Hat.h>   // cMaxHats
 #include <Types.h> // enums for RootTask
 
 #define FFLICHARINFO_SIZE sizeof(FFLiCharInfo)
@@ -70,6 +71,7 @@ private:
 
     void loadResourceFiles_();
     void loadBodyModels_();
+    void loadHatModels_();
     void createModel_();
     // void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
     bool createModel_(RenderRequest *buf, int socket_handle);
@@ -117,6 +119,7 @@ private:
 #endif
 
     rio::mdl::Model* getBodyModel_(Model* pModel, BodyType type);
+    rio::mdl::Model* getHatModel_(Model* pModel, uint8_t type);
     void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
 
 private:
@@ -134,6 +137,7 @@ private:
     s32                 mMiiCounter;
     Model*              mpModel;
     rio::mdl::Model*    mpBodyModels[BODY_TYPE_MAX][FFL_GENDER_MAX];
+    rio::mdl::Model*    mpHatModels[cMaxHats];
     const char*         mpServerOnly;
     const char*         mpNoSpin;
 

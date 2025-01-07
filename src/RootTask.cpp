@@ -2,11 +2,13 @@
 #include <nn/ffl/detail/FFLiCharInfo.h>
 #include <nn/ffl/FFLiCreateID.h>
 #include <EnumStrings.h>
+#include <Hat.h>
 #include <Model.h>
 #include <RootTask.h>
 #include <Hat.h>
 #include <Types.h>
 #include <BodyTypeStrings.h>
+#include <HatTypeStrings.h>
 
 #include <filedevice/rio_FileDeviceMgr.h>
 #include <gfx/rio_Projection.h>
@@ -346,8 +348,9 @@ void RootTask::prepare_()
     mMiiCounter = 0;
     createModel_();
 
-    // load body models
+    // load body/hat models
     loadBodyModels_();
+    loadHatModels_();
 
     mInitialized = true;
 }
@@ -379,6 +382,28 @@ void RootTask::loadBodyModels_()
 
             mpBodyModels[bodyType][gender] = new rio::mdl::Model(resModel);
         }
+    }
+}
+
+void RootTask::loadHatModels_()
+{
+    for (u32 hatType = cMinHats; hatType < cMaxHats; hatType++)
+    {
+        char hatPathC[64];
+
+        snprintf(hatPathC, sizeof(hatPathC), cHatFileNameFormat, hatType);
+
+        RIO_LOG("loading hat model: %s\n", hatPathC);
+        const rio::mdl::res::Model* resModel = rio::mdl::res::ModelCacher::instance()->loadModel(hatPathC, hatPathC);
+
+        RIO_ASSERT(resModel);
+        if (resModel == nullptr)
+        {
+            fprintf(stderr, "Hat model not found: %s. Exiting.\n", hatPathC);
+            exit(EXIT_FAILURE);
+        }
+
+        mpHatModels[hatType] = new rio::mdl::Model(resModel);
     }
 }
 
@@ -977,70 +1002,23 @@ rio::mdl::Model* RootTask::getBodyModel_(Model* pModel, BodyType type)
     return model;
 }
 
-// draws mii hat
-void RootTask::drawMiiHat(Model *pModel, uint8_t &hatType,
-                          rio::Matrix34f &model_mtx, rio::BaseMtx34f &view_mtx,
-                          rio::BaseMtx44f &proj_mtx, const rio::Vector3f scaleFactors)
+#include <HatModel.h>
+
+rio::mdl::Model* RootTask::getHatModel_(Model* pModel, uint8_t type)
 {
+    RIO_ASSERT(type > 0); // make sure it does not stay 0 as there is no 0 hat model
 
-    const bool lightEnable = pModel->getLightEnable();
-    FFLiCharInfo *pCharInfo = pModel->getCharInfo();
+    // Clamp the value of gender.
+    const uint8_t hatTypeNew = static_cast<FFLGender>(type % cMaxHats);
 
-    // Hat model
-    // RIO_ASSERT(hatType < 10);
-    std::string errMsg;
+    // Select hat model.
+    rio::mdl::Model* model = mpHatModels[hatTypeNew]; // Based on gender.
 
-    const rio::mdl::Model *model = mpHatModels[hatType];
-
-    const rio::mdl::Mesh *const meshes = model->meshes();
-
-    // THANK YOU ARIAN
-
-    FFLPartsTransform partsTransform;
-    FFLGetPartsTransform(&partsTransform, mpModel->getCharModel());
-
-    // Render each mesh in order
-    for (u32 i = 0; i < model->numMeshes(); i++)
-    {
-        const rio::mdl::Mesh &mesh = meshes[i];
-
-        // BIND SHADER
-        IShader *pShader = pModel->getShader();
-        pShader->bindBodyShader(lightEnable, pCharInfo);
-        // #ifndef USE_OLD_MODELS
-        //         if ((i % 2) == 1) // is it the second mesh (pants)?
-        //             pShader->setBodyShaderPantsMaterial(pantsColor);
-        // #endif
-
-        // make new matrix for body
-        // rio::Matrix34f modelMtxHat = rio::Matrix34f::ident; // model_mtx;
-
-        // // apply scale factors before anything else
-        // modelMtxBody.applyScaleLocal(scaleFactors);
-        // apply original model matrix (rotation)
-        // modelMtxHat.setMul(model_mtx, modelMtxHat);
-        rio::Matrix34f tmpHatMatrix;
-
-        // apply head rotation, and translation
-        tmpHatMatrix.makeRT(cBodyHeadRotation, {0.0f,
-                                                cBodyHeadYTranslation * scaleFactors.y * cBodyScaleFactor,
-                                                0.0f});
-
-        tmpHatMatrix.applyTranslationLocal({partsTransform.hatTranslate.x, partsTransform.hatTranslate.y, partsTransform.hatTranslate.z});
-
-        // Apply Position & Rotation ???
-        // tmpHatMatrix.makeRT({0, 0, 0}, {partsTransform.hatTranslate.x, partsTransform.hatTranslate.y, partsTransform.hatTranslate.z});
-        // tmpHatMatrix.makeRT({0, 0, 0}, {0, 0, 0});
-        tmpHatMatrix.setMul(model_mtx, tmpHatMatrix);
-
-        pShader->setViewUniformBody(tmpHatMatrix, view_mtx, proj_mtx);
-
-        rio::RenderState render_state;
-        render_state.setCullingMode(rio::Graphics::CULLING_MODE_BACK);
-        render_state.applyCullingAndPolygonModeAndPolygonOffset();
-        mesh.draw();
-    }
+    RIO_ASSERT(model); // make sure it is not null
+    return model;
 }
+
+
 
 // configures camera, proj mtx, uses height from charinfo...
 // ... to handle the view type appropriately
@@ -1300,6 +1278,13 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     float aspectHeightFactor = 1.0f;
     bool isCameraPosAbsolute = false; // if it should not move the camera to the head
     bool willDrawBody = true; // and if should move camera
+    bool willDrawHat = false;
+
+    // simple hatType drawing logic. Prevents a crash when hatType is too high.
+    if (renderRequest->hatType > 0 && renderRequest->hatType < cMaxHats) 
+    {
+        willDrawHat = true;
+    }
 
     rio::LookAtCamera camera;
     const ViewType viewType = static_cast<ViewType>(renderRequest->viewType);
@@ -1550,6 +1535,37 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
         pCharInfo->favoriteColor = originalFavoriteColor;
     }
 
+    // Custom hat model :D
+    if (willDrawHat)
+    {
+        RIO_LOG("WE WILL DRAW HAT %i!! YAYY!!!\n", renderRequest->hatType);
+
+        // Prepare hat model
+        HatModel hatModel(getHatModel_(pModel, renderRequest->hatType));
+        
+        rio::Matrix34f hat_mtx = rotationMtx;
+
+        if (willDrawBody)
+        {
+            // Apply head model position
+            rio::Matrix34f head_mtx = bodyModel.getHeadModelMatrix();
+            hat_mtx.setMul(hat_mtx, head_mtx);
+        }
+
+        // THANK YOU ARIAN
+        FFLPartsTransform partsTransform;
+        FFLGetPartsTransform(&partsTransform, mpModel->getCharModel());
+
+        hat_mtx.applyTranslationLocal({ 
+            partsTransform.hatTranslate.x, 
+            partsTransform.hatTranslate.y, 
+            partsTransform.hatTranslate.z
+        });
+
+        // Initialize model:
+        hatModel.initialize(pModel, renderRequest->hatColor);
+        hatModel.draw(hat_mtx, view_mtx, projMtx);
+    } 
 
     // draw xlu mask only after body is drawn
     // in case there are elements of the mask that go in the body region
@@ -1848,6 +1864,10 @@ void RootTask::exit_()
         for (u32 g = 0; g < FFL_GENDER_MAX; g++)
             if (mpBodyModels[i][g] != nullptr)
                 delete mpBodyModels[i][g];
+    // delete hat models that were initialized earlier
+    for (u32 i = 0; i < cMaxHats; i++)
+        if (mpHatModels[i] != nullptr)
+            delete mpHatModels[i];
 
     mInitialized = false;
 }
