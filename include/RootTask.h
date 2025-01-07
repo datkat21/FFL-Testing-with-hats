@@ -37,16 +37,6 @@
 #include <vector>
 #endif
 
-// arian told me to put it in here instead of another one so ok i will do that
-typedef enum BodyType
-{
-    BODY_TYPE_WIIU,
-    BODY_TYPE_SWITCH,
-    BODY_TYPE_MIITOMO,
-    BODY_TYPE_MAX,
-} BodyType;
-
-
 class Model;
 
 #define RENDERREQUEST_SIZE sizeof(RenderRequest)

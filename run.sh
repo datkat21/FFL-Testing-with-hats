@@ -1,1 +1,1 @@
-SERVER_ONLy=1 ./ffl_testing_2_debug64.exe
+SERVER_ONLY=1 ./ffl_testing_2
