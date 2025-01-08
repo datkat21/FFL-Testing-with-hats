@@ -1051,16 +1051,13 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     BodyType bodyType = static_cast<BodyType>(renderRequest->bodyType);
     if (bodyType <= BODY_TYPE_DEFAULT_FOR_SHADER
         || bodyType >= BODY_TYPE_MAX)
-    {
-        // bounds check:
-        if (renderRequest->shaderType < SHADER_TYPE_MAX)
-            bodyType = cShaderTypeDefaultBodyType[renderRequest->shaderType];
-        else
-            bodyType = cShaderTypeDefaultBodyType[SHADER_TYPE_WIIU];
-    }
+        bodyType = cShaderTypeDefaultBodyType[renderRequest->shaderType % SHADER_TYPE_MAX];
 
     BodyModel bodyModel(getBodyModel_(pModel, bodyType), bodyType);
-    PantsColor pantsColor = static_cast<PantsColor>(renderRequest->pantsColor % PANTS_COLOR_MAX);
+    PantsColor pantsColor = static_cast<PantsColor>(renderRequest->pantsColor);
+    if (pantsColor <= PANTS_COLOR_DEFAULT_FOR_SHADER
+        || pantsColor >= PANTS_COLOR_MAX)
+        pantsColor = cShaderTypeDefaultPantsType[renderRequest->shaderType % SHADER_TYPE_MAX];
 
     if (willDrawBody)
     {

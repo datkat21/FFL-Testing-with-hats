@@ -1,6 +1,9 @@
-#include <nn/ffl.h>
+#pragma once
+
+#include <nn/ffl.h> // FFLColor
 
 enum PantsColor {
+    PANTS_COLOR_DEFAULT_FOR_SHADER = -1,
     PANTS_COLOR_GRAY = 0,
     PANTS_COLOR_BLUE,
     PANTS_COLOR_RED,

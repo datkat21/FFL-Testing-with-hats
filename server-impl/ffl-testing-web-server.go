@@ -60,8 +60,8 @@ type RenderRequest struct {
 	VerifyCRC16          bool
 	LightEnable          bool
 	ClothesColor         int8 // default: -1
-	PantsColor           uint8
-	BodyType             int8
+	PantsColor           int8 // ^^
+	BodyType             int8 // ^^
 	InstanceCount        uint8
 	InstanceRotationMode uint8
 	LightDirection       [3]int16 // default/unset: -1
@@ -640,7 +640,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 	pantsColorStr := query.Get("pantsColor")
 	if pantsColorStr == "" {
-		pantsColorStr = "red"
+		pantsColorStr = "default"
 	}
 
 	var responseFormat uint8 = 0
@@ -851,7 +851,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	var pantsColor int
 	pantsColor, err = strconv.Atoi(pantsColorStr)
 	if err != nil {
-		pantsColor = getMapToInt(pantsColorStr, pantsColorMap, 0)
+		pantsColor = getMapToInt(pantsColorStr, pantsColorMap, -1)
 	}
 
 	// Parsing and validating width
@@ -1014,7 +1014,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		VerifyCRC16:     verifyCRC16,
 		LightEnable:     lightEnable,
 		ClothesColor:    int8(clothesColor),
-		PantsColor:      uint8(pantsColor),
+		PantsColor:      int8(pantsColor),
 		BodyType:        int8(bodyType),
 		InstanceCount:   uint8(instanceCount),
 		InstanceRotationMode: 0, // TODO
@@ -1249,7 +1249,7 @@ var clothesColorMap = map[string]int{
 }
 
 var pantsColorMap = map[string]int{
-	//"default": -1,
+	"default": -1,
 	"gray": 0,
 	"blue": 1,
 	"red":  2,

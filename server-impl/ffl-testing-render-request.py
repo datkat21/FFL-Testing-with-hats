@@ -51,7 +51,7 @@ def main():
     # Ensure fflstoredata is exactly 96 bytes
     #fflstoredata = fflstoredata[:96] + b'\x00' * (96 - len(fflstoredata))
 
-    struct_format = '96sHBBHhBBBBIIIhhhhhhBBBBBB???bBbBBhhh'
+    struct_format = '96sHBBHhBBBBIIIhhhhhhBBBBBB???bBbBBhhhB3x'
     packed_data = struct.pack(
         struct_format,
         fflstoredata,         # data: 96s
@@ -87,7 +87,8 @@ def main():
         0,                    # instanceRotationMode: B (uint8_t)
         -1,                   # lightDirection.x: h (int16_t)
         -1,                   # lightDirection.y: h (int16_t)
-        -1                    # lightDirection.z: h (int16_t)
+        -1,                   # lightDirection.z: h (int16_t)
+        0                     # splitMode: B (uint8_t)
     )
     """
     # Write the packed data to the output file

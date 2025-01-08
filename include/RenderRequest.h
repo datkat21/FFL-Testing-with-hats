@@ -32,7 +32,7 @@ struct RenderRequest {
     bool     verifyCRC16;    // passed to pickupCharInfoFromData
     bool     lightEnable;    // passed to IShader::bind()
     int8_t   clothesColor;   // favorite color, -1 for default
-    uint8_t  pantsColor;     // corresponds to PantsColor
+    int8_t   pantsColor;     // PantsColor, -1 = default shader
     int8_t   bodyType;       // BodyType, -1 = default for shader
 
     uint8_t  instanceCount;  // for instanceCountNewRender loop
