@@ -943,8 +943,12 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
         pRenderTexture->pRenderBuffer->bind();
 
+        rio::Texture2D* pTexture = pRenderTexture->pTexture2D;
+
+        writeTGAHeaderToSocket(socket, pTexture->getWidth(), pTexture->getHeight(), pTexture->getTextureFormat());
+
         // NOTE the resolution of this is the texture resolution so that would have to match what the client expects
-        copyAndSendRenderBufferToSocket(pRenderTexture->pTexture2D, socket, 1);
+        copyAndSendRenderBufferToSocket(pTexture, socket, 1);
 
         // CharModel does not have shapes (maybe) and
         // should not be drawn anymore
