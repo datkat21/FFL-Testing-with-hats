@@ -98,6 +98,12 @@ void RootTask::fillStoreDataArray_()
     RIO_LOG("Loaded %zu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
 }
 
+// Second argument passed to listen() indicating
+// the queue/backlog of requests, set to Apache default.
+#define LISTEN_BACKLOG_DEFAULT 511 // httpd uses this value
+
+#define PORT_DEFAULT 12346 // default port to listen on
+
 // Setup socket to send data to
 void RootTask::setupSocket_()
 {
@@ -151,8 +157,10 @@ void RootTask::setupSocket_()
     mServerAddress.sin_addr.s_addr = INADDR_ANY;
     // Get port number from environment or use default
     char portReminder[] ="\033[2m(you can change the port with the PORT environment variable)\033[0m\n";
+
     const char* env_port = getenv("PORT");
-    int port = 12346; // default port
+
+    int port = PORT_DEFAULT; // default port
     if (env_port)
     {
         port = atoi(env_port);
@@ -168,11 +176,15 @@ void RootTask::setupSocket_()
         "\033[0m\n");
         exit(EXIT_FAILURE);
     }
-    if (listen(mServerFD, 3) < 0)
+
+    s32 listenBacklog = LISTEN_BACKLOG_DEFAULT;
+
+    if (listen(mServerFD, listenBacklog) < 0)
     {
         perror("listen");
         exit(EXIT_FAILURE);
     }
+
     else
     {
         // Set socket to non-blocking mode

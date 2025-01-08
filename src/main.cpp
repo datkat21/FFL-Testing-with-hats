@@ -54,14 +54,15 @@ void initializeSentry()
 #endif
     sentry_options_set_dsn(options, USE_SENTRY_DSN);
     sentry_options_set_release(options, SENTRY_RELEASE);
-    int result = sentry_init(options);
+    const int result = sentry_init(options);
     RIO_LOG("sentry_init result: %d\n", result);
 }
 #endif // USE_SENTRY_DSN
 
 int main()
 {
-    char* isServerOnly = getenv("SERVER_ONLY");
+    // don't know how to pass argv to RootTask
+    const char* isServerOnly = getenv("SERVER_ONLY");
     // use invisible window with server only
     if (isServerOnly)
         initializeArg.window.invisible = true;
