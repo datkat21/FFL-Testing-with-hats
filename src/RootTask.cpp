@@ -8,7 +8,6 @@
 #include <BodyTypeStrings.h>
 
 #include <filedevice/rio_FileDeviceMgr.h>
-#include <gfx/rio_Projection.h>
 #include <gfx/rio_Window.h>
 #include <gfx/rio_Graphics.h>
 
@@ -41,7 +40,7 @@ RootTask::RootTask()
     , mResourceDesc()
     , mpShaders{ nullptr }
     , mProjMtx()
-    , mProjMtxIconBody(nullptr)
+    , mProjMtxIconBody()
     , mCamera()
     , mCounter(0.0f)
     , mMiiCounter(0)
@@ -323,7 +322,7 @@ void RootTask::prepare_()
         // GetFaceMatrix: C_MTXPerspective(projMtx, 15.0, 1.0, 10.0, 1000.0);
 
         // Create perspective projection instance
-        rio::PerspectiveProjection proj(
+        mProj = rio::PerspectiveProjection(
             500.0f,  // near
             1000.0f, // far
             fovy,    // fovy
@@ -332,15 +331,15 @@ void RootTask::prepare_()
         // The near and far values define the depth range of the view frustum (500.0f to 700.0f)
 
         // Calculate matrix
-        mProjMtx = proj.getMatrix();
+        mProjMtx = mProj.getMatrix();
 
-        rio::PerspectiveProjection projIconBody(
+        mProjIconBody = rio::PerspectiveProjection(
             10.0f,
             1000.0f,
             rio::Mathf::deg2rad(15.0f),
             1.0f
         );
-        mProjMtxIconBody = new rio::BaseMtx44f(projIconBody.getMatrix());
+        mProjMtxIconBody = mProjIconBody.getMatrix();
 
     }
 
@@ -681,7 +680,7 @@ rio::mdl::Model* RootTask::getBodyModel_(Model* pModel, BodyType type)
 
 // configures camera, proj mtx, uses height from charinfo...
 // ... to handle the view type appropriately
-void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo)
+void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::PerspectiveProjection* proj, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo)
 {
     switch (viewType)
     {
@@ -692,7 +691,8 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         case VIEW_TYPE_FACE:
         {
             // if it has body then use the matrix we just defined
-            *projMtx = *mProjMtxIconBody;
+            *projMtx = mProjMtxIconBody;
+            *proj = mProjIconBody;
 
             //RIO_LOG("x = %i, y = %i, z = %i\n", renderRequest->cameraRotate.x, renderRequest->cameraRotate.y, renderRequest->cameraRotate.z);
             /*
@@ -711,7 +711,8 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         }
         case VIEW_TYPE_NNMII_VARIABLEICONBODY:
         {
-            *projMtx = *mProjMtxIconBody;
+            *projMtx = mProjMtxIconBody;
+            *proj = mProjIconBody;
             // nn::mii::VariableIconBody::StoreCameraMatrix values
             pCamera->pos() = { 0.0f, 37.0f, 380.0f };
             pCamera->at() = { 0.0f, 37.0f, 0.0f };
@@ -720,7 +721,8 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         }
         case VIEW_TYPE_FFLICONWITHBODY:
         {
-            *projMtx = *mProjMtxIconBody;
+            *projMtx = mProjMtxIconBody;
+            *proj = mProjIconBody;
             // FFLMakeIconWithBody view
             pCamera->pos() = { 0.0f, 37.05f, 415.53f };
             pCamera->at() = { 0.0f, 37.05f, 0.0f };
@@ -729,7 +731,8 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         }
         case VIEW_TYPE_ALL_BODY:
         {
-            *projMtx = *mProjMtxIconBody;
+            *projMtx = mProjMtxIconBody;
+            *proj = mProjIconBody;
             *isCameraPosAbsolute = true;
             // made to be closer to mii studio looking value but still not actually accurate
             //pCamera->pos() = { 0.0f, 50.0f, 805.0f };
@@ -745,15 +748,13 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         {
             static const float aspect = 3.0f / 4.0f;
             *aspectHeightFactor = 1.0f / aspect;
-            //projMtx = *mProjMtxIconBody;
-            static const rio::PerspectiveProjection projAllBodyAspect(
-                10.0f,//10.0f,
-                1000.0f,
-                rio::Mathf::deg2rad(15.0f),
-                aspect
-            );
+
+            rio::PerspectiveProjection projAllBodyAspect = mProjIconBody;
+            projAllBodyAspect.setAspect(aspect);
+
             static const rio::BaseMtx44f projMtxAllBodyAspect = rio::BaseMtx44f(projAllBodyAspect.getMatrix());
             *projMtx = projMtxAllBodyAspect;
+            *proj = projAllBodyAspect;
 
             *isCameraPosAbsolute = true;
 
@@ -815,6 +816,7 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
             // default, face only (FFLMakeIcon)
             // use default if request is head only
             *projMtx = mProjMtx;
+            *proj = mProj;
             *willDrawBody = false;
 
             pCamera->at() = { 0.0f, 34.5f, 0.0f };
@@ -857,6 +859,44 @@ static rio::Vector3f calculateUpVector(const rio::Vector3f& radians)
     up.y = std::cos(radians.z);
     up.z = 0.0f;
     return up;
+}
+
+static f32 getTransformedZ(const rio::BaseMtx34f model_mtx, const rio::BaseMtx34f view_mtx)
+{
+    // Extract translation / object center from the model matrix.
+    f32 modelCenter[4] = { // vector4 but we want to index it
+        model_mtx.m[0][3], model_mtx.m[1][3], model_mtx.m[2][3], 1.0f
+    };
+    // Initialize Z value, which will be the Z split.
+    f32 zSplit = 0.0f;
+    // Transform model matrix/world to view space.
+    for (int row = 0; row < 4; ++row)
+        // Only Z axis/third row of view_mtx
+        zSplit += -view_mtx.m[2][row] * modelCenter[row];
+        // Use negative ^^ value for -Z forward/right handed
+
+    // Transform world/model matrix to view space.
+    /*
+    rio::Vector3f modelViewCenter = {
+        // x:
+        view_mtx.m[0][0] * modelCenter.x +
+                view_mtx.m[0][1] * modelCenter.y +
+                view_mtx.m[0][2] * modelCenter.z +
+                view_mtx.m[0][3],
+        // y:
+        view_mtx.m[1][0] * modelCenter.x +
+                view_mtx.m[1][1] * modelCenter.y +
+                view_mtx.m[1][2] * modelCenter.z +
+                view_mtx.m[1][3],
+        // z:
+        view_mtx.m[2][0] * modelCenter.x +
+                view_mtx.m[2][1] * modelCenter.y +
+                view_mtx.m[2][2] * modelCenter.z +
+                view_mtx.m[2][3]
+        // (w is not needed)
+    };
+    */
+    return zSplit;
 }
 
 // TODO: this is still using class instances: getBodyModel
@@ -942,14 +982,16 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     FFLiCharInfo* pCharInfo = pModel->getCharInfo();
 
     // switch between two projection matrxies
-    rio::BaseMtx44f projMtx;
+    rio::BaseMtx44f projMtx; // set by setViewTypeParams
+    rio::PerspectiveProjection proj = mProjIconBody; // ^^
+
     float aspectHeightFactor = 1.0f;
     bool isCameraPosAbsolute = false; // if it should not move the camera to the head
     bool willDrawBody = true; // and if should move camera
 
     rio::LookAtCamera camera;
     const ViewType viewType = static_cast<ViewType>(renderRequest->viewType);
-    setViewTypeParams(viewType, &camera,
+    setViewTypeParams(viewType, &camera, &proj,
                       &projMtx, &aspectHeightFactor,
                       &isCameraPosAbsolute, &willDrawBody, pCharInfo);
 
@@ -967,7 +1009,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     instanceCountNewRender:
 
     setViewTypeParams(viewType, &camera,
-                      &projMtx, &aspectHeightFactor,
+                      &proj, &projMtx, &aspectHeightFactor,
                       &isCameraPosAbsolute, &willDrawBody, pCharInfo);
 
     // Update camera position
@@ -1052,6 +1094,30 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     rio::Matrix34f view_mtx;
     camera.getMatrix(&view_mtx);
+
+
+    const SplitMode splitMode = static_cast<SplitMode>(renderRequest->splitMode);
+    if (splitMode != SPLIT_MODE_NONE)
+    {
+        // Copy projection matrix and set near/far on it.
+        rio::PerspectiveProjection projCopy = proj;
+
+        const f32 zSplit = getTransformedZ(model_mtx, view_mtx);
+        RIO_LOG("z split: %f\n", zSplit);
+
+        if (splitMode == SPLIT_MODE_FRONT)
+        {
+            projCopy.setNear(projCopy.getNear());
+            projCopy.setFar(zSplit);
+        }
+        else if (splitMode == SPLIT_MODE_BACK)
+        {
+            projCopy.setNear(zSplit);
+            projCopy.setFar(projCopy.getFar());
+        }
+        // TODO: SPLIT_MODE_BOTH.. how are we going to do that.
+        projMtx = projCopy.getMatrix();
+    }
 
 #if RIO_IS_WIN
     // if default gl clip control is being used, or the response needs flipped y for tga...
@@ -1142,14 +1208,6 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     renderTexture.bind();
 
     RIO_LOG("Render buffer bound.\n");
-
-    //if (gl_FragCoord.z > 0.98593) discard;
-    // Enable depth testing
-    /*glEnable(GL_DEPTH_TEST);
-    // Set the depth function to discard fragments with depth values greater than the threshold
-    glDepthFunc(GL_GREATER);
-    glDepthRange(0.98593f, 0.f);
-*/
 
     // Set light direction.
     /*
@@ -1379,9 +1437,9 @@ void RootTask::calc_()
     model_mtx.setMul(model_mtx, bodyModel.getHeadModelMatrix());
     mpModel->setMtxRT(model_mtx);
 
-    mpModel->drawOpa(view_mtx, *mProjMtxIconBody);
-    bodyModel.draw(rotationMtx, view_mtx, *mProjMtxIconBody);
-    mpModel->drawXlu(view_mtx, *mProjMtxIconBody);
+    mpModel->drawOpa(view_mtx, mProjMtxIconBody);
+    bodyModel.draw(rotationMtx, view_mtx, mProjMtxIconBody);
+    mpModel->drawXlu(view_mtx, mProjMtxIconBody);
 }
 
 #ifndef NO_GLTF
@@ -1476,7 +1534,6 @@ void RootTask::exit_()
     if (mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] != 0)
       rio::MemUtil::free(mResourceDesc.pData[FFL_RESOURCE_TYPE_MIDDLE]);
 
-    delete mProjMtxIconBody;
     // delete all shaders that were initialized
     for (int type = 0; type < SHADER_TYPE_MAX; type++)
         delete mpShaders[type];

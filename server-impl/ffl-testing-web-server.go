@@ -65,7 +65,10 @@ type RenderRequest struct {
 	InstanceCount        uint8
 	InstanceRotationMode uint8
 	LightDirection       [3]int16 // default/unset: -1
-	//_                    [3]byte // padding for alignment
+	SplitMode            uint8
+
+	// NOTE: needs to be adjusted on EVERY update:
+	_                    [3]byte // padding for alignment
 }
 
 const FFL_EXPRESSION_LIMIT = 70
@@ -133,6 +136,13 @@ var modelTypes = map[string]int{
 	"normal":    0,
 	"hat":       1,
 	"face_only": 2,
+}
+
+var splitModes = map[string]int{
+	"none":  0,
+	"front": 1,
+	"back":  2,
+	"both":  3,
 }
 
 var drawStageModes = map[string]int{
@@ -740,13 +750,17 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "valid model types: normal, hat, face_only", http.StatusBadRequest)
 		return
 	}
-	/*
-		modelType, err := strconv.Atoi(modelTypeStr)
-		if err != nil || modelType > 2 {
-			http.Error(w, "modelType must be 0-2", http.StatusBadRequest)
-			return
-		}
-	*/
+
+	splitModeStr := query.Get("splitMode")
+	if splitModeStr == "" {
+		splitModeStr = "none"
+	}
+	splitMode, exists := splitModes[splitModeStr]
+	if !exists {
+		http.Error(w, "valid split modes: none, front, back, both", http.StatusBadRequest)
+		return
+	}
+
 	flattenNose := query.Get("flattenNose") != ""
 
 	modelFlag := (1 << modelType)
@@ -917,6 +931,27 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	lightDirectionVec3i := [3]int16{-1, -1, -1}
+
+	if lightXDir := query.Get("lightXDirection"); lightXDir != "" {
+		x, err := strconv.Atoi(lightXDir)
+		if err == nil {
+			lightDirectionVec3i[0] = int16(x)
+		}
+	}
+	if lightYDir := query.Get("lightYDirection"); lightYDir != "" {
+		y, err := strconv.Atoi(lightYDir)
+		if err == nil {
+			lightDirectionVec3i[1] = int16(y)
+		}
+	}
+	if lightZDir := query.Get("lightZDirection"); lightZDir != "" {
+		z, err := strconv.Atoi(lightZDir)
+		if err == nil {
+			lightDirectionVec3i[2] = int16(z)
+		}
+	}
+
 	instanceCount, err := strconv.Atoi(instanceCountStr)
 	if err != nil || instanceCount > 20 {
 		http.Error(w, "instanceCount must be a number less than 20 or whatever i just set the maximum to", http.StatusBadRequest)
@@ -974,15 +1009,17 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		CameraRotate:    cameraRotateVec3i,
 		ModelRotate:     modelRotateVec3i,
 		BackgroundColor: bgColor4u8,
+		DrawStageMode:   uint8(drawStageMode),
+		VerifyCharInfo:  verifyCharInfo,
+		VerifyCRC16:     verifyCRC16,
+		LightEnable:     lightEnable,
+		ClothesColor:    int8(clothesColor),
+		PantsColor:      uint8(pantsColor),
 		BodyType:        int8(bodyType),
 		InstanceCount:   uint8(instanceCount),
-		//InstanceRotationModeIsCamera: false,
-		DrawStageMode:  uint8(drawStageMode),
-		VerifyCharInfo: verifyCharInfo,
-		VerifyCRC16:    verifyCRC16,
-		LightEnable:    lightEnable,
-		ClothesColor:   int8(clothesColor),
-		PantsColor:     uint8(pantsColor),
+		InstanceRotationMode: 0, // TODO
+		LightDirection:  lightDirectionVec3i,
+		SplitMode:       uint8(splitMode),
 	}
 
 	// Enabling mipmap if specified

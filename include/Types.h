@@ -56,6 +56,14 @@ enum InstanceRotationMode {
     INSTANCE_ROATATION_MODE_MAX,
 };
 
+enum SplitMode {
+    SPLIT_MODE_NONE,
+    SPLIT_MODE_FRONT,
+    SPLIT_MODE_BACK,
+    SPLIT_MODE_BOTH,
+    SPLIT_MODE_MAX
+};
+
 enum ViewType {
     VIEW_TYPE_FACE,  // head with body
     VIEW_TYPE_FACE_ONLY,  // head only

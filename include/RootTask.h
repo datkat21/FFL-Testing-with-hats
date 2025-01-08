@@ -21,6 +21,8 @@
 #endif // RIO_IS_WIN && defined(_WIN32)
 
 #include <gfx/rio_Camera.h>
+#include <gfx/rio_Projection.h>
+
 #include <gfx/mdl/rio_Model.h>
 #include <task/rio_Task.h>
 
@@ -110,7 +112,7 @@ private:
 #endif
 
     rio::mdl::Model* getBodyModel_(Model* pModel, BodyType type);
-    void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
+    void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::PerspectiveProjection* proj, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
 
 private:
     bool                mInitialized;
@@ -120,8 +122,12 @@ private:
 #endif
     FFLResourceDesc     mResourceDesc;
     IShader*            mpShaders[SHADER_TYPE_MAX];
+
+    rio::PerspectiveProjection mProj;
     rio::BaseMtx44f     mProjMtx;
-    rio::BaseMtx44f*    mProjMtxIconBody;
+    rio::PerspectiveProjection mProjIconBody;
+    rio::BaseMtx44f     mProjMtxIconBody;
+
     rio::LookAtCamera   mCamera;
     f32                 mCounter;
     s32                 mMiiCounter;
