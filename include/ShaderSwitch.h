@@ -19,17 +19,15 @@ public:
     void bind(bool light_enable, FFLiCharInfo* charInfo) override;
 
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
-
-    void setLightDirection(const rio::Vector3f direction) override
-    {
-        RIO_LOG("setLightDirection not implemented for ShaderSwitch.h\n");
-    };
+    void resetUniformsToDefault() override;
 
     void setModulate(const FFLModulateParam& modulateParam) override
     {
         setModulate_(modulateParam);
     }
     void setModulatePantsMaterial(PantsColor pantsColor) override;
+
+    void setLightDirection(const rio::Vector3f direction) override;
 
     void applyAlphaTestEnable() const override
     {
@@ -111,4 +109,5 @@ private:
     FFLShaderCallback       mCallback;
     rio::TextureSampler2D   mSampler;
     FFLiCharInfo*           mpCharInfo;
+    rio::BaseVec4f          mLightDir;
 };

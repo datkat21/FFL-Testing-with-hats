@@ -1223,14 +1223,25 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     RIO_LOG("Render buffer bound.\n");
 
     // Set light direction.
-    /*
-    rio::Vector3f lightDirection = {
-        static_cast<f32>(renderRequest->lightDirection[0]),
-        static_cast<f32>(renderRequest->lightDirection[1]),
-        static_cast<f32>(renderRequest->lightDirection[2])
-    };
-    pModel->getShader()->setLightDirection(lightDirection);
-    */
+    // Reset uniforms first
+    pModel->getShader()->resetUniformsToDefault();
+    // only set each if all axes are not zero
+
+    // TODO maybe miitomo needs radians
+    if (renderRequest->lightDirection[0] != 0
+        || renderRequest->lightDirection[1] != 0
+        || renderRequest->lightDirection[2] != 0)
+    {
+        /*
+        rio::Vector3f lightDirection = {
+            static_cast<f32>(renderRequest->lightDirection[0]),
+            static_cast<f32>(renderRequest->lightDirection[1]),
+            static_cast<f32>(renderRequest->lightDirection[2])
+        };
+        */
+        rio::Vector3f lightDirection = convertVec3iToRadians3f(renderRequest->lightDirection);
+        pModel->getShader()->setLightDirection(lightDirection);
+    }
 
     DrawStageMode drawStages = static_cast<DrawStageMode>(renderRequest->drawStageMode);
 

@@ -86,11 +86,12 @@ private:
                 case SHADER_TYPE_WIIU_FFLICONWITHBODY:
                 {
                     Shader* s = new Shader();
-
-                    s->setLightDirection({ -0.50f, 0.366f, 0.785f });
-                    s->setLightAmbient({ 0.5f, 0.5f, 0.5f, 1.0f });
-                    s->setLightDiffuse({ 0.9f, 0.9f, 0.9f, 1.0f });
-                    s->setLightSpecular({ 1.0f, 1.0f, 1.0f, 1.0f });
+                    s->setDefaultLight(
+                        { -0.50f, 0.366f, 0.785f }, // direction
+                        { 0.5f, 0.5f, 0.5f, 1.0f }, // ambient
+                        { 0.9f, 0.9f, 0.9f, 1.0f }, // diffuse
+                        { 1.0f, 1.0f, 1.0f, 1.0f }  // specular
+                    );
 
                     mpShaders[type] = s;
                     break;

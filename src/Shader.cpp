@@ -234,7 +234,7 @@ const FFLColor cLightAmbient  = { 0.73f, 0.73f, 0.73f, 1.0f };
 const FFLColor cLightDiffuse  = { 0.60f, 0.60f, 0.60f, 1.0f };
 const FFLColor cLightSpecular = { 0.70f, 0.70f, 0.70f, 1.0f };
 
-const rio::BaseVec3f cLightDirection = { -0.4531539381f, 0.4226179123f, 0.7848858833f }; // , 0.30943f
+const rio::BaseVec3f cLightDir = { -0.4531539381f, 0.4226179123f, 0.7848858833f }; // , 0.30943f
 
 const FFLColor cRimColor = { 0.3f, 0.3f, 0.3f, 1.0f };
 const FFLColor cRimColorBody = { 0.4f, 0.4f, 0.4f, 1.0f };
@@ -254,10 +254,16 @@ Shader::Shader()
     , mCallback()
     , mpCharInfo(nullptr)
     , mSpecularMode(FFL_SPECULAR_MODE_ANISOTROPIC)
-    , mLightDirection(cLightDirection)
-    , mLightAmbient(cLightAmbient)
-    , mLightDiffuse(cLightDiffuse)
-    , mLightSpecular(cLightSpecular)
+    // default values
+    , mDefaultLightDir(cLightDir)
+    , mDefaultLightAmbient(cLightAmbient)
+    , mDefaultLightDiffuse(cLightDiffuse)
+    , mDefaultLightSpecular(cLightSpecular)
+    // current values
+    , mLightDir(mDefaultLightDir)
+    , mLightAmbient(mDefaultLightAmbient)
+    , mLightDiffuse(mDefaultLightDiffuse)
+    , mLightSpecular(mDefaultLightSpecular)
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
     rio::MemUtil::set(mPixelUniformLocation, u8(-1), sizeof(mPixelUniformLocation));
@@ -282,6 +288,14 @@ Shader::~Shader()
         mVAOHandle = GL_NONE;
     }
 #endif
+}
+
+void Shader::resetUniformsToDefault()
+{
+    mLightDir = mDefaultLightDir;
+    mLightAmbient = mDefaultLightAmbient;
+    mLightDiffuse = mDefaultLightDiffuse;
+    mLightSpecular = mDefaultLightSpecular;
 }
 
 void Shader::initialize()
@@ -401,6 +415,20 @@ void Shader::setShaderCallback_()
     FFLSetShaderCallback(&mCallback);
 }
 
+// think this needs to be in radians
+void Shader::setLightDirection(const rio::Vector3f direction)
+{
+    rio::BaseVec3f newLightDirection = cLightDir;
+    // only set each axis if it is non-negative
+    if (direction.x > -0.01)
+        newLightDirection.x = direction.x;
+    if (direction.y > -0.01)
+        newLightDirection.y = direction.y;
+    if (direction.z > -0.01)
+        newLightDirection.z = direction.z;
+    mLightDir = newLightDirection;
+}
+
 void Shader::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 {
     mpCharInfo = pCharInfo;
@@ -414,7 +442,7 @@ void Shader::bind(bool light_enable, FFLiCharInfo* pCharInfo)
         RIO_GL_CALL(glDisableVertexAttribArray(i));
 #endif
 
-    mShader.setUniform(mLightDirection, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_DIR]);
+    mShader.setUniform(mLightDir, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_DIR]);
     mShader.setUniform(light_enable, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_ENABLE]);
     mShader.setUniform(getColorUniform(mLightAmbient), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_AMBIENT]);
     mShader.setUniform(getColorUniform(mLightDiffuse), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_DIFFUSE]);
@@ -422,19 +450,6 @@ void Shader::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 
     mShader.setUniform(getColorUniform(cRimColor), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_COLOR]);
     mShader.setUniform(cRimPower, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_RIM_POWER]);
-}
-
-void Shader::setLightDirection(const rio::Vector3f direction)
-{
-    rio::BaseVec3f newLightDirection = cLightDirection;
-    // only set each axis if it is non-negative
-    if (direction.x > -1)
-        newLightDirection.x = direction.x;
-    if (direction.y > -1)
-        newLightDirection.y = direction.y;
-    if (direction.z > -1)
-        newLightDirection.z = direction.z;
-    mLightDirection = newLightDirection;
 }
 
 #ifdef FFL_USE_ADJUST_MTX

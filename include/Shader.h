@@ -26,6 +26,7 @@ public:
     void bind(bool light_enable, FFLiCharInfo* charInfo) override;
 
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
+    void resetUniformsToDefault() override;
 
     void setModulate(const FFLModulateParam& modulateParam) override
     {
@@ -39,17 +40,13 @@ public:
     }
 
     void setLightDirection(const rio::Vector3f direction) override;
-    void setLightAmbient(const FFLColor ambient)
+
+    void setDefaultLight(const rio::Vector3f direction, const FFLColor ambient, const FFLColor diffuse, const FFLColor specular)
     {
-        mLightAmbient = ambient;
-    }
-    void setLightDiffuse(const FFLColor diffuse)
-    {
-        mLightDiffuse = diffuse;
-    }
-    void setLightSpecular(const FFLColor specular)
-    {
-        mLightSpecular = specular;
+        mDefaultLightDir = direction;
+        mDefaultLightAmbient = ambient;
+        mDefaultLightDiffuse = diffuse;
+        mDefaultLightSpecular = specular;
     }
 
     void applyAlphaTestEnable() const override
@@ -132,7 +129,15 @@ protected:
     rio::TextureSampler2D   mSampler;
     FFLiCharInfo*           mpCharInfo;
     FFLiDefaultShaderSpecularMode mSpecularMode;
-    rio::BaseVec3f          mLightDirection;
+
+    // defaults values
+    rio::BaseVec3f          mDefaultLightDir;
+    FFLColor                mDefaultLightAmbient;
+    FFLColor                mDefaultLightDiffuse;
+    FFLColor                mDefaultLightSpecular;
+
+    // current values
+    rio::BaseVec3f          mLightDir;
     FFLColor                mLightAmbient;
     FFLColor                mLightDiffuse;
     FFLColor                mLightSpecular;

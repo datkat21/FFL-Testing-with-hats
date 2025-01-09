@@ -21,17 +21,15 @@ public:
     void bind(bool light_enable, FFLiCharInfo* charInfo) override;
 
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
-
-    void setLightDirection(const rio::Vector3f direction) override
-    {
-        RIO_LOG("setLightDirection not implemented for ShaderMiitomo.h\n");
-    };
+    void resetUniformsToDefault() override;
 
     void setModulate(const FFLModulateParam& modulateParam) override
     {
         setModulate_(modulateParam);
     }
     void setModulatePantsMaterial(PantsColor pantsColor) override;
+
+    void setLightDirection(const rio::Vector3f direction) override;
 
     void applyAlphaTestEnable() const override
     {
@@ -181,4 +179,6 @@ private:
     rio::TextureSampler2D   mLUTSpecSampler;//[LUT_SPECULAR_TYPE_MAX];
     rio::TextureSampler2D   mLUTFresSampler;//[LUT_FRESNEL_TYPE_MAX];
     bool                    mIsUsingMaskShader;
+    rio::BaseVec4f          mLightDirAndType0;
+    rio::BaseVec4f          mLightDirAndType1;
 };

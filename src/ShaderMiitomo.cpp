@@ -175,6 +175,8 @@ ShaderMiitomo::ShaderMiitomo(IShader* mpMaskShader)
     , mpCharInfo(nullptr)
     , mLightEnable(true)
     , mIsUsingMaskShader(false)
+    , mLightDirAndType0(cLightDirAndType0)
+    , mLightDirAndType1(cLightDirAndType1)
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
     rio::MemUtil::set(mPixelUniformLocation, u8(-1), sizeof(mPixelUniformLocation));
@@ -257,6 +259,12 @@ const u32 cLUTWidth = 512;
 const u32 cLUTHeight = 1;
 
 #endif // RIO_IS_WIN
+
+void ShaderMiitomo::resetUniformsToDefault()
+{
+    mLightDirAndType0 = cLightDirAndType0;
+    mLightDirAndType1 = cLightDirAndType1;
+}
 
 void ShaderMiitomo::initialize()
 {
@@ -389,6 +397,21 @@ void ShaderMiitomo::setShaderCallback_()
     FFLSetShaderCallback(&mCallback);
 }
 
+// ... not in radians?
+void ShaderMiitomo::setLightDirection(const rio::Vector3f direction)
+{
+    rio::BaseVec4f newLightDirection = cLightDirAndType0;
+    // only set each axis if it is non-negative
+    if (direction.x > -0.01)
+        newLightDirection.x = direction.x;
+    if (direction.y > -0.01)
+        newLightDirection.y = direction.y;
+    if (direction.z > -0.01)
+        newLightDirection.z = direction.z;
+    mLightDirAndType0 = newLightDirection;
+    mLightDirAndType1 = mLightDirAndType0; // ???
+}
+
 void ShaderMiitomo::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 {
     // ASSUME this is drawing mask/faceline texture in which case the LUT shader cannot be used for that
@@ -426,8 +449,8 @@ void ShaderMiitomo::bind(bool light_enable, FFLiCharInfo* pCharInfo)
     mShader.setUniform(cDirLightColor0, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR0], u32(-1));
     mShader.setUniform(cDirLightColor1, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COLOR1], u32(-1));
 
-    mShader.setUniform(cLightDirAndType0, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE0], u32(-1));
-    mShader.setUniform(cLightDirAndType1, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE1], u32(-1));
+    mShader.setUniform(mLightDirAndType0, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE0], u32(-1));
+    mShader.setUniform(mLightDirAndType1, mVertexUniformLocation[VERTEX_UNIFORM_LIGHT_DIR_AND_TYPE1], u32(-1));
     mShader.setUniform(cDirLightCount, mVertexUniformLocation[VERTEX_UNIFORM_DIR_LIGHT_COUNT], u32(-1));
 
     mShader.setUniform(cLightColor, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_COLOR]);
