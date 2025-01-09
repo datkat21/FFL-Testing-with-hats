@@ -57,6 +57,7 @@ FFLRes*.dat
 *.swp
 *.kate-swp
 .DS_Store
+.sentry-native
 
 # visual studio
 .vs
@@ -71,3 +72,7 @@ CMakeFiles
 build
 #Makefile
 cmake_install.cmake
+
+
+.cache
+.cmake

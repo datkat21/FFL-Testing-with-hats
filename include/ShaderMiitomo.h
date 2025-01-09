@@ -22,7 +22,7 @@ public:
 
     void setViewUniform(const rio::BaseMtx34f& model_mtx, const rio::BaseMtx34f& view_mtx, const rio::BaseMtx44f& proj_mtx) const override;
 
-    void setLightDirection(const rio::Vector3f direction) const override
+    void setLightDirection(const rio::Vector3f direction) override
     {
         RIO_LOG("setLightDirection not implemented for ShaderMiitomo.h\n");
     };

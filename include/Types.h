@@ -1,4 +1,5 @@
 #pragma once
+#include <PantsColor.h>
 
 // Enums included in RenderRequest.
 
@@ -49,11 +50,28 @@ const BodyType cShaderTypeDefaultBodyType[SHADER_TYPE_MAX] = {
     BODY_TYPE_FFLBODYRES,         // SHADER_TYPE_WIIU_FFLICONWITHBODY
 };
 
+// Same as above but for pants type.
+const PantsColor cShaderTypeDefaultPantsType[SHADER_TYPE_MAX] = {
+    PANTS_COLOR_RED,          // SHADER_TYPE_WIIU
+    PANTS_COLOR_GRAY,         // SHADER_TYPE_SWITCH
+    PANTS_COLOR_GRAY,         // SHADER_TYPE_MIITOMO
+    PANTS_COLOR_RED,          // SHADER_TYPE_WIIU_BLINN
+    PANTS_COLOR_SAME_AS_BODY, // SHADER_TYPE_WIIU_FFLICONWITHBODY
+};
+
 enum InstanceRotationMode {
     INSTANCE_ROTATION_MODE_MODEL,
     INSTANCE_ROTATION_MODE_CAMERA,
     INSTANCE_ROTATION_MODE_EXPRESSION, // neewwww
     INSTANCE_ROATATION_MODE_MAX,
+};
+
+enum SplitMode {
+    SPLIT_MODE_NONE,
+    SPLIT_MODE_FRONT,
+    SPLIT_MODE_BACK,
+    SPLIT_MODE_BOTH,
+    SPLIT_MODE_MAX
 };
 
 enum ViewType {

@@ -21,6 +21,8 @@
 #endif // RIO_IS_WIN && defined(_WIN32)
 
 #include <gfx/rio_Camera.h>
+#include <gfx/rio_Projection.h>
+
 #include <gfx/mdl/rio_Model.h>
 #include <task/rio_Task.h>
 
@@ -78,13 +80,15 @@ private:
                 case SHADER_TYPE_WIIU_BLINN:
                 {
                     Shader* s = new Shader();
-                    s->setSpecularMode(FFL_SPECULAR_MODE_BLINN);
+                    s->setSpecularMode(FFL_SPECULAR_MODE_NORMAL);
                     mpShaders[type] = s;
                     break;
                 }
                 case SHADER_TYPE_WIIU_FFLICONWITHBODY:
                 {
                     Shader* s = new Shader();
+
+                    s->setLightDirection({ -0.50f, 0.366f, 0.785f });
                     s->setLightAmbient({ 0.5f, 0.5f, 0.5f, 1.0f });
                     s->setLightDiffuse({ 0.9f, 0.9f, 0.9f, 1.0f });
                     s->setLightSpecular({ 1.0f, 1.0f, 1.0f, 1.0f });
@@ -110,7 +114,7 @@ private:
 
     rio::mdl::Model* getBodyModel_(Model* pModel, BodyType type);
     rio::mdl::Model* getHatModel_(Model* pModel, uint8_t type);
-    void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
+    void setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::PerspectiveProjection* proj, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo);
 
 private:
     bool mInitialized;
@@ -120,8 +124,12 @@ private:
 #endif
     FFLResourceDesc     mResourceDesc;
     IShader*            mpShaders[SHADER_TYPE_MAX];
+
+    rio::PerspectiveProjection mProj;
     rio::BaseMtx44f     mProjMtx;
-    rio::BaseMtx44f*    mProjMtxIconBody;
+    rio::PerspectiveProjection mProjIconBody;
+    rio::BaseMtx44f     mProjMtxIconBody;
+
     rio::LookAtCamera   mCamera;
     f32                 mCounter;
     s32                 mMiiCounter;

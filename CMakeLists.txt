@@ -11,6 +11,9 @@ option(RIO_USE_OSMESA "Uses OSMesa, which provides off-screen rendering without 
 option(NO_GLTF "Disable glTF export feature" OFF)
 option(USE_SYSTEMD_SOCKET "Use systemd socket activation. Don't enable this if you don't know what it is." OFF)
 
+# Sentry integration.
+set(USE_SENTRY_DSN "" CACHE STRING "Sentry DSN (leave blank to disable Sentry)")
+
 set(CMAKE_CACHE_ARGS_INCLUDE_HELP TRUE) # Include option descriptions with cmake -LH.
 
 # Target Options ----------------
@@ -93,6 +96,28 @@ if(USE_SYSTEMD_SOCKET) # For systemd socket activation.
     endif()
 endif()
 
+
+# Configure Sentry and Git info if USE_SENTRY_DSN isn't blank
+if(NOT USE_SENTRY_DSN STREQUAL "")
+    # Search for Sentry library.
+    find_package(sentry REQUIRED)
+
+    # Fetch Git hash
+    execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+    # Define compile-time constants for DSN and release
+    set(SENTRY_RELEASE "${CMAKE_PROJECT_NAME}@${GIT_COMMIT_HASH}")
+    add_compile_definitions(
+        USE_SENTRY_DSN="${USE_SENTRY_DSN}"
+        SENTRY_RELEASE="${SENTRY_RELEASE}"
+    )
+endif()
+
 # ----------- Add Subprojects -----------
 
 # RIO Sources ---------------------------
@@ -142,10 +167,14 @@ endif()
 
 if(RIO_GLES)
     target_compile_definitions(rio PUBLIC RIO_GLES)
+    # Needs to propagate to FFL:
+    target_compile_definitions(ffl-for-rio PUBLIC RIO_GLES)
 endif()
 
 if(RIO_NO_CLIP_CONTROL)
     target_compile_definitions(rio PUBLIC RIO_NO_CLIP_CONTROL)
+    # Needs to propagate to FFL:
+    target_compile_definitions(ffl-for-rio PUBLIC RIO_NO_CLIP_CONTROL)
 endif()
 
 # ----------- Main Sources -----------
@@ -156,6 +185,7 @@ set(SRC_FILES
     src/RootTask.cpp
     src/DataUtils.cpp
     src/BodyModel.cpp
+    src/RenderTexture.cpp
     src/HatModel.cpp
 
     src/Shader.cpp
@@ -191,7 +221,13 @@ endif()
 # Link libraries specific to main program.
 
 if(USE_SYSTEMD_SOCKET AND SYSTEMD_FOUND)
+    message(STATUS "FFL-Testing: systemd socket support enabled")
     target_link_libraries(${TARGET_NAME} PRIVATE ${SYSTEMD_LIBRARIES})
+endif()
+
+if(NOT USE_SENTRY_DSN STREQUAL "" AND sentry_FOUND)
+    message(STATUS "FFL-Testing: Sentry enabled with DSN: ${USE_SENTRY_DSN}")
+    target_link_libraries(${TARGET_NAME} PRIVATE sentry::sentry)
 endif()
 
 # ----------- Summary -----------

@@ -37,9 +37,32 @@ void mainLoop()
 }
 #endif
 
+#ifdef USE_SENTRY_DSN
+#include <sentry.h>
+
+void initializeSentry()
+{
+    // Set up Sentry.
+#ifndef SENTRY_RELEASE
+    #define SENTRY_RELEASE "(SENTRY_RELEASE not set)"
+#endif
+    RIO_LOG("Initializing Sentry with DSN: %s, release: %s\n", USE_SENTRY_DSN, SENTRY_RELEASE);
+
+    sentry_options_t *options = sentry_options_new();
+#if RIO_DEBUG
+      sentry_options_set_debug(options, 1);
+#endif
+    sentry_options_set_dsn(options, USE_SENTRY_DSN);
+    sentry_options_set_release(options, SENTRY_RELEASE);
+    const int result = sentry_init(options);
+    RIO_LOG("sentry_init result: %d\n", result);
+}
+#endif // USE_SENTRY_DSN
+
 int main()
 {
-    char* isServerOnly = getenv("SERVER_ONLY");
+    // don't know how to pass argv to RootTask
+    const char* isServerOnly = getenv("SERVER_ONLY");
     // use invisible window with server only
     if (isServerOnly)
         initializeArg.window.invisible = true;
@@ -53,6 +76,11 @@ int main()
     // Initialize RIO, make window...
     if (!rio::Initialize<RootTask>(initializeArg))
         return -1;
+
+#ifdef USE_SENTRY_DSN
+    initializeSentry();
+#endif // USE_SENTRY_DSN
+
 #ifndef __EMSCRIPTEN__
     // do not draw/present to window when server only
     // may avoid an issue where, when window hasn't been updated
@@ -85,5 +113,11 @@ int main()
     // Exit RIO
     rio::Exit();
 #endif // __EMSCRIPTEN__
+
+#ifdef USE_SENTRY_DSN
+    // make sure everything flushes
+    sentry_shutdown();
+#endif
+
     return 0;
 }

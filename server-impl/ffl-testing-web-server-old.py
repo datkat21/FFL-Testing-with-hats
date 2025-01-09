@@ -103,7 +103,7 @@ class RenderRequest:
 
     def pack(self):
         return struct.pack(
-            '96sHB?HhBBBBIIIhhhhhhBBBBBB???bBbBBhhh',
+            '96sHBBHhBBBBIIIhhhhhhBBBBBB???bBbBBhhhB3x',
             self.data,                 # data: 96s
             self.data_length,          # dataLength: H (uint16_t)
             1 << 0,                    # modelType: B (uint8_t)
@@ -137,7 +137,8 @@ class RenderRequest:
             0,                         # instanceRotationMode: B (uint8_t)
             -1,                        # lightDirection.x: h (int16_t)
             -1,                        # lightDirection.y: h (int16_t)
-            -1                         # lightDirection.z: h (int16_t)
+            -1,                        # lightDirection.z: h (int16_t)
+            0                          # splitMode: B (uint8_t)
         )
 
 """
