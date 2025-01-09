@@ -859,12 +859,12 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
 
 
 // Convert degrees to radians
-static rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3])
+static rio::Vector3f convertVec3iToRadians3f(const int16_t x, const int16_t y, const int16_t z)
 {
     rio::Vector3f radians;
-    radians.x = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[0]), 360.0f));
-    radians.y = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[1]), 360.0f));
-    radians.z = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[2]), 360.0f));
+    radians.x = rio::Mathf::deg2rad(fmod(static_cast<f32>(x), 360.0f));
+    radians.y = rio::Mathf::deg2rad(fmod(static_cast<f32>(y), 360.0f));
+    radians.z = rio::Mathf::deg2rad(fmod(static_cast<f32>(z), 360.0f));
     return radians;
 }
 
@@ -1047,8 +1047,8 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     const rio::Vector3f cameraPosInitial = camera.pos();
     const f32 radius = cameraPosInitial.z;
 
-    rio::Vector3f cameraRotate = convertVec3iToRadians3f(req->cameraRotate);
-    rio::Vector3f modelRotate = convertVec3iToRadians3f(req->modelRotate);
+    rio::Vector3f cameraRotate = convertVec3iToRadians3f(req->cameraRotate[0], req->cameraRotate[1], req->cameraRotate[2]);
+    rio::Vector3f modelRotate = convertVec3iToRadians3f(req->modelRotate[0], req->modelRotate[1], req->modelRotate[2]);
 
 
     if (instanceTotal > 1)
@@ -1254,7 +1254,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
             static_cast<f32>(req->lightDirection[2])
         };
         */
-        rio::Vector3f lightDirection = convertVec3iToRadians3f(req->lightDirection);
+        rio::Vector3f lightDirection = convertVec3iToRadians3f(req->lightDirection[0], req->lightDirection[1], req->lightDirection[2]);
         pModel->getShader()->setLightDirection(lightDirection);
     }
 

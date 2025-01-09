@@ -68,7 +68,7 @@ type RenderRequest struct {
 	SplitMode            uint8
 
 	// NOTE: needs to be adjusted on EVERY update:
-	_                    [3]byte // padding for alignment
+	//_                    [3]byte // padding for alignment
 }
 
 const FFL_EXPRESSION_LIMIT = 70
@@ -1257,6 +1257,7 @@ var resourceTypeMap = map[string]int{
 	"default": -1, // server will select preferred
 	"middle":  0,  // FFL_RESOURCE_TYPE_MIDDLE
 	"high":    1,  // FFL_RESOURCE_TYPE_HIGH
+	//"low":     2,
 }
 
 func getMapToInt(input string, theMap map[string]int, defaultValue int) int {
