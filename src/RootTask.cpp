@@ -225,66 +225,68 @@ void RootTask::loadResourceFiles_()
     FSInit();
 #endif // RIO_IS_CAFE
 
+    for (u32 resourceType = 0; resourceType < FFL_RESOURCE_TYPE_MAX; resourceType++)
     {
-        std::string resPath;
-        resPath.resize(256);
-        // Middle (now being skipped bc it is not even used here)
-        {
-            FFLGetResourcePath(resPath.data(), 256, FFL_RESOURCE_TYPE_MIDDLE, false);
-            {
-                rio::FileDevice::LoadArg arg;
-                arg.path = resPath;
-                arg.alignment = 0x2000;
+        char resPath[256];
 
-                u8* buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
-                if (buffer == nullptr)
-                    RIO_LOG("Skipping loading FFL_RESOURCE_TYPE_MIDDLE (%s failed to load)\n", resPath.c_str());
-                else
-                {
-                    RIO_LOG("FFL_RESOURCE_TYPE_MIDDLE successfully loaded from: %s\n", arg.path.c_str());
-                    mResourceDesc.pData[FFL_RESOURCE_TYPE_MIDDLE] = buffer;
-                    mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = arg.read_size;
-                }
+        FFLGetResourcePath(resPath,
+            static_cast<u32>(sizeof(resPath)),
+            static_cast<FFLResourceType>(resourceType), false); // last arg: linear gamma (LG) resource?
+
+        std::vector<std::string> pathsToTry = { resPath }; // list of paths
+        // Convert absolute resPath to std::filesystem::path.
+        std::filesystem::path fsPath(resPath);
+        // as well as the absolute resPath, try relative
+        pathsToTry.push_back(fsPath.filename());
+
+        bool resLoaded = false;
+
+        for (const std::string& path : pathsToTry)
+        {
+            //RIO_LOG("path to try: %s\n", path.c_str());
+            rio::FileDevice::LoadArg arg;
+            arg.path = path;
+            arg.alignment = 0x2000;
+
+            rio::NativeFileDevice* device = rio::FileDeviceMgr::instance()->getNativeFileDevice();
+            u8* buffer = device->tryLoad(arg);
+            if (buffer != nullptr)
+            {
+                RIO_LOG("Loaded resource %d from: %s\n", resourceType, arg.path.c_str());
+                mResourceDesc.pData[resourceType] = buffer;
+                mResourceDesc.size[resourceType] = arg.read_size;
+                resLoaded = true;
+                break;
+            }
+            else
+            {
+                const rio::RawErrorCode code = device->getLastRawError();
+                RIO_LOG("Failed to load resource %d from: %s with error: %s\n", resourceType, arg.path.c_str(), rioRawErrorCodeToString(code));
             }
         }
-        //mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = 0;
-        // High, load from FFL path or current working directory
+
+        if (!resLoaded)
         {
-            // Two different paths
-            std::array<std::string, 2> resPaths = {"", "./FFLResHigh.dat"};
-            resPaths[0].resize(256);
-            FFLGetResourcePath(resPaths[0].data(), 256, FFL_RESOURCE_TYPE_HIGH, false);
-
-            bool resLoaded = false;
-
-            // Try two different paths
-            for (const std::string& resPath : resPaths)
-            {
-                rio::FileDevice::LoadArg arg;
-                arg.path = resPath;
-                arg.alignment = 0x2000;
-
-                u8* buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
-                if (buffer != nullptr)
-                {
-                    RIO_LOG("FFL_RESOURCE_TYPE_HIGH successfully loaded from: %s\n", arg.path.c_str());
-                    mResourceDesc.pData[FFL_RESOURCE_TYPE_HIGH] = buffer;
-                    mResourceDesc.size[FFL_RESOURCE_TYPE_HIGH] = arg.read_size;
-                    resLoaded = true;
-                    // Break when one loads successfully
-                    break;
-                }
-                else
-                    RIO_LOG("NativeFileDevice failed to load: %s\n", arg.path.c_str());
-            }
-
-            if (!resLoaded)
-            {
-                RIO_LOG("Was not able to load high resource.\n");
-                RIO_LOG("\033[1;31mThe FFLResHigh.dat needs to be present, or else this program won't work. It will probably crash right now.\033[0m\n");
-            }
+            RIO_LOG("\033[1;31mFailed to load resource %d.\033[0m\n", resourceType);
         }
     }
+}
+
+
+FFLResourceType RootTask::getDefaultResourceType_()
+{
+    // prefer high by default
+    const FFLResourceType preferred = FFL_RESOURCE_TYPE_HIGH;
+    if (mResourceDesc.size[preferred])
+        return preferred; // return preferred if it is there
+
+    // iterate through all resource types
+    for (u32 i = 0; i < FFL_RESOURCE_TYPE_MAX; i++)
+        if (mResourceDesc.size[i])
+            return FFLResourceType(i); // return first available resource
+
+    RIO_ASSERT(false && "no resources available...???");
+    return preferred;
 }
 
 void RootTask::prepare_()
@@ -355,6 +357,9 @@ void RootTask::prepare_()
 
     }
 
+    // load body models
+    loadBodyModels_();
+
 #if RIO_IS_WIN
     fillStoreDataArray_();
     setupSocket_();
@@ -367,9 +372,6 @@ void RootTask::prepare_()
 
     mMiiCounter = 0;
     createModel_();
-
-    // load body models
-    loadBodyModels_();
 
     mInitialized = true;
 }
@@ -465,7 +467,7 @@ void RootTask::createModel_()
         .desc = {
             .resolution = static_cast<FFLResolution>(FFL_RESOLUTION_TEX_256 | FFL_RESOLUTION_MIP_MAP_ENABLE_MASK),
             .allExpressionFlag = { .flags = { 1 << 0, 0, 0 } },
-            .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
+            .modelFlag = 1 << 0,
             .resourceType = FFL_RESOURCE_TYPE_HIGH,
         },
         .source = modelSource,
@@ -599,6 +601,10 @@ bool RootTask::createModel_(RenderRequest* req, int socket_handle)
 
     FFLResourceType resourceType = static_cast<FFLResourceType>(req->resourceType);
 
+    // clamp minimum (-1) or maximum to default
+    if (req->resourceType < 0 || req->resourceType >= FFL_RESOURCE_TYPE_MAX)
+        // may consider "default resource for shader"
+        resourceType = getDefaultResourceType_();
 
     // otherwise just fall through and use default
     Model::InitArgStoreData arg = {

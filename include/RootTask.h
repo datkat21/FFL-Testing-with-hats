@@ -64,6 +64,7 @@ private:
     void loadResourceFiles_();
     void loadBodyModels_();
     void createModel_();
+    FFLResourceType getDefaultResourceType_();
 
     bool createModel_(RenderRequest* req, int socket_handle);
 

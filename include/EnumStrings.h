@@ -2,6 +2,9 @@
 
 #include <nn/ffl.h>
 
+#include <filedevice/rio_FileDevice.h>
+#include <unordered_map>
+
 // TODO: CAN YOU REDUCE THIS???
 const char* FFLiVerifyCharInfoReasonStrings[] = {
     "FFLI_VERIFY_CHAR_INFO_REASON_OK",
@@ -135,4 +138,29 @@ const char* FFLResultToString(FFLResult result)
         return UNKNOWN;
 
     return FFLResultStrings[result];
+}
+
+// map for rio::RawErrorCode, for file acccess failures
+const std::unordered_map<int, const char*> rioRawErrorCodeStrings = {
+    {rio::RAW_ERROR_OK, "rio::RAW_ERROR_OK"},
+    {rio::RAW_ERROR_CANCELED, "rio::RAW_ERROR_CANCELED"},
+    {rio::RAW_ERROR_END, "rio::RAW_ERROR_END"},
+    {rio::RAW_ERROR_ALREADY_OPEN, "rio::RAW_ERROR_ALREADY_OPEN"},
+    {rio::RAW_ERROR_NOT_FOUND, "rio::RAW_ERROR_NOT_FOUND"},
+    {rio::RAW_ERROR_NOT_FILE, "rio::RAW_ERROR_NOT_FILE"},
+    {rio::RAW_ERROR_ACCESS_ERROR, "rio::RAW_ERROR_ACCESS_ERROR"},
+    {rio::RAW_ERROR_PERMISSION_ERROR, "rio::RAW_ERROR_PERMISSION_ERROR"},
+    {rio::RAW_ERROR_FILE_TOO_BIG, "rio::RAW_ERROR_FILE_TOO_BIG"},
+    {rio::RAW_ERROR_STORAGE_FULL, "rio::RAW_ERROR_STORAGE_FULL"},
+    {rio::RAW_ERROR_FATAL_ERROR, "rio::RAW_ERROR_FATAL_ERROR"}
+};
+
+static const char* rioRawErrorCodeToString(rio::RawErrorCode code)
+{
+    const auto it = rioRawErrorCodeStrings.find(code);
+    if (it != rioRawErrorCodeStrings.end()) {
+        return it->second;
+    } else {
+        return UNKNOWN;
+    }
 }

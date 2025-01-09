@@ -46,7 +46,7 @@ type RenderRequest struct {
 	Resolution      uint16
 	TexResolution   int16
 	ViewType        uint8
-	ResourceType    uint8
+	ResourceType    int8
 	ShaderType      uint8
 	Expression      uint8
 	ExpressionFlag  FFLAllExpressionFlag //uint32  // used if there are multiple
@@ -622,21 +622,20 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 	resourceTypeStr := query.Get("resourceType")
 	if resourceTypeStr == "" {
-		// TODO: should be -1 instead?
-		resourceTypeStr = "1"
+		resourceTypeStr = "default"
 	}
 	shaderTypeStr := query.Get("shaderType")
 	if shaderTypeStr == "" {
 		// TODO: should server determine default (-1)?
-		shaderTypeStr = "0"
+		shaderTypeStr = "wiiu"
 	}
 	bodyTypeStr := query.Get("bodyType")
 	if bodyTypeStr == "" {
-		bodyTypeStr = "-1" // based on shader type
+		bodyTypeStr = "default" // based on shader type
 	}
 	clothesColorStr := query.Get("clothesColor")
 	if clothesColorStr == "" {
-		clothesColorStr = "-1"
+		clothesColorStr = "default"
 	}
 	pantsColorStr := query.Get("pantsColor")
 	if pantsColorStr == "" {
@@ -782,12 +781,12 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	lightEnable := query.Get("lightEnable") != "0"       // 0 = no lighting
 	verifyCharInfo := query.Get("verifyCharInfo") != "0" // verify default
 
-	// Parsing and validating resource type
-	resourceType, err := strconv.Atoi(resourceTypeStr)
+	var resourceType int
+	resourceType, err = strconv.Atoi(resourceTypeStr)
 	if err != nil {
-		http.Error(w, "resource type is not a number", http.StatusBadRequest)
-		return
+		resourceType = getMapToInt(resourceTypeStr, resourceTypeMap, -1)
 	}
+
 	verifyCRC16 := query.Get("verifyCRC16") != "0" // 0 = no verify
 
 	// Parsing and validating expression flag
@@ -810,7 +809,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		expression = getMapToInt(expressionStr, expressionMap, FFL_EXPRESSION_NORMAL)
 	}
 
-	if expression > 18 && resourceType < 1 {
+	if expression > 18 && resourceType == 0 {
 		http.Error(w, "🥺🥺 🥺🥺🥺🥺 🥺🥺🥺, 🥺🥺🥺 😔 (Translation: Sorry, you cannot use this expression with the middle resource.)", http.StatusBadRequest)
 		return
 	}
@@ -860,12 +859,10 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "width = resolution, int, no limit on this lmao,", http.StatusBadRequest)
 		return
 	}
-	/*
-		if width > 4096 {
-			http.Error(w, "ok bro i set the limit to 4K", http.StatusBadRequest)
-			return
-		}
-	*/
+	if width > 4096 {
+		http.Error(w, "ok bro i set the limit to 4K", http.StatusBadRequest)
+		return
+	}
 
 	// Parsing and validating texture resolution
 	texResolution, err := strconv.Atoi(texResolutionStr)
@@ -875,12 +872,10 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// NOTE: excessive high texture resolutions crash (assert fail) the renderer
-	/*
-		if texResolution > 6000 {
-			http.Error(w, "you cannot make texture resolution this high it will make your balls explode", http.StatusBadRequest)
-			return
-		}
-	*/
+	if texResolution > 6000 {
+		http.Error(w, "you cannot make texture resolution this high it will make your balls explode", http.StatusBadRequest)
+		return
+	}
 
 	ssaaFactor, err := strconv.Atoi(ssaaFactorStr)
 	if err != nil || ssaaFactor > 2 {
@@ -1002,7 +997,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 		Resolution:      uint16(width),
 		TexResolution:   int16(texResolution),
 		ViewType:        uint8(viewType),
-		ResourceType:    uint8(resourceType),
+		ResourceType:    int8(resourceType),
 		ShaderType:      uint8(shaderType),
 		Expression:      uint8(expression),
 		ExpressionFlag:  expressionFlag,
@@ -1132,7 +1127,7 @@ func renderImage(w http.ResponseWriter, r *http.Request) {
 
 		// size is deterministic so set it
 		imageDataSize := int(img.Rect.Dx()) * int(img.Rect.Dy()) * 4 // NRGBA
-		size := imageDataSize + 18                                   // tga header size
+		size := imageDataSize + 18 // tga header size
 		header.Set("Content-Length", strconv.Itoa(size))
 		header.Set("Content-Type", "image/tga")
 
@@ -1250,12 +1245,18 @@ var clothesColorMap = map[string]int{
 
 var pantsColorMap = map[string]int{
 	"default": -1,
-	"gray": 0,
-	"blue": 1,
-	"red":  2,
-	"gold": 3,
-	"body": 4,
-	"none": 5,
+	"gray":    0,
+	"blue":    1,
+	"red":     2,
+	"gold":    3,
+	"body":    4,
+	"none":    5,
+}
+
+var resourceTypeMap = map[string]int{
+	"default": -1, // server will select preferred
+	"middle":  0,  // FFL_RESOURCE_TYPE_MIDDLE
+	"high":    1,  // FFL_RESOURCE_TYPE_HIGH
 }
 
 func getMapToInt(input string, theMap map[string]int, defaultValue int) int {

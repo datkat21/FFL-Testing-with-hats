@@ -15,7 +15,7 @@ struct RenderRequest {
     // texture resolution controls mipmap enable (1 << 30)
     int16_t  texResolution;  // FFLResolution/u32, negative = mipmap
     uint8_t  viewType;       // camera view (setViewTypeParams)
-    uint8_t  resourceType;   // FFLResourceType (default high/1)
+    int8_t  resourceType;    // FFLResourceType (default high/-1)
     uint8_t  shaderType;     // custom ShaderType
     uint8_t  expression;     // used if expressionFlag is all zeroes
     uint32_t expressionFlag[3];  // casted to FFLAllExpressionFlag

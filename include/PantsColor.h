@@ -4,14 +4,14 @@
 
 enum PantsColor {
     PANTS_COLOR_DEFAULT_FOR_SHADER = -1,
-    PANTS_COLOR_GRAY = 0,
-    PANTS_COLOR_BLUE,
-    PANTS_COLOR_RED,
-    PANTS_COLOR_GOLD,
-    PANTS_COLOR_COUNT = PANTS_COLOR_GOLD + 1,
-    PANTS_COLOR_SAME_AS_BODY,
-    PANTS_COLOR_NO_DRAW_PANTS,
-    PANTS_COLOR_MAX
+    PANTS_COLOR_GRAY               = 0,
+    PANTS_COLOR_BLUE               = 1,
+    PANTS_COLOR_RED                = 2,
+    PANTS_COLOR_GOLD               = 3,
+    PANTS_COLOR_COUNT              = PANTS_COLOR_GOLD + 1,
+    PANTS_COLOR_SAME_AS_BODY       = 4,
+    PANTS_COLOR_NO_DRAW_PANTS      = 5,
+    PANTS_COLOR_MAX                = 6
 };
 
 const FFLColor cPantsColors[PANTS_COLOR_COUNT] =
