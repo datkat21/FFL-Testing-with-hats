@@ -69,10 +69,9 @@ type RenderRequest struct {
 	InstanceRotationMode uint8
 	LightDirection       [3]int16 // default/unset: -1
 	SplitMode            uint8
-	_Padding             [3]byte
 
 	// NOTE: needs to be adjusted on EVERY update:
-	_                    [3]byte // padding for alignment
+	_                    [5]byte // padding for alignment
 }
 
 const FFL_EXPRESSION_LIMIT = 70
