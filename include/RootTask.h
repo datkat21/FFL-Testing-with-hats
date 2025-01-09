@@ -64,8 +64,8 @@ private:
     void loadResourceFiles_();
     void loadBodyModels_();
     void createModel_();
-    //void createModel_(char (*buf)[FFLICHARINFO_SIZE]);
-    bool createModel_(RenderRequest* buf, int socket_handle);
+
+    bool createModel_(RenderRequest* req, int socket_handle);
 
     void initializeShaders_()
     {
