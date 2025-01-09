@@ -43,5 +43,5 @@ struct RenderRequest {
     uint8_t  splitMode;      // none (default), front, back, both
 
     // NOTE: needs to be adjusted on EVERY update for alignment!!:
-    uint8_t  _pad[3]; // padding, go struct needs this
+    uint8_t  _pad[1]; // padding, go struct needs this
 };

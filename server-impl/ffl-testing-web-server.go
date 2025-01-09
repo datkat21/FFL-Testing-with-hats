@@ -71,7 +71,7 @@ type RenderRequest struct {
 	SplitMode            uint8
 
 	// NOTE: needs to be adjusted on EVERY update:
-	_                    [5]byte // padding for alignment
+	_                    [1]byte // padding for alignment
 }
 
 const FFL_EXPRESSION_LIMIT = 70

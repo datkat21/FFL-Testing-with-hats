@@ -1,16 +1,38 @@
 # FFL-Testing Fork with Hats
 
 I'm not very good at C++ so I had a lot of help from arian :)
-This is also a very WIP version, because of no hat texture and it's using the body shader because of reused code..
-and the RootTask.cpp got formatted..
+This is also a very WIP version, because there's no hat texture yet.
+
+### 2025 Rewrite
+
+I recently rewrote basically most of the code in this fork to support arian's latest version of FFL-Testing, so it's more readable when diffing with the original.
 
 ### Sample images
 
-<div align=center>
-<img src="./doc/jasmine_hat_test_wiiu.png" width=240>
-<img src="./doc/jasmine_hat_test_switch.png" width=240>
-<img src="./doc/jasmine_hat_test_studio.png" width=240>
-</div>
+<figure>
+<img src="./doc/jasmine wiiu shader hat test.png" width=240>
+<figcaption>Wii U shader, characterYRotate = 23, hatType = 2</figcaption>
+</figure>
+
+<figure>
+<img src="./doc/jasmine switch shader hat test.png" width=240>
+<figcaption>Switch shader, characterYRotate = 23, hatType = 7</figcaption>
+</figure>
+
+<figure>
+<img src="./doc/jasmine miitomo shader hat test.png" width=240>
+<figcaption>Miitomo shader, characterYRotate = 23, hatType = 1</figcaption>
+</figure>
+
+<figure>
+<img src="./doc/jasmine wiiu blinn shader hat test.png" width=240>
+<figcaption>Wii U (blinn) shader, characterYRotate = 337, hatType = 5, hatColor = pink</figcaption>
+</figure>
+
+<figure>
+<img src="./doc/jasmine nwf shader hat test.png" width=240>
+<figcaption>Wii U (NWF/FFLIconWithBody) shader, characterYRotate = 337, hatType = 4</figcaption>
+</figure>
 
 ### Usage & info
 
