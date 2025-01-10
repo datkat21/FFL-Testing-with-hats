@@ -37,7 +37,7 @@ def main():
     data_length = len(fflstoredata)
     view_type = 0  # face
     #expression = 0
-    resource_type = 1
+    resource_type = -1
     shader_type = 0
     camera_rotate = [0, 0, 0]
     model_rotate = [0, 0, 0]
@@ -51,7 +51,7 @@ def main():
     # Ensure fflstoredata is exactly 96 bytes
     #fflstoredata = fflstoredata[:96] + b'\x00' * (96 - len(fflstoredata))
 
-    struct_format = '96sHBBHhBBBBIIIhhhhhhBBBBBB???bBbBBhhhB3x'
+    struct_format = '96sHBBHhBbBBIIIhhhhhhBBBBBB???bBbBBhhhB'
     packed_data = struct.pack(
         struct_format,
         fflstoredata,         # data: 96s

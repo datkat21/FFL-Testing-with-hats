@@ -389,9 +389,10 @@ const DrawParamMaterial cBeardMaterials[100] = {
 
 };
 
-// NOTE: WHERE DOES THIS COME FROM? just taken from a render
-const rio::BaseVec4f cLightDir = { -0.12279f, 0.70711f, 0.69636f, 1.0f };
+// nn::mii::(anonymous namespace)::IconLightDirection, vec3
+const rio::BaseVec4f cLightDir = { -0.1227878f, 0.70710677f, 0.6963642f, 1.0f };
 
+// nn::mii::(anonymous namespace)::IconLightColor, vec3
 const rio::BaseVec4f cLightColor = { 1.00f, 1.00f, 1.00f, 1.00f };
 
 }
@@ -406,6 +407,7 @@ ShaderSwitch::ShaderSwitch()
 #endif
     , mCallback()
     , mpCharInfo(nullptr)
+    , mLightDir(cLightDir)
 {
     rio::MemUtil::set(mVertexUniformLocation, u8(-1), sizeof(mVertexUniformLocation));
     rio::MemUtil::set(mPixelUniformLocation, u8(-1), sizeof(mPixelUniformLocation));
@@ -430,6 +432,11 @@ ShaderSwitch::~ShaderSwitch()
         mVAOHandle = GL_NONE;
     }
 #endif
+}
+
+void ShaderSwitch::resetUniformsToDefault()
+{
+    mLightDir = cLightDir;
 }
 
 void ShaderSwitch::initialize()
@@ -536,6 +543,20 @@ void ShaderSwitch::setShaderCallback_()
     mCallback.facelineColorIsTransparent = true;
 }
 
+// IDK!!!!!!!!
+void ShaderSwitch::setLightDirection(const rio::Vector3f direction)
+{
+    rio::BaseVec4f newLightDirection = cLightDir;
+    // only set each axis if it is non-negative
+    if (direction.x > -0.01)
+        newLightDirection.x = direction.x;
+    if (direction.y > -0.01)
+        newLightDirection.y = direction.y;
+    if (direction.z > -0.01)
+        newLightDirection.z = direction.z;
+    mLightDir = newLightDirection;
+}
+
 void ShaderSwitch::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 {
     mpCharInfo = pCharInfo;
@@ -554,7 +575,7 @@ void ShaderSwitch::bind(bool light_enable, FFLiCharInfo* pCharInfo)
 
     //mShader.setUniform(s32(0), u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_PAD0]);
     mShader.setUniform(sGammaType, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_GAMMA_TYPE]);
-    mShader.setUniform(cLightDir, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_DIR_IN_VIEW]);
+    mShader.setUniform(mLightDir, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_DIR_IN_VIEW]);
     mShader.setUniform(cLightColor, u32(-1), mPixelUniformLocation[PIXEL_UNIFORM_LIGHT_COLOR]);
 
 }

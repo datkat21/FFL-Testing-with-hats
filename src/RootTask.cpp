@@ -229,66 +229,68 @@ void RootTask::loadResourceFiles_()
     FSInit();
 #endif // RIO_IS_CAFE
 
+    for (u32 resourceType = 0; resourceType < FFL_RESOURCE_TYPE_MAX; resourceType++)
     {
-        std::string resPath;
-        resPath.resize(256);
-        // Middle (now being skipped bc it is not even used here)
-        {
-            FFLGetResourcePath(resPath.data(), 256, FFL_RESOURCE_TYPE_MIDDLE, false);
-            {
-                rio::FileDevice::LoadArg arg;
-                arg.path = resPath;
-                arg.alignment = 0x2000;
+        char resPath[256];
 
-                u8 *buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
-                if (buffer == nullptr)
-                    RIO_LOG("Skipping loading FFL_RESOURCE_TYPE_MIDDLE (%s failed to load)\n", resPath.c_str());
-                else
-                {
-                    RIO_LOG("FFL_RESOURCE_TYPE_MIDDLE successfully loaded from: %s\n", arg.path.c_str());
-                    mResourceDesc.pData[FFL_RESOURCE_TYPE_MIDDLE] = buffer;
-                    mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = arg.read_size;
-                }
+        FFLGetResourcePath(resPath,
+            static_cast<u32>(sizeof(resPath)),
+            static_cast<FFLResourceType>(resourceType), false); // last arg: linear gamma (LG) resource?
+
+        std::vector<std::string> pathsToTry = { resPath }; // list of paths
+        // Convert absolute resPath to std::filesystem::path.
+        std::filesystem::path fsPath(resPath);
+        // as well as the absolute resPath, try relative
+        pathsToTry.push_back(fsPath.filename());
+
+        bool resLoaded = false;
+
+        for (const std::string& path : pathsToTry)
+        {
+            //RIO_LOG("path to try: %s\n", path.c_str());
+            rio::FileDevice::LoadArg arg;
+            arg.path = path;
+            arg.alignment = 0x2000;
+
+            rio::NativeFileDevice* device = rio::FileDeviceMgr::instance()->getNativeFileDevice();
+            u8* buffer = device->tryLoad(arg);
+            if (buffer != nullptr)
+            {
+                RIO_LOG("Loaded resource %d from: %s\n", resourceType, arg.path.c_str());
+                mResourceDesc.pData[resourceType] = buffer;
+                mResourceDesc.size[resourceType] = arg.read_size;
+                resLoaded = true;
+                break;
+            }
+            else
+            {
+                const rio::RawErrorCode code = device->getLastRawError();
+                RIO_LOG("Failed to load resource %d from: %s with error: %s\n", resourceType, arg.path.c_str(), rioRawErrorCodeToString(code));
             }
         }
-        // mResourceDesc.size[FFL_RESOURCE_TYPE_MIDDLE] = 0;
-        //  High, load from FFL path or current working directory
+
+        if (!resLoaded)
         {
-            // Two different paths
-            std::array<std::string, 2> resPaths = {"", "./FFLResHigh.dat"};
-            resPaths[0].resize(256);
-            FFLGetResourcePath(resPaths[0].data(), 256, FFL_RESOURCE_TYPE_HIGH, false);
-
-            bool resLoaded = false;
-
-            // Try two different paths
-            for (const std::string& resPath : resPaths)
-            {
-                rio::FileDevice::LoadArg arg;
-                arg.path = resPath;
-                arg.alignment = 0x2000;
-
-                u8* buffer = rio::FileDeviceMgr::instance()->getNativeFileDevice()->tryLoad(arg);
-                if (buffer != nullptr)
-                {
-                    RIO_LOG("FFL_RESOURCE_TYPE_HIGH successfully loaded from: %s\n", arg.path.c_str());
-                    mResourceDesc.pData[FFL_RESOURCE_TYPE_HIGH] = buffer;
-                    mResourceDesc.size[FFL_RESOURCE_TYPE_HIGH] = arg.read_size;
-                    resLoaded = true;
-                    // Break when one loads successfully
-                    break;
-                }
-                else
-                    RIO_LOG("NativeFileDevice failed to load: %s\n", arg.path.c_str());
-            }
-
-            if (!resLoaded)
-            {
-                RIO_LOG("Was not able to load high resource.\n");
-                RIO_LOG("\033[1;31mThe FFLResHigh.dat needs to be present, or else this program won't work. It will probably crash right now.\033[0m\n");
-            }
+            RIO_LOG("\033[1;31mFailed to load resource %d.\033[0m\n", resourceType);
         }
     }
+}
+
+
+FFLResourceType RootTask::getDefaultResourceType_()
+{
+    // prefer high by default
+    const FFLResourceType preferred = FFL_RESOURCE_TYPE_HIGH;
+    if (mResourceDesc.size[preferred])
+        return preferred; // return preferred if it is there
+
+    // iterate through all resource types
+    for (u32 i = 0; i < FFL_RESOURCE_TYPE_MAX; i++)
+        if (mResourceDesc.size[i])
+            return FFLResourceType(i); // return first available resource
+
+    RIO_ASSERT(false && "no resources available...???");
+    return preferred;
 }
 
 void RootTask::prepare_()
@@ -358,6 +360,9 @@ void RootTask::prepare_()
         mProjMtxIconBody = mProjIconBody.getMatrix();
 
     }
+
+    // load body models
+    loadBodyModels_();
 
 #if RIO_IS_WIN
     fillStoreDataArray_();
@@ -491,7 +496,7 @@ mMiiCounter = (mMiiCounter + 1) % maxMiis;
         .desc = {
             .resolution = static_cast<FFLResolution>(FFL_RESOLUTION_TEX_256 | FFL_RESOLUTION_MIP_MAP_ENABLE_MASK),
             .allExpressionFlag = { .flags = { 1 << 0, 0, 0 } },
-            .modelFlag = 1 << 0 | 1 << 1 | 1 << 2,
+            .modelFlag = 1 << 0,
             .resourceType = FFL_RESOURCE_TYPE_HIGH,
         },
         .source = modelSource,
@@ -643,16 +648,16 @@ FFLResult pickupCharInfoFromRenderRequest(FFLiCharInfo *pCharInfo, RenderRequest
 const std::string socketErrorPrefix = "ERROR: ";
 
 // create model for render request
-bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
+bool RootTask::createModel_(RenderRequest* req, int socket_handle)
 {
     FFLiCharInfo charInfo;
 
     std::string errMsg;
 
     FFLResult pickupResult = pickupCharInfoFromData(&charInfo,
-                                                    buf->data,
-                                                    buf->dataLength,
-                                                    buf->verifyCRC16);
+                                                    req->data,
+                                                    req->dataLength,
+                                                    req->verifyCRC16);
 
     if (pickupResult != FFL_RESULT_OK)
     {
@@ -668,7 +673,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
     }
 
     // VERIFY CHARINFO
-    if (buf->verifyCharInfo)
+    if (req->verifyCharInfo)
     {
         // get verify char info reason, don't verify name
         FFLiVerifyCharInfoReason verifyCharInfoReason =
@@ -695,10 +700,17 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
             send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
             return false;
         }
+
+        if (!FFLiIsValidMiiID(&charInfo.creatorID))
+        {
+            errMsg = "FFLiIsValidMiiID returned false (this data will not work on a real console)\n";
+            RIO_LOG("%s", errMsg.c_str());
+            errMsg = socketErrorPrefix + errMsg;
+            send(socket_handle, errMsg.c_str(), errMsg.length(), 0);
+            return false;
+        }
 */
     }
-
-    // NOTE NOTE: MAKE SURE TO CHECK NULL MII ID TOO
 
     FFLCharModelSource modelSource = {
         // don't call PickupCharInfo or verify mii after we already did
@@ -711,32 +723,41 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
     // initialize expanded expression flags to blank
     FFLAllExpressionFlag expressionFlag = {.flags = {0, 0, 0}}; //{ .flags = { 1 << FFL_EXPRESSION_NORMAL } };
 
-    u32 modelFlag = static_cast<u32>(buf->modelFlag);
+    u32 modelFlag = static_cast<u32>(req->modelFlag);
     // This is set because we always initialize all flags to zero:
     modelFlag |= FFL_MODEL_FLAG_NEW_EXPRESSIONS;
     // NOTE: This flag is needed to use expressions past 31 ^^
 
-    if (buf->expressionFlag[0] != 0 || buf->expressionFlag[1] != 0 || buf->expressionFlag[2] != 0)
-        // expressionFlag.flags[0] = buf->expressionFlag;
-        rio::MemUtil::copy(expressionFlag.flags, buf->expressionFlag, sizeof(u32) * 3);
+    if (req->expressionFlag[0] != 0
+        || req->expressionFlag[1] != 0
+        || req->expressionFlag[2] != 0)
+        //expressionFlag.flags[0] = req->expressionFlag;
+        rio::MemUtil::copy(expressionFlag.flags, req->expressionFlag, sizeof(u32) * 3);
     else
-        FFLSetExpressionFlagIndex(&expressionFlag, buf->expression, true); // set that bit
+        FFLSetExpressionFlagIndex(&expressionFlag, req->expression, true); // set that bit
 
     FFLResolution texResolution;
-    if (buf->texResolution < 0)
+    if (req->texResolution < 0)
     { // if it is negative...
         texResolution = static_cast<FFLResolution>(
-            static_cast<u32>(buf->texResolution * -1) // remove negative
+            static_cast<u32>(req->texResolution * -1) // remove negative
             | FFL_RESOLUTION_MIP_MAP_ENABLE_MASK); // enable mipmap
     }
     else
-        texResolution = static_cast<FFLResolution>(buf->texResolution);
+        texResolution = static_cast<FFLResolution>(req->texResolution);
 
 #ifdef FFL_ENABLE_NEW_MASK_ONLY_FLAG
     // Enable special mode that will not initialize shapes.
-    if (buf->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY)
+    if (req->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY)
         modelFlag |= FFL_MODEL_FLAG_NEW_MASK_ONLY;
 #endif
+
+    FFLResourceType resourceType = static_cast<FFLResourceType>(req->resourceType);
+
+    // clamp minimum (-1) or maximum to default
+    if (req->resourceType < 0 || req->resourceType >= FFL_RESOURCE_TYPE_MAX)
+        // may consider "default resource for shader"
+        resourceType = getDefaultResourceType_();
 
     // Hat modelFlag conditions.
     if (cHatTypes[int(buf->hatType)] == HAT_TYPE_HAT_ONLY)
@@ -761,7 +782,7 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
             // model flag includes model type (required)
             // and flatten nose bit at pos 4
             .modelFlag = modelFlag,
-            .resourceType = static_cast<FFLResourceType>(buf->resourceType),
+            .resourceType = resourceType,
         },
         .source = modelSource,
         .index = 0
@@ -770,11 +791,11 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
     mpModel = new Model();
 
     ShaderType whichShader = SHADER_TYPE_WIIU;
-    if (buf->shaderType < SHADER_TYPE_MAX)
-        whichShader = static_cast<ShaderType>(buf->shaderType);
+    if (req->shaderType < SHADER_TYPE_MAX)
+        whichShader = static_cast<ShaderType>(req->shaderType);
 
     // this should happen after charinfo verification by the way
-    if (buf->shaderType == SHADER_TYPE_MIITOMO)
+    if (req->shaderType == SHADER_TYPE_MIITOMO)
         // miitomo erroneously makes glasses larger so we will too
         // NOTE: REMOVE LATER..??
         charInfo.parts.glassScale += 1;
@@ -782,9 +803,9 @@ bool RootTask::createModel_(RenderRequest* buf, int socket_handle)
     // shortcut, check if one of the following are true:
     // using default body type which is going to be fflbodyres
     // or body type is fflbodyres
-    else if ((buf->bodyType == BODY_TYPE_DEFAULT_FOR_SHADER
-          && buf->shaderType == SHADER_TYPE_WIIU_FFLICONWITHBODY)
-          || buf->bodyType == BODY_TYPE_FFLBODYRES)
+    else if ((req->bodyType == BODY_TYPE_DEFAULT_FOR_SHADER
+          && req->shaderType == SHADER_TYPE_WIIU_FFLICONWITHBODY)
+          || req->bodyType == BODY_TYPE_FFLBODYRES)
     {
         // this is roughly equivalent to no scale
         charInfo.build = 82;
@@ -885,13 +906,13 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
             *projMtx = mProjMtxIconBody;
             *proj = mProjIconBody;
 
-        // RIO_LOG("x = %i, y = %i, z = %i\n", renderRequest->cameraRotate.x, renderRequest->cameraRotate.y, renderRequest->cameraRotate.z);
-        /*
-        rio::Vec3f fCameraPosition = {
-            fmod(static_cast<f32>(renderRequest->cameraRotate.x), 360),
-            fmod(static_cast<f32>(renderRequest->cameraRotate.y), 360),
-            fmod(static_cast<f32>(renderRequest->cameraRotate.z), 360),
-        };*/
+            //RIO_LOG("x = %i, y = %i, z = %i\n", req->cameraRotate.x, req->cameraRotate.y, req->cameraRotate.z);
+            /*
+            rio::Vec3f fCameraPosition = {
+                fmod(static_cast<f32>(req->cameraRotate.x), 360),
+                fmod(static_cast<f32>(req->cameraRotate.y), 360),
+                fmod(static_cast<f32>(req->cameraRotate.z), 360),
+            };*/
 
             // FFLMakeIconWithBody view uses 37.05f, 415.53f
             // below values are extracted from wii u mii maker
@@ -1016,12 +1037,12 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
 }
 
 // Convert degrees to radians
-static rio::Vector3f convertVec3iToRadians3f(const int16_t degrees[3])
+static rio::Vector3f convertVec3iToRadians3f(const int16_t x, const int16_t y, const int16_t z)
 {
     rio::Vector3f radians;
-    radians.x = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[0]), 360.0f));
-    radians.y = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[1]), 360.0f));
-    radians.z = rio::Mathf::deg2rad(fmod(static_cast<f32>(degrees[2]), 360.0f));
+    radians.x = rio::Mathf::deg2rad(fmod(static_cast<f32>(x), 360.0f));
+    radians.y = rio::Mathf::deg2rad(fmod(static_cast<f32>(y), 360.0f));
+    radians.z = rio::Mathf::deg2rad(fmod(static_cast<f32>(z), 360.0f));
     return radians;
 }
 
@@ -1094,19 +1115,19 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     RIO_LOG("handleRenderRequest: socket handle: %d\n", socket);
 
     // hopefully renderrequest is proper
-    RenderRequest *renderRequest = reinterpret_cast<RenderRequest *>(buf);
+    RenderRequest* req = reinterpret_cast<RenderRequest*>(buf);
 
-    if (renderRequest->responseFormat == RESPONSE_FORMAT_GLTF_MODEL)
+    if (req->responseFormat == RESPONSE_FORMAT_GLTF_MODEL)
     {
 #ifndef NO_GLTF
-        ::handleGLTFRequest(renderRequest, pModel, socket);
+        ::handleGLTFRequest(req, pModel, socket);
 #endif
         closesocket(socket);
         return;
     }
 
     // mask ONLY - which was already initialized, so nothing else needs to happen
-    if (renderRequest->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY)
+    if (req->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY)
     {
 #ifdef FFL_NO_RENDER_TEXTURE
         RIO_ASSERT(false && "FFL_NO_RENDER_TEXTURE is enabled, but mask only draw mode relies on binding to/reading from it.");
@@ -1153,15 +1174,15 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     }
 
 
-    RIO_LOG("instance count: %d\n", renderRequest->instanceCount);
+    RIO_LOG("instance count: %d\n", req->instanceCount);
 
     int instanceTotal = 1;
 
     int instanceCurrent = 0;
     float instanceParts; // only used if below is true: vv
-    if (renderRequest->instanceCount > 1)
+    if (req->instanceCount > 1)
     {
-        instanceTotal = renderRequest->instanceCount;
+        instanceTotal = req->instanceCount;
         instanceParts = 360.0f / instanceTotal;
     }
 
@@ -1184,15 +1205,15 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     }
 
     rio::LookAtCamera camera;
-    const ViewType viewType = static_cast<ViewType>(renderRequest->viewType);
+    const ViewType viewType = static_cast<ViewType>(req->viewType);
     setViewTypeParams(viewType, &camera, &proj,
                       &projMtx, &aspectHeightFactor,
                       &isCameraPosAbsolute, &willDrawBody, pCharInfo);
 
     // Total width/height accounting for instance count.
-    const u32 totalWidth = renderRequest->resolution;
+    const u32 totalWidth = req->resolution;
     const u32 totalHeight = static_cast<u32>((ceilf(
-        static_cast<f32>(renderRequest->resolution
+        static_cast<f32>(req->resolution
         * aspectHeightFactor * instanceTotal)
     ) / 2) * 2);
 
@@ -1210,8 +1231,8 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     const rio::Vector3f cameraPosInitial = camera.pos();
     const f32 radius = cameraPosInitial.z;
 
-    rio::Vector3f cameraRotate = convertVec3iToRadians3f(renderRequest->cameraRotate);
-    rio::Vector3f modelRotate = convertVec3iToRadians3f(renderRequest->modelRotate);
+    rio::Vector3f cameraRotate = convertVec3iToRadians3f(req->cameraRotate[0], req->cameraRotate[1], req->cameraRotate[2]);
+    rio::Vector3f modelRotate = convertVec3iToRadians3f(req->modelRotate[0], req->modelRotate[1], req->modelRotate[2]);
 
 
     if (instanceTotal > 1)
@@ -1220,7 +1241,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
         float instanceAngleRad = rio::Mathf::deg2rad(instanceAngle);
         RIO_LOG("instance %d rotation: %f (rad: %f)\n", instanceCurrent, instanceAngle, instanceAngleRad);
 
-        switch (renderRequest->instanceRotationMode)
+        switch (req->instanceRotationMode)
         {
             case INSTANCE_ROTATION_MODE_MODEL:
                 modelRotate.y += instanceAngleRad;
@@ -1238,16 +1259,16 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     position.y += cameraPosInitial.y;
     const rio::Vector3f upVector = calculateUpVector(cameraRotate);
 
-    BodyType bodyType = static_cast<BodyType>(renderRequest->bodyType);
+    BodyType bodyType = static_cast<BodyType>(req->bodyType);
     if (bodyType <= BODY_TYPE_DEFAULT_FOR_SHADER
         || bodyType >= BODY_TYPE_MAX)
-        bodyType = cShaderTypeDefaultBodyType[renderRequest->shaderType % SHADER_TYPE_MAX];
+        bodyType = cShaderTypeDefaultBodyType[req->shaderType % SHADER_TYPE_MAX];
 
     BodyModel bodyModel(getBodyModel_(pModel, bodyType), bodyType);
-    PantsColor pantsColor = static_cast<PantsColor>(renderRequest->pantsColor);
+    PantsColor pantsColor = static_cast<PantsColor>(req->pantsColor);
     if (pantsColor <= PANTS_COLOR_DEFAULT_FOR_SHADER
         || pantsColor >= PANTS_COLOR_MAX)
-        pantsColor = cShaderTypeDefaultPantsType[renderRequest->shaderType % SHADER_TYPE_MAX];
+        pantsColor = cShaderTypeDefaultPantsType[req->shaderType % SHADER_TYPE_MAX];
 
     if (willDrawBody)
     {
@@ -1286,7 +1307,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     camera.getMatrix(&view_mtx);
 
 
-    const SplitMode splitMode = static_cast<SplitMode>(renderRequest->splitMode);
+    const SplitMode splitMode = static_cast<SplitMode>(req->splitMode);
     if (splitMode != SPLIT_MODE_NONE)
     {
         // Copy projection matrix and set near/far on it.
@@ -1314,7 +1335,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     bool flipY = false;
 
     // When RIO_NO_CLIP_CONTROL is not defined, we only flip Y if the response format requires it
-    if (renderRequest->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y)
+    if (req->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y)
         flipY = true;
 
 #ifdef RIO_NO_CLIP_CONTROL
@@ -1335,7 +1356,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     }
 #endif // RIO_IS_WIN
 
-    pModel->setLightEnable(renderRequest->lightEnable);
+    pModel->setLightEnable(req->lightEnable);
 
     // Create the render buffer with the desired size
 
@@ -1345,7 +1366,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 #else
             1;
 #endif
-    const int iResolution = static_cast<int>(renderRequest->resolution);
+    const int iResolution = static_cast<int>(req->resolution);
     const int width = iResolution * ssaaFactor;
 
     const float fHeight = (ceilf( // round up
@@ -1363,7 +1384,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     // however golang does not support this and png, jpeg, webp aren't using this anyway so
     textureFormat = rio::TEXTURE_FORMAT_B8_G8_R8_A8_UNORM;
 #elif RIO_IS_WIN //&& !defined(RIO_GLES) // not supported in gles core
-        if (renderRequest->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y
+    if (req->responseFormat == RESPONSE_FORMAT_TGA_BGRA_FLIP_Y
 #ifdef RIO_GLES
             && GLAD_GL_EXT_texture_format_BGRA8888
 #endif
@@ -1386,10 +1407,10 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     //else
     //{
     fBackgroundColor = {
-        static_cast<f32>(renderRequest->backgroundColor[0]) / 256,
-        static_cast<f32>(renderRequest->backgroundColor[1]) / 256,
-        static_cast<f32>(renderRequest->backgroundColor[2]) / 256,
-        static_cast<f32>(renderRequest->backgroundColor[3]) / 256
+        static_cast<f32>(req->backgroundColor[0]) / 256,
+        static_cast<f32>(req->backgroundColor[1]) / 256,
+        static_cast<f32>(req->backgroundColor[2]) / 256,
+        static_cast<f32>(req->backgroundColor[3]) / 256
     };
     //}
     renderTexture.clear(rio::RenderBuffer::CLEAR_FLAG_COLOR_DEPTH_STENCIL, fBackgroundColor);
@@ -1400,16 +1421,27 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     RIO_LOG("Render buffer bound.\n");
 
     // Set light direction.
-    /*
-    rio::Vector3f lightDirection = {
-        static_cast<f32>(renderRequest->lightDirection[0]),
-        static_cast<f32>(renderRequest->lightDirection[1]),
-        static_cast<f32>(renderRequest->lightDirection[2])
-    };
-    pModel->getShader()->setLightDirection(lightDirection);
-    */
+    // Reset uniforms first
+    pModel->getShader()->resetUniformsToDefault();
+    // only set each if all axes are not zero
 
-    DrawStageMode drawStages = static_cast<DrawStageMode>(renderRequest->drawStageMode);
+    // TODO maybe miitomo needs radians
+    if (req->lightDirection[0] != 0
+        || req->lightDirection[1] != 0
+        || req->lightDirection[2] != 0)
+    {
+        /*
+        rio::Vector3f lightDirection = {
+            static_cast<f32>(req->lightDirection[0]),
+            static_cast<f32>(req->lightDirection[1]),
+            static_cast<f32>(req->lightDirection[2])
+        };
+        */
+        rio::Vector3f lightDirection = convertVec3iToRadians3f(req->lightDirection[0], req->lightDirection[1], req->lightDirection[2]);
+        pModel->getShader()->setLightDirection(lightDirection);
+    }
+
+    DrawStageMode drawStages = static_cast<DrawStageMode>(req->drawStageMode);
 
     // Render the first frame to the buffer
     if (drawStages == DRAW_STAGE_MODE_ALL
@@ -1421,13 +1453,13 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     // draw body?
     if (willDrawBody)
     {
-        FFLFavoriteColor originalFavoriteColor = pCharInfo->favoriteColor;
-        if (renderRequest->clothesColor >= 0
+        const FFLFavoriteColor originalFavoriteColor = pCharInfo->favoriteColor;
+        if (req->clothesColor >= 0
             // verify favorite color is in range here bc it is NOT verified in drawMiiBodyREAL
-            && renderRequest->clothesColor < FFL_FAVORITE_COLOR_MAX
+            && req->clothesColor < FFL_FAVORITE_COLOR_MAX
         )
             // change favorite color after drawing opa
-            pCharInfo->favoriteColor = static_cast<FFLFavoriteColor>(renderRequest->clothesColor);
+            pCharInfo->favoriteColor = static_cast<FFLFavoriteColor>(req->clothesColor);
 
         bodyModel.draw(rotationMtx, view_mtx, projMtx);
         // restore original favorite color tho
@@ -1554,9 +1586,9 @@ void RootTask::calc_()
             delete mpModel;
             hasSocketRequest = true;
 
-            RenderRequest *reqBuf = reinterpret_cast<RenderRequest *>(buf);
+            RenderRequest* req = reinterpret_cast<RenderRequest*>(buf);
 
-            if (!createModel_(reqBuf, mServerSocket))
+            if (!createModel_(req, mServerSocket))
             {
                 mpModel = nullptr;
                 mCounter = 0.0f;
@@ -1665,7 +1697,7 @@ void RootTask::calc_()
 #include "GLTFExportCallback.h"
 #include <sstream>
 
-void handleGLTFRequest(RenderRequest* renderRequest, Model* pModel, int socket)
+void handleGLTFRequest(RenderRequest* req, Model* pModel, int socket)
 {
     // Initialize ExportShader
     GLTFExportCallback exportShader;
@@ -1677,9 +1709,9 @@ void handleGLTFRequest(RenderRequest* renderRequest, Model* pModel, int socket)
     // Get the shader callback
     FFLShaderCallback callback = exportShader.GetShaderCallback();
 
-    DrawStageMode drawStages = static_cast<DrawStageMode>(renderRequest->drawStageMode);
+    DrawStageMode drawStages = static_cast<DrawStageMode>(req->drawStageMode);
 
-    if (renderRequest->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY)
+    if (req->drawStageMode == DRAW_STAGE_MODE_MASK_ONLY)
     {
         // only draw the xlu mask in this mode
         const FFLDrawParam* maskParam = FFLGetDrawParamXluMask(pModel->getCharModel());

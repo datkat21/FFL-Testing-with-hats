@@ -1,9 +1,17 @@
 #pragma once
 
+// snippet below from: https://github.com/microsoft/CMake/blob/a5caf2fee0a42735b8f5f54e146da39099f1a8a6/Utilities/cmlibarchive/libarchive/archive_write_set_format_cpio_binary.c#L75
+
+// snippet to define that a struct should not have alignment
+#ifdef __GNUC__
+    #define PACKED(x) x __attribute__((packed))
+#elif defined(_MSC_VER)
+    #define PACKED(x) __pragma(pack(push, 1)) x __pragma(pack(pop))
+#endif
+
 // Structure representing a render request, derived from
 // request query parameters by caller (web server).
-// Note that the order of this is completely based on alignment.
-struct RenderRequest {
+PACKED(struct RenderRequest {
     uint8_t  data[96];       // just a buffer that accounts for maximum size
     uint16_t dataLength;     // determines the mii data format
     uint8_t  modelFlag;      // FFLModelType + nose flatten @ bit 4
@@ -15,7 +23,7 @@ struct RenderRequest {
     // texture resolution controls mipmap enable (1 << 30)
     int16_t  texResolution;  // FFLResolution/u32, negative = mipmap
     uint8_t  viewType;       // camera view (setViewTypeParams)
-    uint8_t  resourceType;   // FFLResourceType (default high/1)
+    int8_t  resourceType;    // FFLResourceType (default high/-1)
     uint8_t  shaderType;     // custom ShaderType
     uint8_t  expression;     // used if expressionFlag is all zeroes
     uint32_t expressionFlag[3];  // casted to FFLAllExpressionFlag
@@ -41,7 +49,4 @@ struct RenderRequest {
     uint8_t  instanceRotationMode; // model, camera, TODO
     int16_t  lightDirection[3];    // unset if all negative, TODO
     uint8_t  splitMode;      // none (default), front, back, both
-
-    // NOTE: needs to be adjusted on EVERY update for alignment!!:
-    uint8_t  _pad[1]; // padding, go struct needs this
-};
+});

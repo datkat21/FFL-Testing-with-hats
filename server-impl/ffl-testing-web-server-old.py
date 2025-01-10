@@ -103,7 +103,7 @@ class RenderRequest:
 
     def pack(self):
         return struct.pack(
-            '96sHBBHhBBBBIIIhhhhhhBBBBBB???bBbBBhhhB3x',
+            '96sHBBHhBbBBIIIhhhhhhBBBBBB???bBbBBhhhB',
             self.data,                 # data: 96s
             self.data_length,          # dataLength: H (uint16_t)
             1 << 0,                    # modelType: B (uint8_t)
