@@ -1304,22 +1304,6 @@ var hatColorMap = map[string]int{
 	"black":       12,
 }
 
-var hatColorMap = map[string]int{
-	"default":     0,
-	"red":         1,
-	"orange":      2,
-	"yellow":      3,
-	"yellowgreen": 4,
-	"green":       5,
-	"blue":        6,
-	"skyblue":     7,
-	"pink":        8,
-	"purple":      9,
-	"brown":       10,
-	"white":       11,
-	"black":       12,
-}
-
 var hatTypeMap = map[string]int{
 	"none":        0,
 	"cap":         1,

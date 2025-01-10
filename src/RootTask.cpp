@@ -760,15 +760,15 @@ bool RootTask::createModel_(RenderRequest* req, int socket_handle)
         resourceType = getDefaultResourceType_();
 
     // Hat modelFlag conditions.
-    if (cHatTypes[int(buf->hatType)] == HAT_TYPE_HAT_ONLY)
+    if (cHatTypes[int(req->hatType)] == HAT_TYPE_HAT_ONLY)
     {
         modelFlag = FFL_MODEL_FLAG_HAT;
     }
-    else if (cHatTypes[int(buf->hatType)] == HAT_TYPE_FACE_ONLY)
+    else if (cHatTypes[int(req->hatType)] == HAT_TYPE_FACE_ONLY)
     {
         modelFlag = FFL_MODEL_FLAG_FACE_ONLY;
     }
-    else if (cHatTypes[int(buf->hatType)] == HAT_TYPE_BALD)
+    else if (cHatTypes[int(req->hatType)] == HAT_TYPE_BALD)
     {
         // bald Hair type
         charInfo.parts.hairType = FFL_HAIR_BALD;
@@ -1199,7 +1199,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     bool willDrawHat = false;
 
     // simple hatType drawing logic. Prevents a crash when hatType is too high.
-    if (renderRequest->hatType > 0 && renderRequest->hatType < cMaxHats) 
+    if (req->hatType > 0 && req->hatType < cMaxHats) 
     {
         willDrawHat = true;
     }
@@ -1469,10 +1469,10 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     // Custom hat model :D
     if (willDrawHat)
     {
-        RIO_LOG("WE WILL DRAW HAT %i!! YAYY!!!\n", renderRequest->hatType);
+        RIO_LOG("WE WILL DRAW HAT %i!! YAYY!!!\n", req->hatType);
 
         // Prepare hat model
-        HatModel hatModel(getHatModel_(pModel, renderRequest->hatType));
+        HatModel hatModel(getHatModel_(pModel, req->hatType));
         
         rio::Matrix34f hat_mtx = rotationMtx;
 
@@ -1494,7 +1494,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
         });
 
         // Initialize model:
-        hatModel.initialize(pModel, renderRequest->hatColor);
+        hatModel.initialize(pModel, req->hatColor);
         hatModel.draw(hat_mtx, view_mtx, projMtx);
     } 
 
