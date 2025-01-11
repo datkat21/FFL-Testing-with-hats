@@ -50,6 +50,13 @@ class RootTask : public rio::ITask
 {
 public:
     RootTask();
+    // Static members set to strings or nullptr.
+    static const char* sServerOnlyFlag;
+    static const char* sServerPort;
+
+    static const char* sResourceSearchPath;
+    static const char* sResourceHighPath;
+
 
 private:
     void prepare_() override;
@@ -135,10 +142,8 @@ private:
     s32                 mMiiCounter;
     Model*              mpModel;
     rio::mdl::Model*    mpBodyModels[BODY_TYPE_MAX][FFL_GENDER_MAX];
-    const char*         mpServerOnly;
-    const char*         mpNoSpin;
 
-    // For server
+    // For server:
     int                 mServerFD;
     int                 mServerSocket;
     sockaddr_in         mServerAddress;

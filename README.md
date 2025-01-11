@@ -15,7 +15,7 @@ I keep telling myself that, after a rewrite, it can be moved into its own repo, 
         - Inside `server-impl` just `go run .` or run the Go file
 3. Make sure FFL-Testing is running and listening, and try a request like this to the server: http://localhost:5000/miis/image.png?data=005057676b565c6278819697bbc3cecad3e6edf301080a122e303a381c235f4a52595c4e51494f585c5f667d848b96&width=512
 4. If that works, great! Keep these in mind:
-    - If you are hosting this, **always use the SERVER_ONLY=1 environment variable when running.**
+    - If you are hosting this, **always use the --server argument when running.**
         * Hides the window, doesn't swap buffers, and pauses when idle.
     - If you are running this on a VPS, build with **OSMesa support** so that you don't have to run an X11 server.
         * Build and also pass in optimizations into CMake: `-DCMAKE_CXX_FLAGS="-O3 -march=native" -DRIO_USE_OSMESA=1"`

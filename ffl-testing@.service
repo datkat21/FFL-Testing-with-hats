@@ -10,9 +10,7 @@ After=ffl-testing@%i.socket
 # NOTE: don't run it as root!!!!!! but i did but you should not
 WorkingDirectory=/root/FFL-Testing
 ExecStart=/root/FFL-Testing/ffl_testing_2
-#Environment=PORT=%i
-#Environment=SERVER_ONLY=1
-# both of the above are assumed from LISTEN_FDS
+# --port/--server are assumed from LISTEN_FDS
 # TODO ADD SANDBOXING???
 
 [Install]

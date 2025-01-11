@@ -32,6 +32,12 @@
 void handleGLTFRequest(RenderRequest* renderRequest, Model* pModel, int socket);
 #endif
 
+// Static members.
+const char* RootTask::sServerOnlyFlag     = nullptr;
+const char* RootTask::sServerPort         = nullptr;
+const char* RootTask::sResourceSearchPath = nullptr;
+const char* RootTask::sResourceHighPath   = nullptr;
+
 RootTask::RootTask()
     : ITask("FFL Testing")
     , mInitialized(false)
@@ -46,13 +52,9 @@ RootTask::RootTask()
     , mMiiCounter(0)
     , mpModel(nullptr)
     , mpBodyModels{ nullptr }
-
-    // disables occasionally drawing mii and enables blocking
-    , mpServerOnly(getenv("SERVER_ONLY"))
-    , mpNoSpin(getenv("NO_SPIN"))
 {
 #ifdef RIO_USE_OSMESA // off screen rendering
-    mpServerOnly = "1"; // force it truey
+    sServerOnlyFlag = "1"; // force it truey
 #endif
     rio::MemUtil::set(mpBodyModels, 0, sizeof(mpBodyModels));
 }
@@ -73,7 +75,7 @@ RootTask::RootTask()
 void RootTask::fillStoreDataArray_()
 {
     // Path to the folder
-    const std::string folderPath = STORE_DATA_FOLDER_PATH;
+    static const std::string folderPath = STORE_DATA_FOLDER_PATH;
     // Check if the folder exists
     if (!std::filesystem::exists(folderPath) || !std::filesystem::is_directory(folderPath))
         return; // folder is not usable, skip this
@@ -82,12 +84,14 @@ void RootTask::fillStoreDataArray_()
         if (!entry.is_regular_file()
             || entry.file_size() < sizeof(charInfoStudio)
             || entry.path().filename().string().at(0) == '.')
-            continue; // skip: dotfiles, not regular/too small files
+            // skip: dotfiles, not regular/too small files
+            continue;
 
-        // Read the file content
+        // read file contents into data
         std::ifstream file(entry.path(), std::ios::binary);
         if (!file.is_open())
             continue;
+
         std::vector<char> data;
         data.resize(entry.file_size());
         file.read(&data[0], entry.file_size());
@@ -95,7 +99,7 @@ void RootTask::fillStoreDataArray_()
         mStoreDataArray.push_back(data);
         file.close();
     }
-    RIO_LOG("Loaded %zu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
+    RIO_LOG("loaded %zu files from %s into mStoreDataArray\n", mStoreDataArray.size(), folderPath.c_str());
 }
 
 // Second argument passed to listen() indicating
@@ -104,7 +108,7 @@ void RootTask::fillStoreDataArray_()
 
 #define PORT_DEFAULT 12346 // default port to listen on
 
-// Setup socket to send data to
+// Setup socket to send data to, and print message.
 void RootTask::setupSocket_()
 {
 #ifdef USE_SYSTEMD_SOCKET
@@ -118,7 +122,7 @@ void RootTask::setupSocket_()
             mSocketIsListening = true;
             RIO_LOG("\033[1mUsing systemd socket activation, socket fd: %d\033[0m\n", mServerFD);
 
-            mpServerOnly = "1"; // force server only when using systemd socket
+            sServerOnlyFlag = "1"; // force server only when using systemd socket
             return; // Exit the function as the socket is already set up
         }
         else
@@ -155,24 +159,24 @@ void RootTask::setupSocket_()
 
     mServerAddress.sin_family = AF_INET;
     mServerAddress.sin_addr.s_addr = INADDR_ANY;
-    // Get port number from environment or use default
-    char portReminder[] ="\033[2m(you can change the port with the PORT environment variable)\033[0m\n";
 
-    const char* env_port = getenv("PORT");
+    // Get port number from arguments or use the default.
+    char portReminder[] =" \033[2m(change with --port)\033[0m"; // will be set to blank
 
     int port = PORT_DEFAULT; // default port
-    if (env_port)
+    if (sServerPort)
     {
-        port = atoi(env_port);
-        portReminder[0] = '\0';
+        port = atoi(sServerPort);
+        portReminder[0] = '\0'; // remove port reminder
     }
-    // Forcefully attaching socket to the port
-    mServerAddress.sin_port = htons(port);
+
+    // bind socket handle mServerFD with mServerAddress
+    mServerAddress.sin_port = htons(port); // set port
     if (bind(mServerFD, (struct sockaddr *)&mServerAddress, sizeof(mServerAddress)) < 0)
     {
         perror("bind failed");
         RIO_LOG("\033[1m" \
-        "TIP: Change the default port of 12346 with the PORT environment variable" \
+        "TIP: Change the default port of 12346 with the --port argument." \
         "\033[0m\n");
         exit(EXIT_FAILURE);
     }
@@ -187,29 +191,30 @@ void RootTask::setupSocket_()
 
     else
     {
-        // Set socket to non-blocking mode
-        char serverOnlyReminder[] = "\033[1mRemember to add the environment variable SERVER_ONLY=1 to hide the main window.\n\033[0m";
-        // except if we are server only, in which case we WANT to block
-        if (!mpServerOnly)
+        char serverOnlyReminder[] = "\033[1mRemember to use the --server argument to hide the window.\n\033[0m";
+
+        // accept() blocks by default, this is needed
+        // in server only mode but the mode will be
+        // set to non-blocking without
+        if (!sServerOnlyFlag)
         {
 #ifdef _WIN32
-            u_long mode = 1;
+            const u_long mode = 1;
             ioctlsocket(mServerFD, FIONBIO, &mode);
 #else
             fcntl(mServerFD, F_SETFL, O_NONBLOCK);
-#endif
+#endif // _WIN32
         }
         else
-        {
             // don't show the reminder with server only
             serverOnlyReminder[0] = '\0';
-        }
 
         mSocketIsListening = true;
 
+        // print bold/blue, portReminder, serverOnlyReminder
         RIO_LOG("\033[1m" \
-        "tcp server listening on port %d\033[0m\n" \
-        "%s" \
+        "tcp server listening on port %d\033[0m" \
+        "%s\n" \
         "%s",
         port, portReminder, serverOnlyReminder);
     }
@@ -233,11 +238,26 @@ void RootTask::loadResourceFiles_()
             static_cast<u32>(sizeof(resPath)),
             static_cast<FFLResourceType>(resourceType), false); // last arg: linear gamma (LG) resource?
 
-        std::vector<std::string> pathsToTry = { resPath }; // list of paths
+        std::vector<std::string> pathsToTry; // list of paths
         // Convert absolute resPath to std::filesystem::path.
-        std::filesystem::path fsPath(resPath);
+        std::filesystem::path fsPath = resPath;
+
+        if (resourceType == FFL_RESOURCE_TYPE_HIGH
+            && RootTask::sResourceHighPath)
+            // try that filename directly for high
+            pathsToTry.push_back(RootTask::sResourceHighPath);
+
+        if (RootTask::sResourceSearchPath)
+        {
+            std::string path = RootTask::sResourceSearchPath;
+            // join resource search path
+            pathsToTry.push_back(
+                path + "/" + fsPath.filename().string());
+        }
+
         // as well as the absolute resPath, try relative
         pathsToTry.push_back(fsPath.filename());
+        pathsToTry.push_back(resPath);
 
         bool resLoaded = false;
 
@@ -378,6 +398,7 @@ void RootTask::prepare_()
 
 void RootTask::loadBodyModels_()
 {
+    RIO_LOG("loading body models: ");
     for (u32 bodyType = 0; bodyType < BODY_TYPE_MAX; bodyType++)
     {
         for (u32 gender = 0; gender < FFL_GENDER_MAX; gender++)
@@ -391,19 +412,21 @@ void RootTask::loadBodyModels_()
 
             snprintf(bodyPathC, sizeof(bodyPathC), cBodyFileNameFormat, bodyTypeString, genderString);
 
-            RIO_LOG("loading body model: %s\n", bodyPathC);
+            RIO_LOG("%s, ", bodyPathC);
             const rio::mdl::res::Model* resModel = rio::mdl::res::ModelCacher::instance()->loadModel(bodyPathC, bodyPathC);
 
             RIO_ASSERT(resModel);
             if (resModel == nullptr)
             {
-                fprintf(stderr, "Body model not found: %s. Exiting.\n", bodyPathC);
+                fprintf(stderr, "\nBody model not found: %s. Exiting.\n", bodyPathC);
                 exit(EXIT_FAILURE);
             }
 
             mpBodyModels[bodyType][gender] = new rio::mdl::Model(resModel);
         }
     }
+    // print bold/blue:
+    RIO_LOG("\033[1m(all loaded successfully)\033[0m\n");
 }
 
 // amount of mii indexes to cycle through
@@ -1391,7 +1414,7 @@ void RootTask::calc_()
         // otherwise just fall through and use default
         // when mii is directly in front of the camera
 #endif // RIO_IS_WIN
-        if (!mpServerOnly && mCounter >= rio::Mathf::pi2())
+        if (!sServerOnlyFlag && mCounter >= rio::Mathf::pi2())
         {
             delete mpModel;
             createModel_();
@@ -1404,7 +1427,7 @@ void RootTask::calc_()
     if (hasSocketRequest)
     {
         handleRenderRequest(buf, mpModel, mServerSocket);
-        if (!mpServerOnly)
+        if (!sServerOnlyFlag)
         {
             rio::Window::instance()->makeContextCurrent();
 
@@ -1418,7 +1441,7 @@ void RootTask::calc_()
         return;
     }
 
-    if (!mpServerOnly)
+    if (!sServerOnlyFlag)
     {
         rio::Window::instance()->clearColor(0.2f, 0.3f, 0.3f, 1.0f);
         rio::Window::instance()->clearDepthStencil();
@@ -1457,7 +1480,7 @@ void RootTask::calc_()
     mpModel->setMtxRT(model_mtx);
 
     // Increment the counter to gradually change the camera's position over time
-    if (!mpServerOnly)
+    if (!sServerOnlyFlag)
     {
         mCounter += 1.f / 60;
     }
