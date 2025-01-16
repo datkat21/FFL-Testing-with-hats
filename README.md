@@ -18,7 +18,7 @@ I keep telling myself that, after a rewrite, it can be moved into its own repo, 
     - If you are hosting this, **always use the --server argument when running.**
         * Hides the window, doesn't swap buffers, and pauses when idle.
     - If you are running this on a VPS, build with **OSMesa support** so that you don't have to run an X11 server.
-        * Build and also pass in optimizations into CMake: `-DCMAKE_CXX_FLAGS="-O3 -march=native" -DRIO_USE_OSMESA=1"`
+        * Build and also pass in optimizations into CMake: `-DCMAKE_CXX_FLAGS="-O3 -march=native" -DRIO_USE_OSMESA=ON`
         * Note that OSMesa does **NOT support hardware rendering**, and should only be used if you don't have a GPU! If you do, you'll need to constantly run Xvfb or something.
 
 <details>

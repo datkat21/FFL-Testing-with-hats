@@ -957,8 +957,12 @@ static f32 getTransformedZ(const rio::BaseMtx34f model_mtx, const rio::BaseMtx34
 }
 
 // TODO: this is still using class instances: getBodyModel
-void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
+void RootTask::handleRenderRequest(char* buf, Model** ppModel, int socket)
 {
+    // Cast pModel. ppModel is provided so that
+    // it can be deleted from inside this function
+    Model* pModel = *ppModel;
+
     if (pModel == nullptr)
     {
         // error was already sent by now?
@@ -1017,7 +1021,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
             // will crash if you try to draw any shapes
             // so we are simply deleting the model
             delete pModel;
-            pModel = nullptr;
+            *ppModel = nullptr;
         }
 #endif // FFL_ENABLE_NEW_MASK_ONLY_FLAG
 
@@ -1433,7 +1437,7 @@ void RootTask::calc_()
 
     if (hasSocketRequest)
     {
-        handleRenderRequest(buf, mpModel, mServerSocket);
+        handleRenderRequest(buf, &mpModel, mServerSocket);
         if (!sServerOnlyFlag)
         {
             rio::Window::instance()->makeContextCurrent();

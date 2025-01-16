@@ -63,7 +63,7 @@ private:
     void calc_() override;
     void exit_() override;
 
-    void handleRenderRequest(char* buf, Model* pModel, int socket);
+    void handleRenderRequest(char* buf, Model** ppModel, int socket);
 #ifndef NO_GLTF
     void handleGLTFRequest(RenderRequest* renderRequest);
 #endif
