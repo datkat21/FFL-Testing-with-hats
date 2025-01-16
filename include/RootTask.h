@@ -50,13 +50,20 @@ class RootTask : public rio::ITask
 {
 public:
     RootTask();
+    // Static members set to strings or nullptr.
+    static const char* sServerOnlyFlag;
+    static const char* sServerPort;
+
+    static const char* sResourceSearchPath;
+    static const char* sResourceHighPath;
+
 
 private:
     void prepare_() override;
     void calc_() override;
     void exit_() override;
 
-    void handleRenderRequest(char* buf, Model* pModel, int socket);
+    void handleRenderRequest(char* buf, Model** ppModel, int socket);
 #ifndef NO_GLTF
     void handleGLTFRequest(RenderRequest *renderRequest);
 #endif
@@ -138,10 +145,8 @@ private:
     Model*              mpModel;
     rio::mdl::Model*    mpBodyModels[BODY_TYPE_MAX][FFL_GENDER_MAX];
     rio::mdl::Model*    mpHatModels[cMaxHats];
-    const char*         mpServerOnly;
-    const char*         mpNoSpin;
 
-    // For server
+    // For server:
     int                 mServerFD;
     int                 mServerSocket;
     sockaddr_in         mServerAddress;

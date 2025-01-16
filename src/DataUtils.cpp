@@ -253,7 +253,7 @@ FFLResult pickupCharInfoFromData(FFLiCharInfo* pCharInfo, const void* data, u32 
             break;
         default:
             // uh oh, we can't detect it
-            RIO_LOG("pickupCharInfoFromData: Unknown type for data size %d\n, returning error.", dataLength);
+            RIO_LOG("pickupCharInfoFromData: Unknown type for data size %d, returning error.\n", dataLength);
             return FFL_RESULT_ERROR;
             break;
     }

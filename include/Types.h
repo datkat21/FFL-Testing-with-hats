@@ -38,7 +38,8 @@ enum BodyType {
     BODY_TYPE_SWITCH_MIIBODYHIGH = 1,
     BODY_TYPE_MIITOMO            = 2,  // Female body is custom
     BODY_TYPE_FFLBODYRES         = 3,  // AKA body in nwf.mii
-    BODY_TYPE_MAX                = 4
+    BODY_TYPE_3DS                = 4,
+    BODY_TYPE_MAX                = 5
 };
 
 // Map shader types to a default body type:

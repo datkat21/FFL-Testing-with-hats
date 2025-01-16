@@ -14,7 +14,7 @@ public:
 
     ~RenderTexture();
 
-    const rio::TextureFormat getColorFormat() const
+    rio::TextureFormat getColorFormat() const
     {
         return mRenderTextureColor.getTextureFormat();
     };

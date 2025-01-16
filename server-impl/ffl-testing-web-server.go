@@ -1221,6 +1221,7 @@ var bodyTypeMap = map[string]int{
 	"switch":     1,
 	"miitomo":    2,
 	"fflbodyres": 3,
+	"3ds":        4,
 }
 
 // Map of expression strings to their respective flags
@@ -1282,10 +1283,11 @@ var pantsColorMap = map[string]int{
 }
 
 var resourceTypeMap = map[string]int{
-	"default": -1, // server will select preferred
-	"middle":  0,  // FFL_RESOURCE_TYPE_MIDDLE
-	"high":    1,  // FFL_RESOURCE_TYPE_HIGH
-	//"low":     2,
+	"default":   -1, // server will select preferred
+	"middle":    0,  // FFL_RESOURCE_TYPE_MIDDLE
+	"high":      1,  // FFL_RESOURCE_TYPE_HIGH
+	"very_high": 2,
+	"low":       3,
 }
 
 var hatColorMap = map[string]int{

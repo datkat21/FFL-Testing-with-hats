@@ -3,6 +3,8 @@
 #include <rio.h>
 #include <gfx/rio_Window.h>
 
+#include <string> // for parseArgv
+
 #ifdef __EMSCRIPTEN__
     #include <emscripten/emscripten.h>
     #include <gfx/lyr/rio_Renderer.h>
@@ -12,19 +14,22 @@
 
 static rio::InitializeArg initializeArg = {
     .window = {
+        // square window
         .width = 600,
         .height = 600,
 #if RIO_IS_WIN
         .resizable = true
 #endif // RIO_IS_WIN
-    }
+    },
+    .primitive_renderer = {},
 };
 
 
 #ifdef __EMSCRIPTEN__
-rio::Window* window;
+rio::Window* window = nullptr; // set in main()
 void mainLoop()
 {
+    RIO_ASSERT(window != nullptr);
     // Main loop iteration
     // Update the task manager
     rio::TaskMgr::instance()->calc();
@@ -59,23 +64,21 @@ void initializeSentry()
 }
 #endif // USE_SENTRY_DSN
 
-int main()
+void parseArgv(int argc, char* argv[]); // forward decl
+
+int main(int argc, char* argv[])
 {
-    // don't know how to pass argv to RootTask
-    const char* isServerOnly = getenv("SERVER_ONLY");
-    // use invisible window with server only
-    if (isServerOnly)
-        initializeArg.window.invisible = true;
+    // parse and pass arguments to RootTask
+    parseArgv(argc, argv);
 
 #ifdef __EMSCRIPTEN__
-    // Get window instance
-    window = rio::Window::instance();
+    window = rio::Window::instance(); // used in mainLoop
     emscripten_set_main_loop(mainLoop, 0, 1);
 #endif
 
     // Initialize RIO, make window...
     if (!rio::Initialize<RootTask>(initializeArg))
-        return -1;
+        return -1; // 255
 
 #ifdef USE_SENTRY_DSN
     initializeSentry();
@@ -83,32 +86,27 @@ int main()
 
 #ifndef __EMSCRIPTEN__
     // do not draw/present to window when server only
-    // may avoid an issue where, when window hasn't been updated
-    // for a while (which it won't be if SERVER_ONLY is enabled
-    // , since the program blocks on accept() all day)...
-    // , the program may hang next time it calls swapBuffers()
-    // due to a call to wl_display_dispatch_queue_pending() hanging
-    if (isServerOnly)
+
+    // creates an invisible window whose buffers are
+    // never swapped, and the event loop will block on
+    // accept() all day causing the process to "sleep"
+
+    if (RootTask::sServerOnlyFlag)
     {
         rio::Window* window = rio::Window::instance();
-        // Main loop
+
+        // run event loop without lyr/swapBuffers
         while (window->isRunning())
-        {
-            // Update the task manager
-            rio::TaskMgr::instance()->calc();
+            rio::TaskMgr::instance()->calc(); // event loop
+            //window->swapBuffers(); // Not updating screen.
 
-            // Render
-            //lyr::Renderer::instance()->render();
-
-            // Swap the front and back buffers
-            //window->swapBuffers();
-        }
     }
     else
     {
         // Main loop
         rio::EnterMainLoop();
     }
+    // !window->isRunning():
 
     // Exit RIO
     rio::Exit();
@@ -119,5 +117,58 @@ int main()
     sentry_shutdown();
 #endif
 
-    return 0;
+    return 0; // EXIT_SUCCESS
+}
+
+// Parses command line arguments
+// and sets values in RootTask.
+void parseArgv(int argc, char* argv[])
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i]; // use std::string for ==
+
+        if (arg == "--server" || arg == "-s")
+            RootTask::sServerOnlyFlag = argv[i];
+            // note that if you do have a window and the
+            // program blocks on accept(), next time it
+            // calls swapBuffers() it may hang due on a
+            // call to wl_display_dispatch_queue_pending()
+
+        //else if (arg == "--no-spin" || arg == "-n")
+        //    RootTask::sNoSpinFlag = argv[i];
+        else if (
+            (arg == "--port" || arg == "-p")
+            && i + 1 < argc // get next argument
+        )
+            RootTask::sServerPort = argv[++i];
+
+        else if ((arg == "--resource-path")
+                && i + 1 < argc)
+            RootTask::sResourceSearchPath = argv[++i];
+        else if ((arg == "--resource-high")
+                && i + 1 < argc)
+            RootTask::sResourceHighPath = argv[++i];
+
+        else if (arg == "--help" || arg == "-h")
+        {
+            RIO_LOG("Usage: %s [options]\n\n", argv[0]);
+            //RIO_LOG("--no-spin, -n = Disable rotation or spinning for on-screen heads (demo only).");
+            RIO_LOG("Options:\n");
+
+            // server options
+            RIO_LOG("  --server, -s = Run as a standalone server. Avoids maintaining window and uses minimal resources (pauses on accept())\n");
+            RIO_LOG("  --port, -p <port> = Set TCP server port (host is always localhost)\n");
+
+            // resource options
+            RIO_LOG("  --resource-path <directory> = Set search path for FFLResMiddle.dat/FFLResHigh.dat.\n");
+            RIO_LOG("  --resource-high <file> = Set path for high resource file (e.g., AFLResHigh_2_3.dat)\n");
+
+            // show this help message
+            RIO_LOG("  --help, -h = Show this help message.\n");
+            exit(0);
+        }
+        else
+            RIO_LOG("Unknown argument: \"%s\", ignoring.\n\n", argv[i]);
+    }
 }

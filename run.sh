@@ -1,1 +1,2 @@
-SERVER_ONLY=1 ./ffl_testing_2
+#!/bin/sh
+./ffl_testing_2 --server

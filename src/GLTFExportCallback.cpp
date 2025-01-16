@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cassert>
 #include <iostream>
+#include <misc/rio_MemUtil.h>
 
 // Include stb_image_write implementation
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -24,15 +25,15 @@ GLTFExportCallback::GLTFExportCallback()
 }
 
 // Static function implementations
+/*
 void GLTFExportCallback::ApplyAlphaTestFunc(void* pObj, bool enable, rio::Graphics::CompareFunc func, float ref)
 {
-    // Ignored
 }
 
 void GLTFExportCallback::SetMatrixFunc(void* pObj, const rio::BaseMtx44f* matrix)
 {
-    // Only used when drawing faceline/mask textures
 }
+*/
 
 void GLTFExportCallback::DrawFunc(void* pObj, const FFLDrawParam* drawParam)
 {
@@ -43,11 +44,16 @@ void GLTFExportCallback::DrawFunc(void* pObj, const FFLDrawParam* drawParam)
 FFLShaderCallback GLTFExportCallback::GetShaderCallback()
 {
     FFLShaderCallback callback;
+    // Zero out the structure.
+    rio::MemUtil::set(&callback, 0, sizeof(FFLShaderCallback));
+
     callback.pObj = this;
 
-    callback.pApplyAlphaTestFunc = &GLTFExportCallback::ApplyAlphaTestFunc;
+    // Only called during FFLInitCharModelGPUStep.
+    //callback.pApplyAlphaTestFunc = &GLTFExportCallback::ApplyAlphaTestFunc;
+    //callback.pSetMatrixFunc = &GLTFExportCallback::SetMatrixFunc;
+
     callback.pDrawFunc = &GLTFExportCallback::DrawFunc;
-    callback.pSetMatrixFunc = &GLTFExportCallback::SetMatrixFunc;
 
     return callback;
 }

@@ -7,13 +7,13 @@
 #include <RootTask.h>
 #include <Hat.h>
 #include <Types.h>
-#include <BodyTypeStrings.h>
 #include <HatTypeStrings.h>
 
 #include <filedevice/rio_FileDeviceMgr.h>
 #include <gfx/rio_Window.h>
 #include <gfx/rio_Graphics.h>
 
+#include <rio.h>
 #include <gpu/rio_RenderBuffer.h>
 #include <gpu/rio_RenderTarget.h>
 
@@ -24,9 +24,9 @@
 
 #include <nn/ffl/detail/FFLiCrc.h>
 #include <RenderTexture.h>
+#include <BodyModel.h>
 
 #include <string>
-#include <array>
 
 // Forward declarations
 //void handleRenderRequest(char* buf, Model* pModel, int socket);
@@ -34,6 +34,12 @@
 #ifndef NO_GLTF
 void handleGLTFRequest(RenderRequest* renderRequest, Model* pModel, int socket);
 #endif
+
+// Static members.
+const char* RootTask::sServerOnlyFlag     = nullptr;
+const char* RootTask::sServerPort         = nullptr;
+const char* RootTask::sResourceSearchPath = nullptr;
+const char* RootTask::sResourceHighPath   = nullptr;
 
 RootTask::RootTask()
     : ITask("FFL Testing")
@@ -50,13 +56,9 @@ RootTask::RootTask()
     , mpModel(nullptr)
     , mpBodyModels{ nullptr }
     , mpHatModels{ nullptr }
-
-      // disables occasionally drawing mii and enables blocking
-      ,
-      mpServerOnly(getenv("SERVER_ONLY")), mpNoSpin(getenv("NO_SPIN"))
 {
-#ifdef RIO_USE_OSMESA   // off screen rendering
-    mpServerOnly = "1"; // force it truey
+#ifdef RIO_USE_OSMESA // off screen rendering
+    sServerOnlyFlag = "1"; // force it truey
 #endif
     rio::MemUtil::set(mpBodyModels, 0, sizeof(mpBodyModels));
 }
@@ -77,7 +79,7 @@ RootTask::RootTask()
 void RootTask::fillStoreDataArray_()
 {
     // Path to the folder
-    const std::string folderPath = STORE_DATA_FOLDER_PATH;
+    static const std::string folderPath = STORE_DATA_FOLDER_PATH;
     // Check if the folder exists
     if (!std::filesystem::exists(folderPath) || !std::filesystem::is_directory(folderPath))
         return; // folder is not usable, skip this
@@ -86,12 +88,14 @@ void RootTask::fillStoreDataArray_()
         if (!entry.is_regular_file()
             || entry.file_size() < sizeof(charInfoStudio)
             || entry.path().filename().string().at(0) == '.')
-            continue; // skip: dotfiles, not regular/too small files
+            // skip: dotfiles, not regular/too small files
+            continue;
 
-        // Read the file content
+        // read file contents into data
         std::ifstream file(entry.path(), std::ios::binary);
         if (!file.is_open())
             continue;
+
         std::vector<char> data;
         data.resize(entry.file_size());
         file.read(&data[0], entry.file_size());
@@ -99,7 +103,7 @@ void RootTask::fillStoreDataArray_()
         mStoreDataArray.push_back(data);
         file.close();
     }
-    RIO_LOG("Loaded %zu FFSD files into mStoreDataArray\n", mStoreDataArray.size());
+    RIO_LOG("loaded %zu files from %s into mStoreDataArray\n", mStoreDataArray.size(), folderPath.c_str());
 }
 
 // Second argument passed to listen() indicating
@@ -108,7 +112,7 @@ void RootTask::fillStoreDataArray_()
 
 #define PORT_DEFAULT 12346 // default port to listen on
 
-// Setup socket to send data to
+// Setup socket to send data to, and print message.
 void RootTask::setupSocket_()
 {
 #ifdef USE_SYSTEMD_SOCKET
@@ -122,7 +126,7 @@ void RootTask::setupSocket_()
             mSocketIsListening = true;
             RIO_LOG("\033[1mUsing systemd socket activation, socket fd: %d\033[0m\n", mServerFD);
 
-            mpServerOnly = "1"; // force server only when using systemd socket
+            sServerOnlyFlag = "1"; // force server only when using systemd socket
             return; // Exit the function as the socket is already set up
         }
         else
@@ -137,6 +141,7 @@ void RootTask::setupSocket_()
     if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0)
     {
         perror("WSAStartup failed");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 #endif // _WIN32
@@ -145,39 +150,42 @@ void RootTask::setupSocket_()
     if ((mServerFD = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
         perror("socket failed");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
-    const int opt = 1;
+    const int opt = 1; // into setsockopt()
 
-    // Forcefully attaching socket to the port
+    // Attach socket to the address.
     if (setsockopt(mServerFD, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt)))
     {
         perror("setsockopt");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
     mServerAddress.sin_family = AF_INET;
     mServerAddress.sin_addr.s_addr = INADDR_ANY;
-    // Get port number from environment or use default
-    char portReminder[] ="\033[2m(you can change the port with the PORT environment variable)\033[0m\n";
 
-    const char* env_port = getenv("PORT");
+    // Get port number from arguments or use the default.
+    char portReminder[] =" \033[2m(change with --port)\033[0m"; // will be set to blank
 
     int port = PORT_DEFAULT; // default port
-    if (env_port)
+    if (sServerPort)
     {
-        port = atoi(env_port);
-        portReminder[0] = '\0';
+        port = atoi(sServerPort);
+        portReminder[0] = '\0'; // remove port reminder
     }
-    // Forcefully attaching socket to the port
-    mServerAddress.sin_port = htons(port);
+
+    // bind socket handle mServerFD with mServerAddress
+    mServerAddress.sin_port = htons(port); // set port
     if (bind(mServerFD, (struct sockaddr *)&mServerAddress, sizeof(mServerAddress)) < 0)
     {
         perror("bind failed");
-        RIO_LOG("\033[1m"
-                "TIP: Change the default port of 12346 with the PORT environment variable"
-                "\033[0m\n");
+        RIO_LOG("\033[1m" \
+        "TIP: Change the default port of 12346 with the --port argument." \
+        "\033[0m\n");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
@@ -186,36 +194,38 @@ void RootTask::setupSocket_()
     if (listen(mServerFD, listenBacklog) < 0)
     {
         perror("listen");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
     else
     {
-        // Set socket to non-blocking mode
-        char serverOnlyReminder[] = "\033[1mRemember to add the environment variable SERVER_ONLY=1 to hide the main window.\n\033[0m";
-        // except if we are server only, in which case we WANT to block
-        if (!mpServerOnly)
+        char serverOnlyReminder[] = "\033[1mRemember to use the --server argument to hide the window.\n\033[0m";
+
+        // accept() blocks by default, this is needed
+        // in server only mode but the mode will be
+        // set to non-blocking without
+        if (!sServerOnlyFlag)
         {
 #ifdef _WIN32
-            u_long mode = 1;
+            const u_long mode = 1;
             ioctlsocket(mServerFD, FIONBIO, &mode);
 #else
             fcntl(mServerFD, F_SETFL, O_NONBLOCK);
-#endif
+#endif // _WIN32
         }
         else
-        {
             // don't show the reminder with server only
             serverOnlyReminder[0] = '\0';
-        }
 
         mSocketIsListening = true;
 
-        RIO_LOG("\033[1m"
-                "tcp server listening on port %d\033[0m\n"
-                "%s"
-                "%s",
-                port, portReminder, serverOnlyReminder);
+        // print bold/blue, portReminder, serverOnlyReminder
+        RIO_LOG("\033[1m" \
+        "tcp server listening on port %d\033[0m" \
+        "%s\n" \
+        "%s",
+        port, portReminder, serverOnlyReminder);
     }
 }
 #endif
@@ -237,11 +247,26 @@ void RootTask::loadResourceFiles_()
             static_cast<u32>(sizeof(resPath)),
             static_cast<FFLResourceType>(resourceType), false); // last arg: linear gamma (LG) resource?
 
-        std::vector<std::string> pathsToTry = { resPath }; // list of paths
+        std::vector<std::string> pathsToTry; // list of paths
         // Convert absolute resPath to std::filesystem::path.
-        std::filesystem::path fsPath(resPath);
+        std::filesystem::path fsPath = resPath;
+
+        if (resourceType == FFL_RESOURCE_TYPE_HIGH
+            && RootTask::sResourceHighPath)
+            // try that filename directly for high
+            pathsToTry.push_back(RootTask::sResourceHighPath);
+
+        if (RootTask::sResourceSearchPath)
+        {
+            std::string path = RootTask::sResourceSearchPath;
+            // join resource search path
+            pathsToTry.push_back(
+                path + "/" + fsPath.filename().string());
+        }
+
         // as well as the absolute resPath, try relative
         pathsToTry.push_back(fsPath.filename());
+        pathsToTry.push_back(resPath);
 
         bool resLoaded = false;
 
@@ -256,7 +281,7 @@ void RootTask::loadResourceFiles_()
             u8* buffer = device->tryLoad(arg);
             if (buffer != nullptr)
             {
-                RIO_LOG("Loaded resource %d from: %s\n", resourceType, arg.path.c_str());
+                RIO_LOG("Loaded resource %s from: %s\n", FFLResourceTypeToString(resourceType), arg.path.c_str());
                 mResourceDesc.pData[resourceType] = buffer;
                 mResourceDesc.size[resourceType] = arg.read_size;
                 resLoaded = true;
@@ -265,13 +290,13 @@ void RootTask::loadResourceFiles_()
             else
             {
                 const rio::RawErrorCode code = device->getLastRawError();
-                RIO_LOG("Failed to load resource %d from: %s with error: %s\n", resourceType, arg.path.c_str(), rioRawErrorCodeToString(code));
+                RIO_LOG("Failed to load resource %s from: %s with error: %s\n", FFLResourceTypeToString(resourceType), arg.path.c_str(), rioRawErrorCodeToString(code));
             }
         }
 
         if (!resLoaded)
         {
-            RIO_LOG("\033[1;31mFailed to load resource %d.\033[0m\n", resourceType);
+            RIO_LOG("\033[1;31mNot able to use resource %s.\033[0m\n", FFLResourceTypeToString(resourceType));
         }
     }
 }
@@ -317,6 +342,7 @@ void RootTask::prepare_()
 #if RIO_RELEASE
         fprintf(stderr, "(Hint: build with RIO_DEBUG for more helpful information.)\n");
 #endif
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
@@ -386,6 +412,7 @@ void RootTask::prepare_()
 
 void RootTask::loadBodyModels_()
 {
+    RIO_LOG("loading body models: ");
     for (u32 bodyType = 0; bodyType < BODY_TYPE_MAX; bodyType++)
     {
         for (u32 gender = 0; gender < FFL_GENDER_MAX; gender++)
@@ -399,19 +426,22 @@ void RootTask::loadBodyModels_()
 
             snprintf(bodyPathC, sizeof(bodyPathC), cBodyFileNameFormat, bodyTypeString, genderString);
 
-            RIO_LOG("loading body model: %s\n", bodyPathC);
+            RIO_LOG("%s, ", bodyPathC);
             const rio::mdl::res::Model* resModel = rio::mdl::res::ModelCacher::instance()->loadModel(bodyPathC, bodyPathC);
 
             RIO_ASSERT(resModel);
             if (resModel == nullptr)
             {
-                fprintf(stderr, "Body model not found: %s. Exiting.\n", bodyPathC);
+                fprintf(stderr, "\nBody model not found: %s. Exiting.\n", bodyPathC);
+                rio::Exit();
                 exit(EXIT_FAILURE);
             }
 
             mpBodyModels[bodyType][gender] = new rio::mdl::Model(resModel);
         }
     }
+    // print bold/blue:
+    RIO_LOG("\033[1m(all loaded successfully)\033[0m\n");
 }
 
 void RootTask::loadHatModels_()
@@ -439,7 +469,7 @@ void RootTask::loadHatModels_()
 // amount of mii indexes to cycle through
 // default source only has 6
 // GetMiiDataNum()
-int maxMiis = 6;
+s32 maxMiis = 6;
 
 // create model for displaying on screen
 void RootTask::createModel_()
@@ -892,7 +922,7 @@ rio::mdl::Model* RootTask::getHatModel_(Model* pModel, uint8_t type)
 
 // configures camera, proj mtx, uses height from charinfo...
 // ... to handle the view type appropriately
-void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::PerspectiveProjection* proj, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo)
+void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::PerspectiveProjection* proj, rio::BaseMtx44f* projMtx, f32* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo)
 {
     switch (viewType)
     {
@@ -958,7 +988,7 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         }
         case VIEW_TYPE_ALL_BODY_SUGAR: // like mii maker/nnid
         {
-            static const float aspect = 3.0f / 4.0f;
+            static const f32 aspect = 3.0f / 4.0f;
             *aspectHeightFactor = 1.0f / aspect;
 
             rio::PerspectiveProjection projAllBodyAspect = mProjIconBody;
@@ -978,7 +1008,7 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         // this is an ATTEMPT??? to simulate that
         // via interpolation which is... meh
 
-            const float scaleFactorY = BodyModel::calcBodyScale(pCharInfo->build, pCharInfo->height).y;
+            const f32 scaleFactorY = BodyModel::calcBodyScale(pCharInfo->build, pCharInfo->height).y;
 
         // These camera parameters look right when the character is tallest
         const rio::Vector3f posStart = {0.0f, 30.0f, 550.0f};
@@ -988,8 +1018,10 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         const rio::Vector3f posEnd = {0.0f, 9.0f, 850.0f};
         const rio::Vector3f atEnd = {0.0f, 90.0f, 0.0f};
 
-        // Calculate interpolation factor (normalized to range [0, 1])
-        float t = (scaleFactorY - 0.5f) / (1.264f - 0.5f);
+            // Calculate interpolation factor (normalized to range [0, 1])
+            f32 t = (scaleFactorY - 0.5f) / (1.264f - 0.5f);
+
+
 
         // Interpolate between start and end positions
         rio::Vector3f pos = {
@@ -1074,7 +1106,7 @@ static f32 getTransformedZ(const rio::BaseMtx34f model_mtx, const rio::BaseMtx34
     // Initialize Z value, which will be the Z split.
     f32 zSplit = 0.0f;
     // Transform model matrix/world to view space.
-    for (int row = 0; row < 4; ++row)
+    for (s32 row = 0; row < 4; ++row)
         // Only Z axis/third row of view_mtx
         zSplit += -view_mtx.m[2][row] * modelCenter[row];
         // Use negative ^^ value for -Z forward/right handed
@@ -1104,8 +1136,12 @@ static f32 getTransformedZ(const rio::BaseMtx34f model_mtx, const rio::BaseMtx34
 }
 
 // TODO: this is still using class instances: getBodyModel
-void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
+void RootTask::handleRenderRequest(char* buf, Model** ppModel, int socket)
 {
+    // Cast pModel. ppModel is provided so that
+    // it can be deleted from inside this function
+    Model* pModel = *ppModel;
+
     if (pModel == nullptr)
     {
         // error was already sent by now?
@@ -1164,7 +1200,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
             // will crash if you try to draw any shapes
             // so we are simply deleting the model
             delete pModel;
-            pModel = nullptr;
+            *ppModel = nullptr;
         }
 #endif // FFL_ENABLE_NEW_MASK_ONLY_FLAG
 
@@ -1176,10 +1212,10 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     RIO_LOG("instance count: %d\n", req->instanceCount);
 
-    int instanceTotal = 1;
+    s32 instanceTotal = 1;
 
-    int instanceCurrent = 0;
-    float instanceParts; // only used if below is true: vv
+    s32 instanceCurrent = 0;
+    f32 instanceParts; // only used if below is true: vv
     if (req->instanceCount > 1)
     {
         instanceTotal = req->instanceCount;
@@ -1193,7 +1229,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     rio::BaseMtx44f projMtx; // set by setViewTypeParams
     rio::PerspectiveProjection proj = mProjIconBody; // ^^
 
-    float aspectHeightFactor = 1.0f;
+    f32 aspectHeightFactor = 1.0f;
     bool isCameraPosAbsolute = false; // if it should not move the camera to the head
     bool willDrawBody = true; // and if should move camera
     bool willDrawHat = false;
@@ -1237,8 +1273,8 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     if (instanceTotal > 1)
     {
-        float instanceAngle = instanceCurrent * instanceParts;
-        float instanceAngleRad = rio::Mathf::deg2rad(instanceAngle);
+        f32 instanceAngle = instanceCurrent * instanceParts;
+        f32 instanceAngleRad = rio::Mathf::deg2rad(instanceAngle);
         RIO_LOG("instance %d rotation: %f (rad: %f)\n", instanceCurrent, instanceAngle, instanceAngleRad);
 
         switch (req->instanceRotationMode)
@@ -1360,20 +1396,20 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     // Create the render buffer with the desired size
 
-    int ssaaFactor =
+    s32 ssaaFactor =
 #ifdef TRY_SCALING
         2; // Super Sampling factor, e.g., 2 for 2x SSAA
 #else
             1;
 #endif
-    const int iResolution = static_cast<int>(req->resolution);
-    const int width = iResolution * ssaaFactor;
+    const s32 iResolution = static_cast<s32>(req->resolution);
+    const s32 width = iResolution * ssaaFactor;
 
-    const float fHeight = (ceilf( // round up
+    f32 fHeight = (ceilf( // round up
         (static_cast<float>(iResolution) * aspectHeightFactor)
         * static_cast<float>(ssaaFactor)
     ) / 2) * 2; // to nearest even number
-    const int height = static_cast<const int>(fHeight);
+    s32 height = static_cast<s32>(fHeight);
 
     RIO_LOG("Render buffer created with size: %dx%d\n", width, height);
 
@@ -1605,7 +1641,7 @@ void RootTask::calc_()
         // otherwise just fall through and use default
         // when mii is directly in front of the camera
 #endif // RIO_IS_WIN
-        if (!mpServerOnly && mCounter >= rio::Mathf::pi2())
+        if (!sServerOnlyFlag && mCounter >= rio::Mathf::pi2())
         {
             delete mpModel;
             createModel_();
@@ -1616,8 +1652,8 @@ void RootTask::calc_()
 
     if (hasSocketRequest)
     {
-        handleRenderRequest(buf, mpModel, mServerSocket);
-        if (!mpServerOnly)
+        handleRenderRequest(buf, &mpModel, mServerSocket);
+        if (!sServerOnlyFlag)
         {
             rio::Window::instance()->makeContextCurrent();
 
@@ -1631,7 +1667,7 @@ void RootTask::calc_()
         return;
     }
 
-    if (!mpServerOnly)
+    if (!sServerOnlyFlag)
     {
         rio::Window::instance()->clearColor(0.2f, 0.3f, 0.3f, 1.0f);
         rio::Window::instance()->clearDepthStencil();
@@ -1668,7 +1704,7 @@ void RootTask::calc_()
     mpModel->setMtxRT(model_mtx);
 
     // Increment the counter to gradually change the camera's position over time
-    if (!mpServerOnly)
+    if (!sServerOnlyFlag)
     {
         mCounter += 1.f / 60;
     }
@@ -1784,7 +1820,7 @@ void RootTask::exit_()
       rio::MemUtil::free(mResourceDesc.pData[FFL_RESOURCE_TYPE_MIDDLE]);
 
     // delete all shaders that were initialized
-    for (int type = 0; type < SHADER_TYPE_MAX; type++)
+    for (u32 type = 0; type < SHADER_TYPE_MAX; type++)
         delete mpShaders[type];
     // delete body models that were initialized earlier
     for (u32 i = 0; i < BODY_TYPE_MAX; i++)
