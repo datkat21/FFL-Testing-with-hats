@@ -1193,6 +1193,7 @@ var bodyTypeMap = map[string]int{
 	"switch":     1,
 	"miitomo":    2,
 	"fflbodyres": 3,
+	"3ds":        4,
 }
 
 // Map of expression strings to their respective flags

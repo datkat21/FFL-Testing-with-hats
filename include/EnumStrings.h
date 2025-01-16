@@ -116,6 +116,13 @@ const char* FFLResultStrings[] = {
     "FFL_RESULT_FS_NOT_FOUND"
 };
 
+const char* FFLResourceTypeStrings[] = {
+    "FFL_RESOURCE_TYPE_MIDDLE",
+    "FFL_RESOURCE_TYPE_HIGH",
+    "FFL_RESOURCE_TYPE_VERY_HIGH",
+    "FFL_RESOURCE_TYPE_LOW"
+};
+
 
 
 #include <stdio.h>
@@ -138,6 +145,15 @@ const char* FFLResultToString(FFLResult result)
         return UNKNOWN;
 
     return FFLResultStrings[result];
+}
+
+const char* FFLResourceTypeToString(s32 type)
+{
+    // make sure it is in range
+    if (type < 0 || type > 4)
+        return UNKNOWN;
+
+    return FFLResourceTypeStrings[type];
 }
 
 // map for rio::RawErrorCode, for file acccess failures

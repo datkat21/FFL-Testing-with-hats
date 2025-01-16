@@ -8,6 +8,7 @@
 #include <IShader.h>
 #include <Model.h>
 #include <Types.h>
+#include <BodyTypes.h>
 
 class BodyModel
 {

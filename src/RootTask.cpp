@@ -5,12 +5,12 @@
 #include <Model.h>
 #include <RootTask.h>
 #include <Types.h>
-#include <BodyTypeStrings.h>
 
 #include <filedevice/rio_FileDeviceMgr.h>
 #include <gfx/rio_Window.h>
 #include <gfx/rio_Graphics.h>
 
+#include <rio.h>
 #include <gpu/rio_RenderBuffer.h>
 #include <gpu/rio_RenderTarget.h>
 
@@ -21,9 +21,9 @@
 
 #include <nn/ffl/detail/FFLiCrc.h>
 #include <RenderTexture.h>
+#include <BodyModel.h>
 
 #include <string>
-#include <array>
 
 // Forward declarations
 //void handleRenderRequest(char* buf, Model* pModel, int socket);
@@ -137,6 +137,7 @@ void RootTask::setupSocket_()
     if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0)
     {
         perror("WSAStartup failed");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 #endif // _WIN32
@@ -145,15 +146,17 @@ void RootTask::setupSocket_()
     if ((mServerFD = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
         perror("socket failed");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
-    const int opt = 1;
+    const int opt = 1; // into setsockopt()
 
-    // Forcefully attaching socket to the port
+    // Attach socket to the address.
     if (setsockopt(mServerFD, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt)))
     {
         perror("setsockopt");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
@@ -178,6 +181,7 @@ void RootTask::setupSocket_()
         RIO_LOG("\033[1m" \
         "TIP: Change the default port of 12346 with the --port argument." \
         "\033[0m\n");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
@@ -186,6 +190,7 @@ void RootTask::setupSocket_()
     if (listen(mServerFD, listenBacklog) < 0)
     {
         perror("listen");
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
@@ -272,7 +277,7 @@ void RootTask::loadResourceFiles_()
             u8* buffer = device->tryLoad(arg);
             if (buffer != nullptr)
             {
-                RIO_LOG("Loaded resource %d from: %s\n", resourceType, arg.path.c_str());
+                RIO_LOG("Loaded resource %s from: %s\n", FFLResourceTypeToString(resourceType), arg.path.c_str());
                 mResourceDesc.pData[resourceType] = buffer;
                 mResourceDesc.size[resourceType] = arg.read_size;
                 resLoaded = true;
@@ -281,13 +286,13 @@ void RootTask::loadResourceFiles_()
             else
             {
                 const rio::RawErrorCode code = device->getLastRawError();
-                RIO_LOG("Failed to load resource %d from: %s with error: %s\n", resourceType, arg.path.c_str(), rioRawErrorCodeToString(code));
+                RIO_LOG("Failed to load resource %s from: %s with error: %s\n", FFLResourceTypeToString(resourceType), arg.path.c_str(), rioRawErrorCodeToString(code));
             }
         }
 
         if (!resLoaded)
         {
-            RIO_LOG("\033[1;31mFailed to load resource %d.\033[0m\n", resourceType);
+            RIO_LOG("\033[1;31mNot able to use resource %s.\033[0m\n", FFLResourceTypeToString(resourceType));
         }
     }
 }
@@ -333,6 +338,7 @@ void RootTask::prepare_()
 #if RIO_RELEASE
         fprintf(stderr, "(Hint: build with RIO_DEBUG for more helpful information.)\n");
 #endif
+        rio::Exit();
         exit(EXIT_FAILURE);
     }
 
@@ -419,6 +425,7 @@ void RootTask::loadBodyModels_()
             if (resModel == nullptr)
             {
                 fprintf(stderr, "\nBody model not found: %s. Exiting.\n", bodyPathC);
+                rio::Exit();
                 exit(EXIT_FAILURE);
             }
 
@@ -432,7 +439,7 @@ void RootTask::loadBodyModels_()
 // amount of mii indexes to cycle through
 // default source only has 6
 // GetMiiDataNum()
-int maxMiis = 6;
+s32 maxMiis = 6;
 
 // create model for displaying on screen
 void RootTask::createModel_()
@@ -730,7 +737,7 @@ rio::mdl::Model* RootTask::getBodyModel_(Model* pModel, BodyType type)
 
 // configures camera, proj mtx, uses height from charinfo...
 // ... to handle the view type appropriately
-void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::PerspectiveProjection* proj, rio::BaseMtx44f* projMtx, float* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo)
+void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, rio::PerspectiveProjection* proj, rio::BaseMtx44f* projMtx, f32* aspectHeightFactor, bool* isCameraPosAbsolute, bool* willDrawBody, FFLiCharInfo* pCharInfo)
 {
     switch (viewType)
     {
@@ -796,7 +803,7 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
         }
         case VIEW_TYPE_ALL_BODY_SUGAR: // like mii maker/nnid
         {
-            static const float aspect = 3.0f / 4.0f;
+            static const f32 aspect = 3.0f / 4.0f;
             *aspectHeightFactor = 1.0f / aspect;
 
             rio::PerspectiveProjection projAllBodyAspect = mProjIconBody;
@@ -816,7 +823,7 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
             // this is an ATTEMPT??? to simulate that
             // via interpolation which is... meh
 
-            const float scaleFactorY = BodyModel::calcBodyScale(pCharInfo->build, pCharInfo->height).y;
+            const f32 scaleFactorY = BodyModel::calcBodyScale(pCharInfo->build, pCharInfo->height).y;
 
             // These camera parameters look right when the character is tallest
             const rio::Vector3f posStart = { 0.0f, 30.0f, 550.0f };
@@ -827,7 +834,7 @@ void RootTask::setViewTypeParams(ViewType viewType, rio::LookAtCamera* pCamera, 
             const rio::Vector3f atEnd = { 0.0f, 90.0f, 0.0f };
 
             // Calculate interpolation factor (normalized to range [0, 1])
-            float t = (scaleFactorY - 0.5f) / (1.264f - 0.5f);
+            f32 t = (scaleFactorY - 0.5f) / (1.264f - 0.5f);
 
 
 
@@ -920,7 +927,7 @@ static f32 getTransformedZ(const rio::BaseMtx34f model_mtx, const rio::BaseMtx34
     // Initialize Z value, which will be the Z split.
     f32 zSplit = 0.0f;
     // Transform model matrix/world to view space.
-    for (int row = 0; row < 4; ++row)
+    for (s32 row = 0; row < 4; ++row)
         // Only Z axis/third row of view_mtx
         zSplit += -view_mtx.m[2][row] * modelCenter[row];
         // Use negative ^^ value for -Z forward/right handed
@@ -1022,10 +1029,10 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     RIO_LOG("instance count: %d\n", req->instanceCount);
 
-    int instanceTotal = 1;
+    s32 instanceTotal = 1;
 
-    int instanceCurrent = 0;
-    float instanceParts; // only used if below is true: vv
+    s32 instanceCurrent = 0;
+    f32 instanceParts; // only used if below is true: vv
     if (req->instanceCount > 1)
     {
         instanceTotal = req->instanceCount;
@@ -1039,7 +1046,7 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
     rio::BaseMtx44f projMtx; // set by setViewTypeParams
     rio::PerspectiveProjection proj = mProjIconBody; // ^^
 
-    float aspectHeightFactor = 1.0f;
+    f32 aspectHeightFactor = 1.0f;
     bool isCameraPosAbsolute = false; // if it should not move the camera to the head
     bool willDrawBody = true; // and if should move camera
 
@@ -1076,8 +1083,8 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     if (instanceTotal > 1)
     {
-        float instanceAngle = instanceCurrent * instanceParts;
-        float instanceAngleRad = rio::Mathf::deg2rad(instanceAngle);
+        f32 instanceAngle = instanceCurrent * instanceParts;
+        f32 instanceAngleRad = rio::Mathf::deg2rad(instanceAngle);
         RIO_LOG("instance %d rotation: %f (rad: %f)\n", instanceCurrent, instanceAngle, instanceAngleRad);
 
         switch (req->instanceRotationMode)
@@ -1200,20 +1207,20 @@ void RootTask::handleRenderRequest(char* buf, Model* pModel, int socket)
 
     // Create the render buffer with the desired size
 
-    int ssaaFactor =
+    s32 ssaaFactor =
 #ifdef TRY_SCALING
     2;  // Super Sampling factor, e.g., 2 for 2x SSAA
 #else
     1;
 #endif
-    const int iResolution = static_cast<int>(req->resolution);
-    const int width = iResolution * ssaaFactor;
+    const s32 iResolution = static_cast<s32>(req->resolution);
+    const s32 width = iResolution * ssaaFactor;
 
-    const float fHeight = (ceilf( // round up
+    f32 fHeight = (ceilf( // round up
         (static_cast<float>(iResolution) * aspectHeightFactor)
         * static_cast<float>(ssaaFactor)
     ) / 2) * 2; // to nearest even number
-    const int height = static_cast<const int>(fHeight);
+    s32 height = static_cast<s32>(fHeight);
 
     RIO_LOG("Render buffer created with size: %dx%d\n", width, height);
 
@@ -1597,7 +1604,7 @@ void RootTask::exit_()
       rio::MemUtil::free(mResourceDesc.pData[FFL_RESOURCE_TYPE_MIDDLE]);
 
     // delete all shaders that were initialized
-    for (int type = 0; type < SHADER_TYPE_MAX; type++)
+    for (u32 type = 0; type < SHADER_TYPE_MAX; type++)
         delete mpShaders[type];
     // delete body models that were initialized earlier
     for (u32 i = 0; i < BODY_TYPE_MAX; i++)
