@@ -86,11 +86,13 @@ If you forgot or want to update, then after `git pull`, do this: `git submodule 
     * Settings:
         - Build type: `cmake -S . -B build` **`-DCMAKE_BUILD_TYPE=Release`**
         - CXXFLAGS/Optimizations: `cmake -S . -B build` **`-DCMAKE_CXX_FLAGS="-O3 -march=native"`**
+        - LDFLAGS, you may need to add some if you see `undefined reference to symbol`...:
+          * `cmake -S . -B build` **`-DCMAKE_EXE_LINKER_FLAGS="-ldl"`** (Needed on Debian 11??)
         - Jobs: `cmake --build build` **`-j4`** (4 = num of jobs/cores)
 
     * Clean:
-        - Either delete build (be careful!), or
-        - `cmake --build build --target clean`
+        - To clean, delete build like: `rm -r build`
+        - (be careful, make sure that really IS the folder you're deleting)
     * (On Visual Studio: As long as you have vcpkg configured and everything installed, it should? just work by loading the folder)
 
 3. Obtain the resource file, FFLResHigh.dat.

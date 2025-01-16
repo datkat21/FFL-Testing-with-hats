@@ -1255,10 +1255,11 @@ var pantsColorMap = map[string]int{
 }
 
 var resourceTypeMap = map[string]int{
-	"default": -1, // server will select preferred
-	"middle":  0,  // FFL_RESOURCE_TYPE_MIDDLE
-	"high":    1,  // FFL_RESOURCE_TYPE_HIGH
-	//"low":     2,
+	"default":   -1, // server will select preferred
+	"middle":    0,  // FFL_RESOURCE_TYPE_MIDDLE
+	"high":      1,  // FFL_RESOURCE_TYPE_HIGH
+	"very_high": 2,
+	"low":       3,
 }
 
 func getMapToInt(input string, theMap map[string]int, defaultValue int) int {

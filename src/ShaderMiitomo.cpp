@@ -675,7 +675,14 @@ void ShaderMiitomo::setMaterial_(const FFLModulateType modulateType)
 
 void ShaderMiitomo::draw_(const FFLDrawParam& draw_param)
 {
-    setCulling(draw_param.cullMode);
+    // Override culling for the mask.
+    if (draw_param.modulateParam.type == FFL_MODULATE_TYPE_SHAPE_MASK)
+        // For whatever reason, the mask in Miitomo
+        // has no culling and is visible from the back.
+        setCulling(FFL_CULL_MODE_NONE);
+    else
+        setCulling(draw_param.cullMode);
+
     setModulate_(draw_param.modulateParam);
 
     if (draw_param.primitiveParam.pIndexBuffer != nullptr)

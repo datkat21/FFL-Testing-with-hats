@@ -91,22 +91,17 @@ private:
     // Static callback functions matching FFLShaderCallback's function pointer types
 
     /**
-     * @brief Static callback to apply alpha testing. Currently ignored.
-     *
-     * @param pObj Pointer to the GLTFExportCallback instance.
-     * @param enable Whether to enable alpha testing.
-     * @param func The comparison function for alpha testing.
-     * @param ref The reference value for alpha testing.
+     * @brief Static callback to apply alpha testing. Only used in FFLInitCharModelGPUStep (mask drawing), so it is ignored.
      */
-    static void ApplyAlphaTestFunc(void* pObj, bool enable, rio::Graphics::CompareFunc func, float ref);
+    //static void ApplyAlphaTestFunc(void* pObj, bool enable, rio::Graphics::CompareFunc func, float ref);
 
     /**
-     * @brief Static callback to set transformation matrices. Currently ignored.
+     * @brief Static callback to set matrix. Only used in FFLInitCharModelGPUStep (faceline/mask texture 2D planes drawing), so it is ignored.
      *
      * @param pObj Pointer to the GLTFExportCallback instance.
      * @param matrix The transformation matrix to set.
      */
-    static void SetMatrixFunc(void* pObj, const rio::BaseMtx44f* matrix);
+    //static void SetMatrixFunc(void* pObj, const rio::BaseMtx44f* matrix);
 
     /**
      * @brief Static callback to handle drawing commands.

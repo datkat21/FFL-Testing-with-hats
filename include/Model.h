@@ -28,6 +28,12 @@ public:
     bool initialize(const InitArg<T>& arg, IShader& shader);
 
     FFLCharModel* getCharModel() const { return mpCharModel; }
+    FFLPartsTransform getPartsTransform() const
+    {
+        FFLPartsTransform partsTransform;
+        FFLGetPartsTransform(&partsTransform, mpCharModel);
+        return partsTransform;
+    }
     FFLiCharInfo* getCharInfo()
     {
         FFLiCharModel* pCharModel = reinterpret_cast<FFLiCharModel*>(mpCharModel);

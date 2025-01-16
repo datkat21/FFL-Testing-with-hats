@@ -84,6 +84,11 @@ if(RIO_USE_GLEW) # Use GLEW as an alternative to GLAD.
     if(NOT GLEW_FOUND)
         message(FATAL_ERROR "GLEW was enabled but not found. Please install libglew-dev or whatever the equivalent is or simply omit RIO_USE_GLEW.")
     endif()
+    # Find OpenGL library as well.
+    find_package(OpenGL REQUIRED)
+    if(NOT OpenGL_FOUND)
+        message(FATAL_ERROR "OpenGL development was not found, and this is needed for GLEW. Please install it for your system (e.g., libgl-dev) or simply omit RIO_USE_GLEW.")
+    endif()
 endif()
 
 # Program Dependencies ------------------------
@@ -129,7 +134,12 @@ add_library(rio STATIC ${RIO_SOURCES}) # Add RIO as a static library.
 target_include_directories(rio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/rio/include)
 
 # Link external dependencies:
-target_link_libraries(rio PUBLIC glfw) # glfw
+target_link_libraries(rio PUBLIC glfw)
+
+if(RIO_USE_GLEW) # Link GLEW optionally.
+    # GLEW requires linking OpenGL libraries at build time.
+    target_link_libraries(rio PUBLIC GLEW OpenGL::GL)
+endif()
 
 # FFL Project ----------------------------
 
@@ -157,23 +167,21 @@ add_subdirectory(ffl) # Use FFL's CMakeLists.
 # Always disable controller support.
 target_compile_definitions(rio PRIVATE RIO_NO_CONTROLLERS_WIN)
 
-if(RIO_USE_GLEW)
-    target_compile_definitions(rio PRIVATE RIO_USE_GLEW)
-endif()
-
 if(RIO_USE_OSMESA)
     target_compile_definitions(rio PRIVATE RIO_USE_OSMESA)
 endif()
 
+# Needs to propagate to FFL:
+if(RIO_USE_GLEW)
+    target_compile_definitions(rio PRIVATE RIO_USE_GLEW)
+    target_compile_definitions(ffl-for-rio PUBLIC RIO_USE_GLEW)
+endif()
 if(RIO_GLES)
     target_compile_definitions(rio PUBLIC RIO_GLES)
-    # Needs to propagate to FFL:
     target_compile_definitions(ffl-for-rio PUBLIC RIO_GLES)
 endif()
-
 if(RIO_NO_CLIP_CONTROL)
     target_compile_definitions(rio PUBLIC RIO_NO_CLIP_CONTROL)
-    # Needs to propagate to FFL:
     target_compile_definitions(ffl-for-rio PUBLIC RIO_NO_CLIP_CONTROL)
 endif()
 
