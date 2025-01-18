@@ -23,7 +23,7 @@ void HatModel::initialize(Model* pModel, uint8_t hatColor)
     uint8_t tmpHatColor = hatColor;
 
     // hacky to prevent above favorite color?
-    if (hatColor != 0 && hatColor < 12) 
+    if (hatColor != 0 && hatColor < 13) 
     {
         // subtract one for miic compatibility...
         tmpHatColor = hatColor - 1;
